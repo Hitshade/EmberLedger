@@ -1,0 +1,37 @@
+EmberLedger Changelog
+=====================
+
+v0.7.0 Beta
+-----------
+Beta release candidate for testing.
+
+Highlights:
+- Polished Blizzard-inspired visual style.
+- Compact launcher with configurable displayed lines.
+- Main window remembers open/closed state between logins.
+- Concentration alert threshold is configurable.
+- Concentration alert line hides when no characters meet the threshold.
+- Imbued Mulch readiness counts and timers are capability-gated.
+- Characters without tracked concentration or confirmed Imbued Mulch are hidden from the main dashboard.
+- Session tracking starts automatically and resets on login/reload.
+- Session tracker records session time, total value, gold per hour, and top gathered items.
+- Session list shows item icons and supports mousewheel scrolling without a visible scrollbar.
+- Existing bag contents are baselined so they are not counted as new session loot.
+- Gathered item filtering is based on profession-material logic to avoid useless items such as vendor vials.
+- Added settings for opacity, launcher opacity, window scale, concentration threshold, launcher lines, and section visibility.
+- Added optional convenience action buttons for supported items/spells.
+- Removed visible character scrollbar for a cleaner look.
+
+Recent Fixes:
+- Fixed protected function errors from direct item/logout calls by using secure button patterns.
+- Fixed session item list clipping so loot rows stay inside the panel.
+- Fixed stale mulch data causing non-capable characters to show as ready.
+- Fixed repeated sorting errors by using deterministic sort handling.
+- Fixed many window resize/collapse layout issues.
+- Fixed options panel controls protruding from the frame.
+
+Known Testing Areas:
+- Secure convenience buttons should be tested out of combat and during normal play.
+- Pricing support depends on available external pricing data.
+- Bag baseline behavior should be tested after reloads and full logins.
+- Character capability detection should be tested across alts with different professions.
