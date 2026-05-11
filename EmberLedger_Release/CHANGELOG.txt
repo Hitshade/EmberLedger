@@ -1,37 +1,250 @@
-EmberLedger Changelog
-=====================
+# EmberLedger Changelog
 
-v0.7.0 Beta
------------
-Beta release candidate for testing.
+## v0.9.2 Beta
 
-Highlights:
-- Polished Blizzard-inspired visual style.
-- Compact launcher with configurable displayed lines.
-- Main window remembers open/closed state between logins.
-- Concentration alert threshold is configurable.
-- Concentration alert line hides when no characters meet the threshold.
-- Imbued Mulch readiness counts and timers are capability-gated.
-- Characters without tracked concentration or confirmed Imbued Mulch are hidden from the main dashboard.
-- Session tracking starts automatically and resets on login/reload.
-- Session tracker records session time, total value, gold per hour, and top gathered items.
-- Session list shows item icons and supports mousewheel scrolling without a visible scrollbar.
-- Existing bag contents are baselined so they are not counted as new session loot.
-- Gathered item filtering is based on profession-material logic to avoid useless items such as vendor vials.
-- Added settings for opacity, launcher opacity, window scale, concentration threshold, launcher lines, and section visibility.
-- Added optional convenience action buttons for supported items/spells.
-- Removed visible character scrollbar for a cleaner look.
+### Release Focus
 
-Recent Fixes:
-- Fixed protected function errors from direct item/logout calls by using secure button patterns.
-- Fixed session item list clipping so loot rows stay inside the panel.
-- Fixed stale mulch data causing non-capable characters to show as ready.
-- Fixed repeated sorting errors by using deterministic sort handling.
-- Fixed many window resize/collapse layout issues.
-- Fixed options panel controls protruding from the frame.
+Final beta cleanup pass before broader public testing.
 
-Known Testing Areas:
-- Secure convenience buttons should be tested out of combat and during normal play.
-- Pricing support depends on available external pricing data.
-- Bag baseline behavior should be tested after reloads and full logins.
-- Character capability detection should be tested across alts with different professions.
+### Added
+
+- Added clearer window locking state display:
+  - `Lock: On`
+  - `Lock: Off`
+- Added `/el lock`.
+- Added `/el unlock`.
+- Added improved saved settings normalization on load.
+
+### Changed
+
+- Renamed `Gold/hr` launcher toggle to `Session rate`.
+- Renamed `Reset Positions` to `Reset Windows`.
+- Reset Windows now covers:
+  - Launcher
+  - Profession Tracking window
+  - Session window
+  - Options panel, when visible
+- Improved consistency of UI sizing constants.
+- Continued cleanup of layout and saved state handling.
+- Updated README for beta testing.
+- Updated changelog for public release packaging.
+
+### Reviewed
+
+- Reviewed secure action button logic.
+- Kept protected-action safeguards intact.
+- Reviewed settings normalization and window state handling.
+- Reviewed central layout constants and UI refresh behavior.
+
+---
+
+## v0.9.1 Layout Refactor Preview
+
+### Changed
+
+- Session window now defaults to the same width as the minimum Profession Tracking window.
+- Existing saved session widths at the old default are migrated to the cleaner compact width.
+- Wider custom session widths are preserved.
+- Renamed options toggles:
+  - `Profession` → `Tracking Window`
+  - `Session` → `Session Window`
+  - `Convenience` → `Action Bar`
+
+### Documentation
+
+- Updated README.
+- Updated CHANGELOG.
+
+---
+
+## v0.9.0 Layout Refactor Preview
+
+### Added
+
+- Central `RefreshLayout()` foundation.
+- Separate Session window scale setting.
+- Lock windows option.
+- Database version update for layout refactor.
+
+### Changed
+
+- Renamed `Window scale` to `Main window scale`.
+- Renamed reset position behavior to better reflect multi-window reset handling.
+- Tightened options panel spacing and alignment.
+- Began centralizing layout and scaling behavior.
+
+### Documentation
+
+- Updated README.
+- Updated CHANGELOG.
+
+---
+
+## v0.8.4 Refactor Preview
+
+### Changed
+
+- Reduced main window close button size.
+- Reduced Session window close button size.
+- Tightened Pause, Reset, and Close spacing in the Session header.
+- Moved Logout closer to the right edge of the action bar to reduce wasted space.
+
+---
+
+## v0.8.3 Refactor Preview
+
+### Changed
+
+- Moved the Session close button into the Session header beside Pause and Reset.
+- Renamed Session window title to `EmberLedger Session`.
+- Restyled the main EmberLedger header to better match the Session header.
+- Moved main Options and Close controls into the main header bar.
+- Added `Profession Tracking` subtitle below the main header.
+
+---
+
+## v0.8.2 Refactor Preview
+
+### Changed
+
+- Hiding Characters now resizes the main window down to fit only the visible action bar.
+- Removed internal Characters collapse button.
+- Removed internal Session collapse button from the standalone Session window.
+- Cleared old saved collapse states during migration.
+- Tightened main-window minimum height logic based on visible content.
+- Forced concentration row colors to refresh immediately when the threshold changes.
+
+---
+
+## v0.8.1 Refactor Preview
+
+### Added
+
+- Session opacity option.
+
+### Changed
+
+- Tightened launcher height so hidden lines no longer leave excess blank space.
+- Centered session stats in the standalone Session window.
+- Session toggle no longer resizes the main EmberLedger window unnecessarily.
+- Renamed:
+  - `Launcher lines` → `Launcher display toggles`
+  - `Main window sections` → `Window display toggles`
+- Concentration color gradient now scales to the configured threshold instead of always scaling to 1000.
+
+---
+
+## v0.8.0 Refactor Preview
+
+### Added
+
+- Standalone Session window.
+- `/el main` command.
+- Independent main/session window visibility handling.
+- Independent saved window state for main and session windows.
+
+### Changed
+
+- Session tracker moved out of the main EmberLedger window.
+- Main window now focuses on:
+  - Characters
+  - Professions
+  - Concentration
+  - Imbued Mulch
+  - Action bar
+- Launcher opens both main windows by default.
+- Main and session windows can be closed independently.
+- Updated database migration for new layout.
+
+---
+
+## v0.7.4 RC
+
+### Changed
+
+- Tightened vertical spacing above the session loot list.
+- Reduced empty padding below the four visible loot rows.
+- Kept loot list at exactly four full visible rows.
+
+---
+
+## v0.7.3 RC
+
+### Changed
+
+- Session list now reserves exactly enough space for four full loot rows.
+- Removed partial clipping of a fifth row.
+- Mousewheel scrolling still works for additional loot entries.
+
+---
+
+## v0.7.2 RC
+
+### Changed
+
+- Session tracker now shows a chronological scrolling loot feed instead of sorting by value/quantity.
+- Each loot entry shows item icon, quantity, and value for that pickup.
+- Mousewheel scrolling works over the session list when more than four entries exist.
+- Aggregate totals and gold/hour tracking remain unchanged.
+
+---
+
+## v0.7.1 RC
+
+### Added
+
+- Database versioning and one-time cleanup migration.
+- `/el debug`.
+- Combat-safe action bar refresh deferral.
+
+### Changed
+
+- Removed old development-era SavedVariables fields.
+- Centralized core UI sizing constants.
+- Updated README and CHANGELOG.
+
+---
+
+## v0.7.0 Beta
+
+### Release Focus
+
+First public beta-style package.
+
+### Added
+
+- README.
+- CHANGELOG.
+- Profession tracking.
+- Concentration alerting.
+- Imbued Mulch tracking.
+- Session gold/hour tracking.
+- Session loot tracking.
+- Convenience action bar.
+- Launcher panel.
+- Options panel.
+- Collapsible/hidden section behavior.
+- Window state saving.
+
+---
+
+## Earlier Development Builds
+
+Earlier versions were rapid internal iteration builds that established:
+
+- EmberLedger addon name and structure.
+- Account-wide SavedVariables.
+- Character tracking.
+- Concentration tracking.
+- Profession abbreviation handling.
+- Imbued Mulch gating.
+- Launcher UI.
+- Main window UI.
+- Session tracking.
+- GatherLedger-style material filtering.
+- Action buttons.
+- Blizzard-style button treatment.
+- Opacity controls.
+- Scale controls.
+- Window state behavior.
+- Refined visual layout.
