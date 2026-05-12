@@ -1,0 +1,90 @@
+local addonName, EL = ...
+local M = {}
+EL:RegisterModule("mulch", M)
+
+local function GetItemCountSafe(itemID)
+    if C_Item and C_Item.GetItemCount then
+        local count = C_Item.GetItemCount(itemID, false, false, false)
+        if count ~= nil then return count end
+    end
+    if GetItemCount then return GetItemCount(itemID, false, false) or 0 end
+    return 0
+end
+
+local function IsItemUsableSafe(itemID)
+    if C_Item and C_Item.IsUsableItem then
+        local usable = C_Item.IsUsableItem(itemID)
+        return usable and true or false
+    end
+    if IsUsableItem then
+        local usable = IsUsableItem(itemID)
+        return usable and true or false
+    end
+    return false
+end
+
+local function GetCooldown(itemID)
+    if C_Item and C_Item.GetItemCooldown then
+        local startTime, duration = C_Item.GetItemCooldown(itemID)
+        return startTime or 0, duration or 0
+    end
+    if GetItemCooldown then
+        local startTime, duration = GetItemCooldown(itemID)
+        return startTime or 0, duration or 0
+    end
+    return 0, 0
+end
+
+function M:Refresh()
+    local charKey, char = EL:GetCurrentCharacter()
+    local hasHerbalism = EL:CharacterHasProfession(EL.HERBALISM_ID)
+    local itemCount = GetItemCountSafe(EL.IMBUED_MULCH_ITEM_ID)
+    local isUsable = IsItemUsableSafe(EL.IMBUED_MULCH_ITEM_ID)
+    local startTime, duration = GetCooldown(EL.IMBUED_MULCH_ITEM_ID)
+
+    EL.db.resources.mulch[charKey] = EL.db.resources.mulch[charKey] or {}
+    local data = EL.db.resources.mulch[charKey]
+    data.charKey = charKey
+    data.charName = char.name
+    data.realm = char.realm
+    data.class = char.class
+    data.itemID = EL.IMBUED_MULCH_ITEM_ID
+    data.itemName = "Imbued Mulch"
+    data.hasHerbalism = hasHerbalism
+    data.isUsable = isUsable
+    data.itemCount = itemCount
+
+    local cooldownSeen = startTime and duration and startTime > 0 and duration > 0
+
+    -- Confirm Imbued Mulch access from the current character only.
+    -- Do not let old saved flags or merely owning the item mark a character as capable.
+    local confirmedAccess = hasHerbalism and (isUsable or cooldownSeen)
+    data.confirmedImbuedMulchAccess = confirmedAccess and true or nil
+    data.hasImbuedMulchAccess = confirmedAccess and true or false
+    data.itemKnown = confirmedAccess and true or nil
+    data.confirmationSource = confirmedAccess and (cooldownSeen and "cooldown" or "usable") or nil
+    data.confirmationVersion = confirmedAccess and 2 or nil
+    data.lastUpdate = time()
+
+    if confirmedAccess and cooldownSeen then
+        local remaining = math.max(0, math.ceil((startTime + duration) - GetTime()))
+        data.readyAt = time() + remaining
+    elseif confirmedAccess then
+        data.readyAt = 0
+    else
+        data.readyAt = nil
+    end
+end
+
+function M:OnLoad()
+    self:Refresh()
+end
+
+function M:OnEvent(event, ...)
+    if event == "PLAYER_ENTERING_WORLD" or event == "BAG_UPDATE_DELAYED" or event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_ITEM_CRAFTED_RESULT" then
+        C_Timer.After(0.5, function()
+            self:Refresh()
+            EL:RequestUpdate()
+        end)
+    end
+end
