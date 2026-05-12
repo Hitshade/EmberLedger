@@ -1,0 +1,13 @@
+## Interface: 120007, 120005, 120000
+## Title: EmberLedger
+## Notes: Account-wide alt resource dashboard for concentration, Imbued Mulch, and profession session value tracking, and future resource timers.
+## Author: Jeff Ekmanis / ChatGPT
+## Version: 0.17.7 Beta
+## SavedVariables: EmberLedgerDB
+## DefaultState: Enabled
+
+Core.lua
+Modules/Concentration.lua
+Modules/Mulch.lua
+Modules/Session.lua
+UI.lua
