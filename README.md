@@ -1,216 +1,97 @@
-# EmberLedger
+EmberLedger is a lightweight World of Warcraft profession utility addon designed to help players manage profession activity across multiple characters.
 
-**EmberLedger** is a World of Warcraft profession utility addon designed for players managing multiple profession alts. It combines profession readiness tracking, Imbued Mulch cooldown tracking, session gold tracking, and convenience action buttons into a compact, movable interface.
+It tracks known character professions, profession concentration, Imbued Mulch readiness, session gold and items, and provides a compact action bar for useful profession-related abilities and items. EmberLedger is built around quick visibility, clean organization, and low-friction profession management across your Warband.
 
-This addon was entirely vibe coded through iterative testing and refinement. It is currently released as a beta for public testing.
+Core Features
 
-## Current Version
+- Track known professions across characters
+- Track profession concentration and display current/max values
+- Support for characters with multiple concentration-using professions
+- Track Imbued Mulch readiness and remaining time
+- Pin favorite characters to keep them at the top
+- Hide characters you do not want shown
+- Track session gold, session items, gold-per-hour, and elapsed session time
+- Compact launcher window with customizable display lines
+- Optional session window for more detailed session tracking
+- Configurable action bar with individual button visibility options
+- Clean Options menu with organized settings categories
+- Compact Mode support for a smaller tracking window
 
-**v0.9.2 Beta**
+Profession Concentration Tracking
 
-## Intended Use
+EmberLedger tracks profession concentration across your characters and keeps profession identity separate from concentration data. If a character only has one concentration-tracked profession, EmberLedger displays it cleanly in the first profession/concentration slot rather than leaving unnecessary gaps.
 
-EmberLedger is meant to help profession-focused players quickly answer:
+The tracking table is designed to show the information that matters quickly:
 
-- Which characters have usable profession concentration?
-- Which characters have Imbued Mulch ready or coming up soon?
-- How much gold am I earning during this gathering/session run?
-- What items have I gathered during this session?
-- Can I quickly access common profession utility items from one small action bar?
+- Character
+- Profession 1
+- Concentration 1
+- Profession 2, when needed
+- Concentration 2, when needed
+- Imbued Mulch readiness
 
-It is especially useful for players with multiple alts, profession cooldown routines, or gathering/farming sessions.
+Imbued Mulch Tracking
 
-## Core Features
+EmberLedger can track Imbued Mulch readiness across characters and display remaining time or ready status. This is useful for players managing multiple profession alts or cooldown-style profession routines.
 
-### Profession Tracking
+Session Tracking
 
-- Tracks profession concentration across characters.
-- Shows profession abbreviation, concentration amount, and Imbued Mulch status.
-- Uses a configurable concentration threshold for alert coloring and launcher display.
-- Concentration color gradient scales based on the chosen threshold.
-- Automatically hides unsupported tracking columns when no eligible characters exist.
-- Supports account-wide tracking.
+The session tracker records gathered or received profession materials and estimates session value using available item pricing data. It can display:
 
-### Imbued Mulch Tracking
+- Session total
+- Session gold per hour
+- Session elapsed time
+- Tracked session items
 
-- Tracks Imbued Mulch cooldowns per capable character.
-- Shows ready state or countdown timer.
-- Ignores characters that do not have confirmed Imbued Mulch capability.
-- Displays ready counts and countdowns in the launcher.
-- Includes an optional convenience action button for Imbued Mulch.
+The launcher display and standalone session window can be customized independently.
 
-### Session Tracking
+Action Bar
 
-- Standalone session window.
-- Tracks session time.
-- Tracks total gold value gained.
-- Tracks gold per hour.
-- Shows a chronological scrolling loot feed.
-- Displays item icons, quantity, and value for gathered/session items.
-- Uses material-style filtering inspired by GatherLedger behavior.
-- Attempts to ignore items already in bags when a session starts.
-- Resets and starts automatically on login/reload.
-- Supports mousewheel scrolling over the loot list.
+EmberLedger includes a compact profession utility action bar. Individual buttons can be enabled or disabled in the Options menu, allowing players to keep only the buttons they actually use.
 
-### Launcher
-
-- Compact movable launcher window.
-- Displays selected session and readiness information.
-- Supports toggles for:
-  - concentration alert
-  - mulch status
-  - session rate
-  - session total
-  - session time
-- Launcher opacity can be configured.
-- Launcher remembers position.
-
-### Windows
-
-EmberLedger currently uses separate movable windows for:
-
-- Launcher
-- Profession Tracking
-- Session Tracking
-- Options
-
-Each window remembers position and state where appropriate.
-
-### Options Panel
-
-The options panel includes controls for:
-
-- Window opacity
-- Launcher opacity
-- Session opacity
-- Concentration threshold
-- Main window scale
-- Session window scale
-- Launcher display toggles
-- Window display toggles
-- Action bar visibility
-- Window locking
-- Reset hidden characters
-- Reset windows
-- Reset session
-
-### Convenience Action Bar
-
-The Profession Tracking window includes optional action buttons for supported utility items/actions, including:
+Supported action bar buttons include:
 
 - Imbued Mulch
 - Resilient Seed
-- Interdimensional Parcel Signal, when available
-- Warband Bank Distance Inhibitor, when available
-- Logout
+- Glowing Resilient Seed
+- Wild Resilient Seed
+- Primal Resilient Seed
+- Green Thumb
+- Overload Herb
+- Overload Ore
+- Interdimensional Parcel
+- Warband Bank
 
-Buttons use secure action patterns where possible to avoid protected function issues.
+The action bar respects availability rules where appropriate. Spell and ability buttons only show when known, item buttons can hide when unavailable, and zone-specific abilities are limited to appropriate zones.
 
-## Slash Commands
+Customization
 
-```text
-/el
-/ember
-/emberledger
-```
+EmberLedger includes an organized Options menu with settings for:
 
-General command behavior:
+- General behavior
+- Display options
+- Launcher display
+- Session window
+- Tracking table columns
+- Action bar visibility and individual buttons
+- Maintenance/reset tools
 
-```text
-/el
-```
+You can customize what appears in the launcher, whether session windows are shown, which tracking columns are visible, and which action bar buttons are displayed.
 
-Toggles the main EmberLedger windows.
+Design Goals
 
-```text
-/el main
-```
+EmberLedger is designed to be:
 
-Toggles the Profession Tracking window.
+- Lightweight
+- Clean and readable
+- Useful for multiple profession alts
+- Easy to configure
+- Safe around combat-sensitive UI behavior
+- Focused on profession tracking without unnecessary clutter
 
-```text
-/el session
-```
+Notes
 
-Toggles the Session window.
-
-```text
-/el options
-```
-
-Opens the Options panel.
-
-```text
-/el lock
-```
-
-Locks addon windows.
-
-```text
-/el unlock
-```
-
-Unlocks addon windows.
-
-```text
-/el debug
-```
-
-Toggles debug output.
-
-## Pricing Support
-
-Session gold values depend on available pricing data.
-
-EmberLedger attempts to use supported external pricing sources where available, such as:
-
-- Auctionator
-- TradeSkillMaster, where supported
-
-If no pricing source is available, items may appear with missing or limited value information.
-
-## Installation
-
-1. Download the latest EmberLedger zip.
-2. Extract the `EmberLedger` folder.
-3. Place it in:
-
-```text
-World of Warcraft/_retail_/Interface/AddOns/
-```
-
-4. Restart World of Warcraft.
-5. Enable EmberLedger on the addon selection screen.
-
-Recommended when updating between beta versions:
-
-1. Exit World of Warcraft.
-2. Delete the old `EmberLedger` addon folder.
-3. Extract the new version fresh.
-4. Launch WoW again.
-
-## Known Limitations
-
-- This is a beta release.
-- Session item filtering may still need refinement for edge cases such as mail, bank transfers, vendor purchases, crafting outputs, or unusual profession materials.
-- Secure action buttons are limited by Blizzard's protected action rules.
-- Some item or spell buttons may depend on Blizzard API availability, toy availability, item ownership, or combat lockdown state.
-- Pricing accuracy depends on the pricing addon/source available to the user.
-- The addon was built iteratively and may still contain edge cases that require testing.
-
-## Recommended Testing Areas
-
-Please report issues involving:
-
-- Lua errors.
-- Reload/login behavior.
-- Session tracking counting pre-existing bag items.
-- Missing or incorrect item values.
-- Incorrect Imbued Mulch capability detection.
-- Action buttons not appearing or not working.
-- Combat lockdown issues.
-- Window position or scale issues.
-- Options not saving correctly.
+This release does not include a minimap button, import/export tools, backup tools, or seed flyout behavior. Those features may be considered later, but the current release focuses on stable profession tracking, session tracking, and configurable utility buttons.
 
 ## Project Status
 
