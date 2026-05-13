@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "0.20.0 Beta"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.0.0"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -34,7 +34,7 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 2000
+EL.DB_VERSION = 10000
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -72,11 +72,12 @@ EL.PROFESSION_ABBREVIATIONS = {
 }
 
 local defaults = {
-    version = 1902,
+    version = 10000,
     characters = {},
     resources = {
         concentration = {},
         mulch = {},
+        professions = {},
     },
     settings = {
         sort = {
@@ -102,6 +103,18 @@ local defaults = {
             sessionCollapsed = false,
             charactersShown = true,
             actionBarShown = true,
+            actionButtons = {
+                mulch = true,
+                seed = true,
+                glowingSeed = true,
+                wildSeed = true,
+                primalSeed = true,
+                greenThumb = true,
+                overloadHerb = true,
+                overloadOre = true,
+                parcel = true,
+                bank = true,
+            },
             windowOpen = false,
         },
         session = {
@@ -148,10 +161,17 @@ local defaults = {
             showCharacterRealm = true,
             attentionOnly = false,
             compactMode = false,
-            showFavoritesFirst = true,
+            showPinnedFirst = true,
+            showFavoritesFirst = true, -- legacy saved key retained for compatibility
         },
         hiddenCharacters = {},
         favoriteCharacters = {},
+        options = {
+            point = "CENTER",
+            relativePoint = "CENTER",
+            x = 0,
+            y = 0,
+        },
         lockWindows = false,
         debug = false,
     },
@@ -244,6 +264,7 @@ function EL:NormalizeDatabaseSettings()
     self.db.resources = type(self.db.resources) == "table" and self.db.resources or {}
     self.db.resources.concentration = type(self.db.resources.concentration) == "table" and self.db.resources.concentration or {}
     self.db.resources.mulch = type(self.db.resources.mulch) == "table" and self.db.resources.mulch or {}
+    self.db.resources.professions = type(self.db.resources.professions) == "table" and self.db.resources.professions or {}
 
     settings.display = settings.display or {}
     settings.alerts = settings.alerts or {}
@@ -252,6 +273,33 @@ function EL:NormalizeDatabaseSettings()
     settings.button = settings.button or {}
     settings.hiddenCharacters = settings.hiddenCharacters or {}
     settings.favoriteCharacters = settings.favoriteCharacters or {}
+    settings.options = type(settings.options) == "table" and settings.options or {}
+
+    settings.panel.actionButtons = type(settings.panel.actionButtons) == "table" and settings.panel.actionButtons or {}
+    local validActionButtons = {
+        mulch = true,
+        seed = true,
+        glowingSeed = true,
+        wildSeed = true,
+        primalSeed = true,
+        greenThumb = true,
+        overloadHerb = true,
+        overloadOre = true,
+        parcel = true,
+        bank = true,
+    }
+    for key in pairs(validActionButtons) do
+        if settings.panel.actionButtons[key] == nil then
+            settings.panel.actionButtons[key] = true
+        else
+            settings.panel.actionButtons[key] = settings.panel.actionButtons[key] ~= false
+        end
+    end
+    for key in pairs(settings.panel.actionButtons) do
+        if not validActionButtons[key] then
+            settings.panel.actionButtons[key] = nil
+        end
+    end
 
     settings.display.panelOpacity = ClampNumber(settings.display.panelOpacity, 0.20, 1.00, 0.55)
     settings.display.launcherOpacity = ClampNumber(settings.display.launcherOpacity, 0.20, 1.00, 0.50)
@@ -264,7 +312,12 @@ function EL:NormalizeDatabaseSettings()
     if settings.display.showCharacterRealm == nil then settings.display.showCharacterRealm = true end
     if settings.display.attentionOnly == nil then settings.display.attentionOnly = false end
     if settings.display.compactMode == nil then settings.display.compactMode = false end
-    if settings.display.showFavoritesFirst == nil then settings.display.showFavoritesFirst = true end
+    if settings.display.showPinnedFirst == nil then
+        settings.display.showPinnedFirst = settings.display.showFavoritesFirst
+        if settings.display.showPinnedFirst == nil then settings.display.showPinnedFirst = true end
+    end
+    -- Keep the old saved-variable key synchronized so v0.18-v0.20 users retain their setting.
+    settings.display.showFavoritesFirst = settings.display.showPinnedFirst
     settings.display.showProfession1Column = settings.display.showProfession1Column ~= false
     settings.display.showConcentration1Column = settings.display.showConcentration1Column ~= false
     settings.display.showProfession2Column = settings.display.showProfession2Column ~= false
@@ -273,7 +326,8 @@ function EL:NormalizeDatabaseSettings()
     settings.display.showCharacterRealm = settings.display.showCharacterRealm ~= false
     settings.display.attentionOnly = settings.display.attentionOnly == true
     settings.display.compactMode = settings.display.compactMode == true
-    settings.display.showFavoritesFirst = settings.display.showFavoritesFirst ~= false
+    settings.display.showPinnedFirst = settings.display.showPinnedFirst ~= false
+    settings.display.showFavoritesFirst = settings.display.showPinnedFirst
     settings.display.showProfessionColumn = settings.display.showProfession1Column
     settings.display.showConcentrationColumn = settings.display.showConcentration1Column
     if settings.display.showProfession1Column == false and settings.display.showConcentration1Column == false and settings.display.showProfession2Column == false and settings.display.showConcentration2Column == false and settings.display.showMulchColumn == false then
@@ -427,8 +481,8 @@ function EL:EnsureDB()
         self.db.sessionWidthVersion = 1750
     end
 
-    -- v0.19.0+: polish pass. Remove stale hidden/favorite character flags and normalize table containers after the v0.18 pinning update.
-    -- v0.20.0: UI-only refinement pass. Existing favoriteCharacters saved key remains for backward-compatible pinned character data.
+    -- v0.19.0+: polish pass. Remove stale hidden/pinned character flags and normalize table containers after the v0.18 pinning update.
+    -- v0.20.0: UI-only refinement pass. Existing favoriteCharacters saved key remains as a backward-compatible storage key for pinned character data.
     local polishVersion = tonumber(self.db.polishVersion) or 0
     if polishVersion < 1900 then
         CleanupSavedCharacterFlags(self.db)
@@ -539,6 +593,152 @@ function EL:CharacterHasProfession(skillLineID)
     return false
 end
 
+function EL:RefreshCurrentProfessionIdentity()
+    if not GetProfessions or not GetProfessionInfo then return false end
+    self.db = self.db or {}
+    self.db.resources = type(self.db.resources) == "table" and self.db.resources or {}
+    self.db.resources.professions = type(self.db.resources.professions) == "table" and self.db.resources.professions or {}
+
+    local charKey, char = self:GetCurrentCharacter()
+    if not charKey then return false end
+
+    local prof1, prof2 = GetProfessions()
+    local slots = { prof1, prof2 }
+    local list = {}
+
+    for slotIndex, profIndex in ipairs(slots) do
+        if profIndex then
+            local name, icon, skillLevel, maxSkillLevel, _, _, skillLine = GetProfessionInfo(profIndex)
+            if name and name ~= "" then
+                list[#list + 1] = {
+                    charKey = charKey,
+                    charName = char and char.name or UnitName("player") or "Unknown",
+                    realm = char and char.realm or self:GetRealm(),
+                    class = char and char.class,
+                    slot = slotIndex,
+                    professionID = tonumber(skillLine) or skillLine,
+                    skillLineID = tonumber(skillLine) or skillLine,
+                    professionName = name,
+                    icon = icon,
+                    skillLevel = tonumber(skillLevel) or 0,
+                    maxSkillLevel = tonumber(maxSkillLevel) or 0,
+                    lastUpdate = time(),
+                    source = "GetProfessions",
+                }
+            end
+        end
+    end
+
+    if #list == 0 then
+        local existing = self.db.resources.professions[charKey]
+        if type(existing) == "table" and #existing > 0 then
+            -- Avoid wiping known profession identity if the profession API is not ready yet.
+            return false
+        end
+    end
+
+    self.db.resources.professions[charKey] = list
+    if char then
+        char.professions = list
+    end
+    return true
+end
+
+function EL:GetProfessionEntriesForCharacter(charKey)
+    local out = {}
+    local stored = self.db and self.db.resources and self.db.resources.professions and self.db.resources.professions[charKey]
+    if type(stored) == "table" then
+        for _, data in ipairs(stored) do
+            if type(data) == "table" and (data.professionName or data.professionID or data.skillLineID) then
+                table.insert(out, data)
+            end
+        end
+    end
+
+    if #out > 0 then
+        table.sort(out, function(a, b)
+            local as = tonumber(a.slot) or 99
+            local bs = tonumber(b.slot) or 99
+            if as ~= bs then return as < bs end
+            return tostring(a.professionName or "") < tostring(b.professionName or "")
+        end)
+        return out
+    end
+
+    -- Compatibility fallback for older characters that have concentration data but have not logged in since v0.24.0.
+    return self:GetConcentrationEntriesForCharacter(charKey)
+end
+
+function EL:GetConcentrationEntryForProfession(charKey, professionData)
+    if not charKey or type(professionData) ~= "table" then return nil end
+    local targetID = tonumber(professionData.professionID or professionData.skillLineID or professionData.skillLine)
+    local targetName = self:GetCleanProfessionName(professionData.professionName):lower()
+    local fallback
+
+    for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
+        if data and data.charKey == charKey then
+            local dataID = tonumber(data.professionID or data.skillLineID or data.skillLine)
+            if targetID and dataID and targetID == dataID then
+                return data
+            end
+            local dataName = self:GetCleanProfessionName(data.professionName):lower()
+            if targetName ~= "profession" and targetName ~= "" and dataName == targetName then
+                fallback = data
+            end
+        end
+    end
+
+    return fallback
+end
+
+function EL:GetDashboardProfessionSlots(charKey)
+    local slots = {}
+    local professions = self:GetProfessionEntriesForCharacter(charKey)
+    local matchedConc = {}
+
+    for _, profData in ipairs(professions or {}) do
+        local concData = self:GetConcentrationEntryForProfession(charKey, profData)
+        if concData then matchedConc[concData] = true end
+        table.insert(slots, { prof = profData, conc = concData })
+    end
+
+    -- If profession identity is incomplete but concentration exists, keep the old
+    -- concentration-only fallback so older character records still display.
+    if #slots == 0 then
+        for _, concData in ipairs(self:GetConcentrationEntriesForCharacter(charKey) or {}) do
+            table.insert(slots, { prof = concData, conc = concData })
+        end
+    end
+
+    -- If one of two known professions has concentration and the other does not,
+    -- present the concentration profession in P1/Conc 1. This is display-only:
+    -- stored profession slots are not changed.
+    local concSlotIndex
+    local concCount = 0
+    for i, slotData in ipairs(slots) do
+        if slotData and slotData.conc then
+            concCount = concCount + 1
+            concSlotIndex = i
+        end
+    end
+
+    if concCount == 1 and concSlotIndex and concSlotIndex > 1 then
+        local promoted = table.remove(slots, concSlotIndex)
+        table.insert(slots, 1, promoted)
+    end
+
+    return slots
+end
+
+function EL:GetDashboardProfessionData(charKey, slot)
+    local slots = self:GetDashboardProfessionSlots(charKey)
+    local slotData = slots and slots[slot]
+    if slotData then
+        return slotData.prof, slotData.conc
+    end
+    return nil, nil
+end
+
 function EL:GetCleanProfessionName(name)
     name = tostring(name or "")
     if name == "" then return "Profession" end
@@ -636,26 +836,47 @@ function EL:RestoreHiddenCharacters()
     self:Print("Hidden characters restored.")
 end
 
-function EL:IsCharacterFavorite(charKey)
+function EL:IsCharacterPinned(charKey)
     return self.db and self.db.settings and self.db.settings.favoriteCharacters and self.db.settings.favoriteCharacters[charKey] and true or false
 end
 
-function EL:SetCharacterFavorite(charKey, favorite)
+function EL:SetCharacterPinned(charKey, pinned)
     if not (self.db and self.db.settings and charKey) then return end
+    -- Storage key remains favoriteCharacters for upgrade compatibility with v0.18-v0.20 saved variables.
     self.db.settings.favoriteCharacters = self.db.settings.favoriteCharacters or {}
-    self.db.settings.favoriteCharacters[charKey] = favorite and true or nil
+    self.db.settings.favoriteCharacters[charKey] = pinned and true or nil
 end
 
-function EL:ToggleCharacterFavorite(charKey)
+function EL:ToggleCharacterPinned(charKey)
     if not charKey then return false end
-    local favorite = not self:IsCharacterFavorite(charKey)
-    self:SetCharacterFavorite(charKey, favorite)
+    local pinned = not self:IsCharacterPinned(charKey)
+    self:SetCharacterPinned(charKey, pinned)
     self:RequestUpdate()
     local char = self.db and self.db.characters and self.db.characters[charKey]
     local displayName = (char and (char.displayName or char.name)) or charKey
-    self:Print((favorite and "Pinned: " or "Unpinned: ") .. tostring(displayName))
-    return favorite
+    self:Print((pinned and "Pinned: " or "Unpinned: ") .. tostring(displayName))
+    return pinned
 end
+
+function EL:ResetPinnedCharacters()
+    if not (self.db and self.db.settings) then return 0 end
+    local pinned = self.db.settings.favoriteCharacters
+    local count = 0
+    if type(pinned) == "table" then
+        for _ in pairs(pinned) do
+            count = count + 1
+        end
+    end
+    self.db.settings.favoriteCharacters = {}
+    self:RequestUpdate()
+    self:Print(count > 0 and ("Pinned characters reset: " .. tostring(count)) or "No pinned characters to reset.")
+    return count
+end
+
+-- Backward-compatible aliases for v0.18-v0.20 code paths and saved-variable wording.
+function EL:IsCharacterFavorite(charKey) return self:IsCharacterPinned(charKey) end
+function EL:SetCharacterFavorite(charKey, favorite) return self:SetCharacterPinned(charKey, favorite) end
+function EL:ToggleCharacterFavorite(charKey) return self:ToggleCharacterPinned(charKey) end
 
 function EL:ResetCharacterData(charKey)
     if not (self.db and charKey) then return false end
@@ -679,6 +900,9 @@ function EL:ResetCharacterData(charKey)
                     self.db.resources.concentration[resourceKey] = nil
                 end
             end
+        end
+        if self.db.resources.professions then
+            self.db.resources.professions[charKey] = nil
         end
     end
 
@@ -802,16 +1026,16 @@ function EL:GetDashboardSortValue(entry, key, now)
     if key == "character" then
         return tostring(self:GetCharacterDisplayName(char, charKey)):lower()
     elseif key == "prof" or key == "prof1" then
-        local conc = self:GetConcentrationEntriesForCharacter(charKey)[1]
-        return conc and self:GetProfessionAbbreviation(conc):lower() or nil
+        local prof = self:GetDashboardProfessionData(charKey, 1)
+        return prof and self:GetProfessionAbbreviation(prof):lower() or nil
     elseif key == "conc" or key == "conc1" then
-        local conc = self:GetConcentrationEntriesForCharacter(charKey)[1]
+        local _, conc = self:GetDashboardProfessionData(charKey, 1)
         return conc and (self:GetEstimatedConcentration(conc, now) or 0) or nil
     elseif key == "prof2" then
-        local conc = self:GetConcentrationEntriesForCharacter(charKey)[2]
-        return conc and self:GetProfessionAbbreviation(conc):lower() or nil
+        local prof = self:GetDashboardProfessionData(charKey, 2)
+        return prof and self:GetProfessionAbbreviation(prof):lower() or nil
     elseif key == "conc2" then
-        local conc = self:GetConcentrationEntriesForCharacter(charKey)[2]
+        local _, conc = self:GetDashboardProfessionData(charKey, 2)
         return conc and (self:GetEstimatedConcentration(conc, now) or 0) or nil
     elseif key == "full" then
         local conc = self:GetBestConcentrationForCharacter(charKey, now)
@@ -867,7 +1091,7 @@ function EL:SortDashboardRows(rows)
                 value = value,
                 name = tostring(self:GetCharacterDisplayName(entry.char, entry.key)):lower(),
                 key = tostring(entry.key or ""),
-                favorite = self:IsCharacterFavorite(entry.key),
+                pinned = self:IsCharacterPinned(entry.key),
             })
         end
     end
@@ -878,9 +1102,9 @@ function EL:SortDashboardRows(rows)
         if not a then return false end
         if not b then return true end
 
-        local showFavoritesFirst = self.db and self.db.settings and self.db.settings.display and self.db.settings.display.showFavoritesFirst ~= false
-        if showFavoritesFirst and a.favorite ~= b.favorite then
-            return a.favorite == true
+        local showPinnedFirst = self.db and self.db.settings and self.db.settings.display and self.db.settings.display.showPinnedFirst ~= false
+        if showPinnedFirst and a.pinned ~= b.pinned then
+            return a.pinned == true
         end
 
         local aNA = a.value == nil
@@ -1521,7 +1745,7 @@ SlashCmdList.EMBERLEDGER = function(msg)
     elseif msg == "scale" then
         local current = EL.db and EL.db.settings and EL.db.settings.panel and EL.db.settings.panel.scale or 1
         EL:Print("Current window scale: " .. string.format("%.2f", current) .. ". Use /el scale 0.85, /el scale 1, etc.")
-    elseif msg == "reset" then
+    elseif msg == "reset" or msg == "reset windows" or msg == "reset layout" then
         if EL.ResetWindowPositions then EL:ResetWindowPositions() end
     elseif msg == "lock" or msg == "unlock" then
         EL.db.settings.lockWindows = (msg == "lock")
@@ -1530,17 +1754,29 @@ SlashCmdList.EMBERLEDGER = function(msg)
     elseif msg == "debug" then
         if EL.ToggleDebug then EL:ToggleDebug() end
     elseif msg == "refresh" then
+        if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
         EL:ForEachModule("Refresh")
         EL:RequestUpdate()
         EL:Print("Refreshed.")
+    elseif msg == "refresh professions" or msg == "professions" then
+        if EL.RefreshCurrentProfessionIdentity and EL:RefreshCurrentProfessionIdentity() then
+            EL:RequestUpdate()
+            EL:Print("Profession identity refreshed.")
+        else
+            EL:Print("Profession identity could not be refreshed yet.")
+        end
     elseif msg == "session start" or msg == "session resume" then
         EL:SetSessionPaused(false)
         EL:Print("Session tracking resumed.")
     elseif msg == "session pause" then
         EL:SetSessionPaused(true)
         EL:Print("Session tracking paused.")
-    elseif msg == "session reset" then
+    elseif msg == "session reset" or msg == "reset session" then
         EL:ResetSession()
+    elseif msg == "reset hidden" or msg == "restore hidden" then
+        EL:RestoreHiddenCharacters()
+    elseif msg == "reset pinned" or msg == "unpinall" then
+        if EL.ResetPinnedCharacters then EL:ResetPinnedCharacters() end
     elseif msg == "main" then
         if EL.ToggleMainPanel then EL:ToggleMainPanel() end
     elseif msg == "session" then
@@ -1568,6 +1804,7 @@ EL.frame:SetScript("OnEvent", function(_, event, ...)
         if loaded ~= addonName then return end
         EL:EnsureDB()
         EL:GetCurrentCharacter()
+        if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
         EL:ForEachModule("OnLoad")
         if EL.CreateUI then EL:CreateUI() end
         EL:ForEachModule("Refresh")
@@ -1575,6 +1812,19 @@ EL.frame:SetScript("OnEvent", function(_, event, ...)
     elseif event == "PLAYER_REGEN_ENABLED" then
         if EL.FlushCombatDeferredWork then EL:FlushCombatDeferredWork() end
     else
+        if event == "PLAYER_ENTERING_WORLD" or event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_DATA_SOURCE_CHANGED" or event == "SKILL_LINES_CHANGED" then
+            local delay = (event == "PLAYER_ENTERING_WORLD") and 1 or 0.2
+            if C_Timer and C_Timer.After then
+                C_Timer.After(delay, function()
+                    if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
+                    if EL.RequestUpdate then EL:RequestUpdate() end
+                end)
+            else
+                if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
+            end
+        elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" or event == "SPELLS_CHANGED" or event == "BAG_UPDATE_DELAYED" then
+            if EL.RequestActionBarRefresh then EL:RequestActionBarRefresh() end
+        end
         for _, module in pairs(EL.modules) do
             if module and module.OnEvent then
                 pcall(module.OnEvent, module, event, ...)
@@ -1585,6 +1835,7 @@ end)
 
 EL.frame:RegisterEvent("ADDON_LOADED")
 EL.frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+EL.frame:RegisterEvent("SKILL_LINES_CHANGED")
 EL.frame:RegisterEvent("TRADE_SKILL_SHOW")
 EL.frame:RegisterEvent("TRADE_SKILL_DATA_SOURCE_CHANGED")
 EL.frame:RegisterEvent("TRADE_SKILL_ITEM_CRAFTED_RESULT")
@@ -1592,3 +1843,7 @@ EL.frame:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
 EL.frame:RegisterEvent("BAG_UPDATE_DELAYED")
 EL.frame:RegisterEvent("CHAT_MSG_LOOT")
 EL.frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+EL.frame:RegisterEvent("SPELLS_CHANGED")
+EL.frame:RegisterEvent("ZONE_CHANGED")
+EL.frame:RegisterEvent("ZONE_CHANGED_INDOORS")
+EL.frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")

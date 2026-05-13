@@ -22,9 +22,17 @@ local PANEL_MIN_SCALE = UIC.PANEL_MIN_SCALE or 0.6
 local PANEL_MAX_SCALE = UIC.PANEL_MAX_SCALE or 1.4
 local READY_ICON = "|TInterface\\RaidFrame\\ReadyCheck-Ready:14|t"
 local PIN_GLOW_R, PIN_GLOW_G, PIN_GLOW_B = 1.00, 0.72, 0.18
-local PIN_GLOW_ALPHA = 0.075
-local PIN_ACCENT_ALPHA = 0.28
-local PIN_HOVER_ALPHA = 0.055
+local PIN_GLOW_ALPHA = 0.060
+local PIN_ACCENT_ALPHA = 0.20
+local PIN_HOVER_ALPHA = 0.040
+local BORDER_R, BORDER_G, BORDER_B = 0.42, 0.36, 0.28
+local BORDER_ALPHA_STRONG = 0.58
+local BORDER_ALPHA_SOFT = 0.38
+local HEADER_LINE_ALPHA_TOP = 0.09
+local HEADER_LINE_ALPHA_BOTTOM = 0.18
+local ROW_STRIPE_ALPHA = 0.40
+local ROW_STRIPE_ALPHA_COMPACT = 0.36
+local ROW_SEPARATOR_ALPHA = 0.10
 
 
 local function IsCompactModeEnabled()
@@ -45,11 +53,11 @@ local function GetTrackingHeaderYOffset()
 end
 
 local function GetTrackingActionBarBottomOffset()
-    return IsCompactModeEnabled() and 12 or 14
+    return IsCompactModeEnabled() and 8 or 10
 end
 
 local function GetTrackingBottomPadding(actionBarShown)
-    return actionBarShown and (GetTrackingActionBarBottomOffset() + ACTION_BAR_H + 6) or 22
+    return actionBarShown and (GetTrackingActionBarBottomOffset() + ACTION_BAR_H + 8) or 20
 end
 
 local function ApplyTrackingTextStyle(row)
@@ -93,7 +101,7 @@ local function AddBackdrop(frame, alpha, borderAlpha)
     -- Reverted from the grey-stone experiment: keep the cleaner dark backdrop,
     -- while using Blizzard templates for buttons and scrollbars.
     frame:SetBackdropColor(0.018, 0.020, 0.026, alpha or 0.55)
-    frame:SetBackdropBorderColor(0.42, 0.36, 0.28, borderAlpha or 0.55)
+    frame:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, borderAlpha or 0.55)
 end
 
 local function GetPanelOpacity()
@@ -182,11 +190,10 @@ local function GetCurrentPanelMinHeight(panel)
     local topPadding = GetTrackingTopPadding()
     local charHeaderH = charShown and (IsCompactModeEnabled() and 28 or 32) or 0
     local charBodyMinH = charShown and (IsCompactModeEnabled() and 54 or 76) or 0
-    local actionBarH = actionBarShown and ACTION_BAR_H or 0
     local bottomPadding = GetTrackingBottomPadding(actionBarShown)
     local compactMin = charShown and (IsCompactModeEnabled() and 156 or 190) or 110
 
-    return math.max(compactMin, topPadding + charHeaderH + charBodyMinH + actionBarH + bottomPadding)
+    return math.max(compactMin, topPadding + charHeaderH + charBodyMinH + bottomPadding)
 end
 
 local function ClampPanelSize(panel)
@@ -233,9 +240,8 @@ function EL:GetTrackingPanelAutoSize()
 
     local topPadding = GetTrackingTopPadding()
     local headerAndGapH = charShown and ((IsCompactModeEnabled() and 28 or 32) + 4) or 0
-    local actionBarH = actionBarShown and ACTION_BAR_H or 0
     local bottomPadding = GetTrackingBottomPadding(actionBarShown)
-    local height = topPadding + headerAndGapH + tableBodyH + actionBarH + bottomPadding
+    local height = topPadding + headerAndGapH + tableBodyH + bottomPadding
     height = math.max(GetCurrentPanelMinHeight(self.panel), math.min(PANEL_MAX_H, height))
     return math.floor(width + 0.5), math.floor(height + 0.5)
 end
@@ -347,6 +353,12 @@ local function GetTrackingColumnWidth(def, useMin)
 end
 
 function EL:HasSecondaryConcentrationColumnData()
+    for charKey, list in pairs(self.db and self.db.resources and self.db.resources.professions or {}) do
+        if charKey and not self:IsCharacterHidden(charKey) and type(list) == "table" and #list > 1 then
+            return true
+        end
+    end
+
     local chars = {}
     for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
         local charKey = data and data.charKey
@@ -638,6 +650,49 @@ local function MakeSettingsButton(parent, text, width, onClick)
 end
 
 
+local function ShowSettingsConfirm(text, acceptText, onAccept)
+    if not onAccept then return end
+    if StaticPopupDialogs and StaticPopup_Show then
+        StaticPopupDialogs["EMBERLEDGER_CONFIRM_ACTION"] = {
+            text = text or "Are you sure?",
+            button1 = acceptText or YES,
+            button2 = CANCEL,
+            OnAccept = function() onAccept() end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+        StaticPopup_Show("EMBERLEDGER_CONFIRM_ACTION")
+    else
+        onAccept()
+    end
+end
+
+function EL:ConfirmResetWindowPositions()
+    ShowSettingsConfirm("Reset all EmberLedger window positions? Scale and visibility settings will be kept.", "Reset", function()
+        if EL.ResetWindowPositions then EL:ResetWindowPositions() end
+    end)
+end
+
+function EL:ConfirmResetSession()
+    ShowSettingsConfirm("Reset the current session totals and tracked item list?", "Reset", function()
+        if EL.ResetSession then EL:ResetSession() end
+    end)
+end
+
+function EL:ConfirmRestoreHiddenCharacters()
+    ShowSettingsConfirm("Restore all hidden characters to the tracking table?", "Restore", function()
+        if EL.RestoreHiddenCharacters then EL:RestoreHiddenCharacters() end
+    end)
+end
+
+function EL:ConfirmResetPinnedCharacters()
+    ShowSettingsConfirm("Remove all pinned character markers? Character data will not be deleted.", "Reset", function()
+        if EL.ResetPinnedCharacters then EL:ResetPinnedCharacters() end
+    end)
+end
+
 local function MakeSettingsCheck(parent, text, onClick)
     local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     cb:SetSize(24, 24)
@@ -729,6 +784,19 @@ function EL:CreateSettingsPanel(parent)
     -- Keep the Options panel parented to UIParent so Main window scale changes do not affect it.
     local f = CreateFrame("Frame", "EmberLedgerSettingsPanel", UIParent, "BackdropTemplate")
     self.settingsPanel = f
+    if type(UISpecialFrames) == "table" and not f._emberLedgerEscRegistered then
+        local registered = false
+        for _, frameName in ipairs(UISpecialFrames) do
+            if frameName == "EmberLedgerSettingsPanel" then
+                registered = true
+                break
+            end
+        end
+        if not registered then
+            table.insert(UISpecialFrames, "EmberLedgerSettingsPanel")
+        end
+        f._emberLedgerEscRegistered = true
+    end
     f:SetSize(660, 650)
     f:SetScale(1)
     f:SetFrameStrata("DIALOG")
@@ -769,7 +837,8 @@ function EL:CreateSettingsPanel(parent)
         {"Launcher", "Interface\\Icons\\INV_Misc_Rune_01"},
         {"Session", "Interface\\Icons\\INV_Misc_Coin_01"},
         {"Tracking", "Interface\\Icons\\INV_Inscription_Tradeskill01"},
-        {"Actions", "Interface\\Icons\\INV_Misc_EngGizmos_17"},
+        {"Action Bar", "Interface\\Icons\\INV_Misc_EngGizmos_17"},
+        {"Maintenance", "Interface\\Icons\\Trade_Engineering"},
     }
     f.navLabels = {}
     local ny = -14
@@ -822,8 +891,8 @@ function EL:CreateSettingsPanel(parent)
     f.toggleAttentionOnly:SetPoint("TOPLEFT", 12, -88)
     f.toggleCompactMode = MakeSettingsCheck(f.generalSection, "Compact tracking rows", function() EL:ToggleDisplaySetting("compactMode") end)
     f.toggleCompactMode:SetPoint("TOPLEFT", 238, -88)
-    f.toggleFavoritesFirst = MakeSettingsCheck(f.generalSection, "Show pinned first", function() EL:ToggleDisplaySetting("showFavoritesFirst") end)
-    f.toggleFavoritesFirst:SetPoint("TOPLEFT", 12, -114)
+    f.togglePinnedFirst = MakeSettingsCheck(f.generalSection, "Show pinned first", function() EL:ToggleDisplaySetting("showPinnedFirst") end)
+    f.togglePinnedFirst:SetPoint("TOPLEFT", 12, -114)
 
     f.appearanceSection = MakeSettingsSection(f, "Appearance", contentX, -142, contentW, 150)
     f.launcherOpacitySlider = MakeSettingsSlider(f.appearanceSection, "Launcher opacity", 20, 100, 5, function(v) return string.format("%d%%", v) end, function(v)
@@ -856,18 +925,20 @@ function EL:CreateSettingsPanel(parent)
     f.thresholdSlider:SetPoint("TOPLEFT", 12, -38)
 
     f.trackingColumnsSection = MakeSettingsSection(f, "Tracking Columns", contentX, -598, contentW, 124)
+    local trackingColumnLeftX = 12
+    local trackingColumnRightX = 250
     f.toggleProf1Column = MakeSettingsCheck(f.trackingColumnsSection, "Show Prof 1 column", function() EL:ToggleTrackingColumn("prof1") end)
-    f.toggleProf1Column:SetPoint("TOPLEFT", 12, -34)
+    f.toggleProf1Column:SetPoint("TOPLEFT", trackingColumnLeftX, -34)
     f.toggleConc1Column = MakeSettingsCheck(f.trackingColumnsSection, "Show Conc 1 column", function() EL:ToggleTrackingColumn("conc1") end)
-    f.toggleConc1Column:SetPoint("TOPLEFT", 178, -34)
+    f.toggleConc1Column:SetPoint("TOPLEFT", trackingColumnRightX, -34)
     f.toggleProf2Column = MakeSettingsCheck(f.trackingColumnsSection, "Allow Prof 2 column", function() EL:ToggleTrackingColumn("prof2") end)
-    f.toggleProf2Column:SetPoint("TOPLEFT", 12, -60)
+    f.toggleProf2Column:SetPoint("TOPLEFT", trackingColumnLeftX, -60)
     f.toggleConc2Column = MakeSettingsCheck(f.trackingColumnsSection, "Allow Conc 2 column", function() EL:ToggleTrackingColumn("conc2") end)
-    f.toggleConc2Column:SetPoint("TOPLEFT", 178, -60)
+    f.toggleConc2Column:SetPoint("TOPLEFT", trackingColumnRightX, -60)
     f.toggleMulchColumn = MakeSettingsCheck(f.trackingColumnsSection, "Show Imbued Mulch column", function() EL:ToggleTrackingColumn("mulch") end)
-    f.toggleMulchColumn:SetPoint("TOPLEFT", 12, -86)
+    f.toggleMulchColumn:SetPoint("TOPLEFT", trackingColumnLeftX, -86)
     f.toggleCharacterRealm = MakeSettingsCheck(f.trackingColumnsSection, "Show character realm", function() EL:ToggleDisplaySetting("showCharacterRealm") end)
-    f.toggleCharacterRealm:SetPoint("TOPLEFT", 178, -86)
+    f.toggleCharacterRealm:SetPoint("TOPLEFT", trackingColumnRightX, -86)
     f.launcherSection = MakeSettingsSection(f, "Launcher Display", contentX, -598, contentW, 88)
     f.toggleConc = MakeSettingsCheck(f.launcherSection, "Concentration alert", function() EL:ToggleDisplaySetting("showLauncherConc") end)
     f.toggleConc:SetPoint("TOPLEFT", 12, -34)
@@ -903,23 +974,58 @@ function EL:CreateSettingsPanel(parent)
     f.pricingSourceValue:SetPoint("LEFT", f.pricingSourceLabel, "RIGHT", 5, 0)
     f.pricingSourceValue:SetTextColor(1.00, 0.92, 0.56)
 
-    f.actionSection = MakeSettingsSection(f, "Actions", contentX, -42, contentW, 126)
+    f.actionSection = MakeSettingsSection(f, "Action Bar", contentX, -42, contentW, 74)
     f.toggleActionBar = MakeSettingsCheck(f.actionSection, "Show action bar", function() EL:ToggleSectionSetting("actions") end)
     f.toggleActionBar:SetPoint("TOPLEFT", 10, -34)
-    f.resetHidden = MakeSettingsButton(f.actionSection, "Reset Hidden", 128, function() EL:RestoreHiddenCharacters() end)
-    f.resetHidden:SetPoint("TOPLEFT", 12, -62)
-    f.resetPos = MakeSettingsButton(f.actionSection, "Reset Windows", 128, function() EL:ResetWindowPositions() end)
-    f.resetPos:SetPoint("LEFT", f.resetHidden, "RIGHT", 12, 0)
+
+    f.actionButtonsSection = MakeSettingsSection(f, "Action Bar Buttons", contentX, -128, contentW, 232)
+    f.actionGeneralLabel = f.actionButtonsSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.actionGeneralLabel:SetPoint("TOPLEFT", 12, -32)
+    f.actionGeneralLabel:SetText("General")
+    f.actionGeneralLabel:SetTextColor(1.00, 0.82, 0.24)
+    f.actionMulchButton = MakeSettingsCheck(f.actionButtonsSection, "Imbued Mulch", function() EL:ToggleActionBarButton("mulch", "Imbued Mulch") end)
+    f.actionMulchButton:SetPoint("TOPLEFT", 12, -54)
+    f.actionGreenThumbButton = MakeSettingsCheck(f.actionButtonsSection, "Green Thumb", function() EL:ToggleActionBarButton("greenThumb", "Green Thumb") end)
+    f.actionGreenThumbButton:SetPoint("TOPLEFT", 178, -54)
+    f.actionOverloadHerbButton = MakeSettingsCheck(f.actionButtonsSection, "Overload Herb", function() EL:ToggleActionBarButton("overloadHerb", "Overload Herb") end)
+    f.actionOverloadHerbButton:SetPoint("TOPLEFT", 12, -80)
+    f.actionOverloadOreButton = MakeSettingsCheck(f.actionButtonsSection, "Overload Ore", function() EL:ToggleActionBarButton("overloadOre", "Overload Ore") end)
+    f.actionOverloadOreButton:SetPoint("TOPLEFT", 178, -80)
+    f.actionParcelButton = MakeSettingsCheck(f.actionButtonsSection, "Interdimensional Parcel", function() EL:ToggleActionBarButton("parcel", "Interdimensional Parcel") end)
+    f.actionParcelButton:SetPoint("TOPLEFT", 12, -106)
+    f.actionBankButton = MakeSettingsCheck(f.actionButtonsSection, "Warband Bank", function() EL:ToggleActionBarButton("bank", "Warband Bank") end)
+    f.actionBankButton:SetPoint("TOPLEFT", 178, -106)
+
+    f.actionSeedsLabel = f.actionButtonsSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.actionSeedsLabel:SetPoint("TOPLEFT", 12, -136)
+    f.actionSeedsLabel:SetText("Seeds")
+    f.actionSeedsLabel:SetTextColor(1.00, 0.82, 0.24)
+    f.actionSeedButton = MakeSettingsCheck(f.actionButtonsSection, "Resilient Seed", function() EL:ToggleActionBarButton("seed", "Resilient Seed") end)
+    f.actionSeedButton:SetPoint("TOPLEFT", 12, -158)
+    f.actionGlowingSeedButton = MakeSettingsCheck(f.actionButtonsSection, "Glowing Resilient Seed", function() EL:ToggleActionBarButton("glowingSeed", "Glowing Resilient Seed") end)
+    f.actionGlowingSeedButton:SetPoint("TOPLEFT", 178, -158)
+    f.actionWildSeedButton = MakeSettingsCheck(f.actionButtonsSection, "Wild Resilient Seed", function() EL:ToggleActionBarButton("wildSeed", "Wild Resilient Seed") end)
+    f.actionWildSeedButton:SetPoint("TOPLEFT", 12, -184)
+    f.actionPrimalSeedButton = MakeSettingsCheck(f.actionButtonsSection, "Primal Resilient Seed", function() EL:ToggleActionBarButton("primalSeed", "Primal Resilient Seed") end)
+    f.actionPrimalSeedButton:SetPoint("TOPLEFT", 178, -184)
+
+    f.maintenanceSection = MakeSettingsSection(f, "Maintenance", contentX, -372, contentW, 128)
+    f.resetPos = MakeSettingsButton(f.maintenanceSection, "Reset Windows", 138, function() EL:ConfirmResetWindowPositions() end)
+    f.resetPos:SetPoint("TOPLEFT", 12, -38)
+    f.resetSession = MakeSettingsButton(f.maintenanceSection, "Reset Session", 138, function() EL:ConfirmResetSession() end)
+    f.resetSession:SetPoint("LEFT", f.resetPos, "RIGHT", 12, 0)
+    f.resetHidden = MakeSettingsButton(f.maintenanceSection, "Reset Hidden", 138, function() EL:ConfirmRestoreHiddenCharacters() end)
+    f.resetHidden:SetPoint("TOPLEFT", 12, -72)
+    f.resetPinned = MakeSettingsButton(f.maintenanceSection, "Reset Pinned", 138, function() EL:ConfirmResetPinnedCharacters() end)
+    f.resetPinned:SetPoint("LEFT", f.resetHidden, "RIGHT", 12, 0)
 
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "0.20.0 Beta"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.0.0"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
-    f.resetSession = MakeSettingsButton(f.footerSection, "Reset Session", 106, function() EL:ResetSession() end)
-    f.resetSession:SetPoint("TOPRIGHT", -126, -32)
     f.copySummary = MakeSettingsButton(f.footerSection, "Copy Summary", 112, function() EL:ShowCopySessionSummaryDialog() end)
-    f.copySummary:SetPoint("LEFT", f.resetSession, "RIGHT", 8, 0)
+    f.copySummary:SetPoint("TOPRIGHT", -12, -32)
 
     f.allSettingsSections = {
         f.generalSection,
@@ -930,6 +1036,8 @@ function EL:CreateSettingsPanel(parent)
         f.launcherSection,
         f.sessionOptions,
         f.actionSection,
+        f.actionButtonsSection,
+        f.maintenanceSection,
         f.footerSection,
     }
     f.settingsPages = {
@@ -938,7 +1046,8 @@ function EL:CreateSettingsPanel(parent)
         Launcher = {f.launcherSection},
         Session = {f.sessionOptions},
         Tracking = {f.thresholdSection, f.trackingColumnsSection},
-        Actions = {f.actionSection},
+        ["Action Bar"] = {f.actionSection, f.actionButtonsSection},
+        Maintenance = {f.maintenanceSection},
     }
 
     -- The sidebar is now a real category menu. Show one module at a time rather than
@@ -969,6 +1078,7 @@ function EL:SelectSettingsPage(pageName)
     local f = self.settingsPanel
     if not f then return end
     pageName = pageName or f.currentPage or "General"
+    if pageName == "Actions" then pageName = "Action Bar" end
     f.currentPage = pageName
 
     if f.allSettingsSections then
@@ -1031,12 +1141,23 @@ function EL:RefreshSettingsPanel()
     setToggle(f.toggleCharacterRealm, display.showCharacterRealm ~= false)
     setToggle(f.toggleAttentionOnly, display.attentionOnly == true)
     setToggle(f.toggleCompactMode, display.compactMode == true)
-    setToggle(f.toggleFavoritesFirst, display.showFavoritesFirst ~= false)
+    setToggle(f.togglePinnedFirst, display.showPinnedFirst ~= false)
     local panelSettings = self.db.settings.panel or {}
     local sessionSettings = self.db.settings.session or {}
     setToggle(f.toggleCharactersSection, panelSettings.charactersShown ~= false)
     setToggle(f.toggleSessionSection, sessionSettings.shown ~= false)
     setToggle(f.toggleActionBar, panelSettings.actionBarShown ~= false)
+    local actionButtons = panelSettings.actionButtons or {}
+    setToggle(f.actionMulchButton, actionButtons.mulch ~= false)
+    setToggle(f.actionSeedButton, actionButtons.seed ~= false)
+    setToggle(f.actionGlowingSeedButton, actionButtons.glowingSeed ~= false)
+    setToggle(f.actionWildSeedButton, actionButtons.wildSeed ~= false)
+    setToggle(f.actionPrimalSeedButton, actionButtons.primalSeed ~= false)
+    setToggle(f.actionGreenThumbButton, actionButtons.greenThumb ~= false)
+    setToggle(f.actionOverloadHerbButton, actionButtons.overloadHerb ~= false)
+    setToggle(f.actionOverloadOreButton, actionButtons.overloadOre ~= false)
+    setToggle(f.actionParcelButton, actionButtons.parcel ~= false)
+    setToggle(f.actionBankButton, actionButtons.bank ~= false)
     setToggle(f.filterHerbs, sessionSettings.trackHerbs ~= false)
     setToggle(f.filterOre, sessionSettings.trackOre ~= false)
     setToggle(f.filterCloth, sessionSettings.trackCloth ~= false)
@@ -1150,7 +1271,7 @@ local DISPLAY_TOGGLE_LABELS = {
     showCharacterRealm = "Character realm display",
     attentionOnly = "Attention Only view",
     compactMode = "Compact tracking rows",
-    showFavoritesFirst = "Pinned first sorting",
+    showPinnedFirst = "Pinned first sorting",
 }
 
 local SESSION_FILTER_LABELS = {
@@ -1239,7 +1360,7 @@ function EL:ToggleDisplaySetting(key)
     local enabled = not (self.db.settings.display[key] ~= false)
     self.db.settings.display[key] = enabled
     self:NotifyToggle(DISPLAY_TOGGLE_LABELS[key] or key, enabled)
-    if (key == "showCharacterRealm" or key == "attentionOnly" or key == "compactMode" or key == "showFavoritesFirst") and self.AutoSizeTrackingPanel then
+    if (key == "showCharacterRealm" or key == "attentionOnly" or key == "compactMode" or key == "showPinnedFirst") and self.AutoSizeTrackingPanel then
         self:AutoSizeTrackingPanel(key .. "Toggle")
     end
     self:RefreshSettingsPanel()
@@ -1267,6 +1388,18 @@ function EL:ToggleLockWindows()
     self.db.settings.lockWindows = not (self.db.settings.lockWindows == true)
     self:RefreshSettingsPanel()
     self:Print("Windows " .. (self.db.settings.lockWindows and "locked. Hold Shift and drag to move them." or "unlocked."))
+end
+
+function EL:ToggleActionBarButton(key, label)
+    if not key then return end
+    self.db.settings.panel = self.db.settings.panel or {}
+    self.db.settings.panel.actionButtons = self.db.settings.panel.actionButtons or {}
+    local buttons = self.db.settings.panel.actionButtons
+    buttons[key] = not (buttons[key] ~= false)
+    self:NotifyToggle(label or key, buttons[key] ~= false)
+    if self.RequestActionBarRefresh then self:RequestActionBarRefresh() end
+    if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+    if self.RequestUpdate then self:RequestUpdate() end
 end
 
 function EL:ToggleSectionSetting(section)
@@ -1329,7 +1462,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "0.20.0 Beta"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.0.0"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -1343,7 +1476,7 @@ function EL:RegisterBlizzardSettings()
     canvas.open:SetPoint("TOP", canvas.desc, "BOTTOM", 0, -28)
 
     canvas.reset = MakeSettingsButton(canvas, "Reset Window Positions", 220, function()
-        if EL.ResetWindowPositions then EL:ResetWindowPositions() end
+        if EL.ConfirmResetWindowPositions then EL:ConfirmResetWindowPositions() elseif EL.ResetWindowPositions then EL:ResetWindowPositions() end
     end)
     canvas.reset:SetPoint("TOP", canvas.open, "BOTTOM", 0, -14)
 
@@ -1393,7 +1526,7 @@ function EL:CreateMainButton()
     AddBackdrop(button, GetLauncherOpacity(), 0.50)
     AddInnerBorder(button)
     if button.SetBackdropColor then button:SetBackdropColor(0.018, 0.020, 0.026, GetLauncherOpacity()) end
-    if button.SetBackdropBorderColor then button:SetBackdropBorderColor(0.42, 0.36, 0.28, 0.62) end
+    if button.SetBackdropBorderColor then button:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, BORDER_ALPHA_STRONG) end
 
     button.title = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     button.title:SetPoint("TOPLEFT", 10, -7)
@@ -1513,8 +1646,63 @@ local function GetToyIconSafe(itemID, itemName, fallback)
     return GetItemIconByIDOrName(itemID, itemName, fallback)
 end
 
+
+local ACTION_ZONE_GROUPS = {
+    khazAlgar = {
+        ["Khaz Algar"] = true,
+        ["Isle of Dorn"] = true,
+        ["Dornogal"] = true,
+        ["The Ringing Deeps"] = true,
+        ["Hallowfall"] = true,
+        ["Azj-Kahet"] = true,
+        ["City of Threads"] = true,
+    },
+    midnight = {
+        ["Midnight"] = true,
+        ["Quel'Thalas"] = true,
+        ["Eversong Woods"] = true,
+        ["Silvermoon City"] = true,
+        ["Zul'Aman"] = true,
+        ["Harandar"] = true,
+        ["Voidstorm"] = true,
+    },
+}
+
+local function IsActionZoneAllowed(zoneGroup)
+    if not zoneGroup then return true end
+    local allowed = ACTION_ZONE_GROUPS[zoneGroup]
+    if not allowed then return true end
+    if not C_Map or not C_Map.GetBestMapForUnit or not C_Map.GetMapInfo then return true end
+
+    local ok, mapID = pcall(C_Map.GetBestMapForUnit, "player")
+    if not ok or not mapID then return true end
+
+    local checked = 0
+    while mapID and checked < 8 do
+        local okInfo, info = pcall(C_Map.GetMapInfo, mapID)
+        if okInfo and info then
+            if info.name and allowed[info.name] then return true end
+            mapID = info.parentMapID
+        else
+            break
+        end
+        checked = checked + 1
+    end
+
+    return false
+end
+
+local function IsActionVariantZoneAllowed(variant, info)
+    local zoneGroup = variant and variant.zoneGroup or info and info.zoneGroup
+    return IsActionZoneAllowed(zoneGroup)
+end
+
+local ResolveActionSpell
+
 local function GetActionIcon(info)
     if info.kind == "spell" then
+        local resolved = ResolveActionSpell and ResolveActionSpell(info)
+        if resolved then return GetSpellIconSafe(resolved.spellID, resolved.name, resolved.fallback or info.fallback) end
         return GetSpellIconSafe(info.spellID, info.name, info.fallback)
     elseif info.kind == "toy" then
         return GetToyIconSafe(info.itemID, info.name, info.fallback)
@@ -1564,6 +1752,10 @@ local function PlayerKnowsSpellSafe(spellID, spellName)
             local ok, known = pcall(C_SpellBook.IsSpellKnown, spellID)
             if ok and known then return true end
         end
+        if C_SpellBook and C_SpellBook.IsSpellKnownOrOverridesKnown then
+            local ok, known = pcall(C_SpellBook.IsSpellKnownOrOverridesKnown, spellID)
+            if ok and known then return true end
+        end
     end
     if spellName and GetSpellInfo then
         local ok, name = pcall(GetSpellInfo, spellName)
@@ -1572,24 +1764,55 @@ local function PlayerKnowsSpellSafe(spellID, spellName)
     return false
 end
 
-local function ResolveKnownSpellID(info)
+ResolveActionSpell = function(info)
     if not info then return nil end
-    if info.spellID and PlayerKnowsSpellSafe(info.spellID, info.name) then return info.spellID end
+
+    if info.spellVariants then
+        for _, variant in ipairs(info.spellVariants) do
+            local spellID = variant.spellID
+            local spellName = variant.name or info.name
+            if IsActionVariantZoneAllowed(variant, info) and PlayerKnowsSpellSafe(spellID, spellName) then
+                return {
+                    spellID = spellID,
+                    name = spellName,
+                    label = variant.label or info.label or spellName,
+                    zoneGroup = variant.zoneGroup or info.zoneGroup,
+                    fallback = variant.fallback or info.fallback,
+                }
+            end
+        end
+        return nil
+    end
+
+    if not IsActionZoneAllowed(info.zoneGroup) then return nil end
+    if info.spellID and PlayerKnowsSpellSafe(info.spellID, info.name) then
+        return { spellID = info.spellID, name = info.name, label = info.label or info.name, zoneGroup = info.zoneGroup, fallback = info.fallback }
+    end
     if info.spellIDs then
         for _, spellID in ipairs(info.spellIDs) do
-            if PlayerKnowsSpellSafe(spellID, info.name) then return spellID end
+            if PlayerKnowsSpellSafe(spellID, info.name) then
+                return { spellID = spellID, name = info.name, label = info.label or info.name, zoneGroup = info.zoneGroup, fallback = info.fallback }
+            end
         end
     end
-    if info.name and PlayerKnowsSpellSafe(nil, info.name) then return info.name end
-    return info.spellID or info.name
+    if info.name and PlayerKnowsSpellSafe(nil, info.name) then
+        return { spellID = nil, name = info.name, label = info.label or info.name, zoneGroup = info.zoneGroup, fallback = info.fallback }
+    end
+    return nil
+end
+
+local function ResolveKnownSpellID(info)
+    local resolved = ResolveActionSpell(info)
+    return resolved and (resolved.spellID or resolved.name) or nil
 end
 
 local function GetActionAvailable(info)
     if info.kind == "toy" then
         return PlayerHasToySafe(info.itemID)
     elseif info.kind == "spell" then
-        return ResolveKnownSpellID(info) ~= nil
+        return ResolveActionSpell(info) ~= nil
     else
+        if info.zoneGroup and not IsActionZoneAllowed(info.zoneGroup) then return false end
         return GetItemCountSafe(info.itemID, info.name) > 0
     end
 end
@@ -1598,6 +1821,7 @@ local function GetActionCooldownSafe(info)
     if not info then return 0, 0, 0 end
     if info.kind == "spell" then
         local spell = ResolveKnownSpellID(info)
+        if not spell then return 0, 0, 0 end
         if C_Spell and C_Spell.GetSpellCooldown then
             local ok, cd = pcall(C_Spell.GetSpellCooldown, spell)
             if ok and cd then
@@ -1642,13 +1866,26 @@ local function GetActionCooldownSafe(info)
     end
 end
 
+
+local function SetSpellButtonAttributes(button, info)
+    if not button or not info or info.kind ~= "spell" then return end
+    local resolved = ResolveActionSpell(info)
+    local spellName = (resolved and resolved.name) or info.name or info.label or ""
+    local macrotext = "/cast " .. tostring(spellName)
+    button:SetAttribute("type", "macro")
+    button:SetAttribute("type1", "macro")
+    button:SetAttribute("macrotext", macrotext)
+    button:SetAttribute("macrotext1", macrotext)
+    button.resolvedSpell = resolved
+end
+
 local function MakeIconActionButton(parent, info)
     -- Secure action buttons must not call UseItemByName or Logout directly.
     -- This mirrors the working MulchTracker pattern, with explicit left-click
     -- attributes added for compatibility with action button handling.
     local name = "EmberLedgerActionButton_" .. tostring(info.key or math.random(100000))
     local b = CreateFrame("Button", name, parent, "SecureActionButtonTemplate")
-    b:SetSize(28, 28)
+    b:SetSize(26, 26)
     b:RegisterForClicks("AnyUp", "AnyDown")
     b:EnableMouse(true)
 
@@ -1665,11 +1902,7 @@ local function MakeIconActionButton(parent, info)
         b:SetAttribute("macrotext", macrotext)
         b:SetAttribute("macrotext1", macrotext)
     elseif info.kind == "spell" then
-        local macrotext = "/cast " .. tostring(info.name or info.label or "")
-        b:SetAttribute("type", "macro")
-        b:SetAttribute("type1", "macro")
-        b:SetAttribute("macrotext", macrotext)
-        b:SetAttribute("macrotext1", macrotext)
+        SetSpellButtonAttributes(b, info)
     else
         local macrotext = "/use " .. tostring(info.name or info.label or "")
         b:SetAttribute("type", "macro")
@@ -1716,10 +1949,15 @@ local function MakeIconActionButton(parent, info)
         local inf = self.actionInfo or {}
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         if inf.kind == "spell" then
-            if inf.spellID and GameTooltip.SetSpellByID then
-                GameTooltip:SetSpellByID(inf.spellID)
+            local resolved = self.resolvedSpell or ResolveActionSpell(inf)
+            if resolved and resolved.spellID and GameTooltip.SetSpellByID then
+                GameTooltip:SetSpellByID(resolved.spellID)
             else
-                GameTooltip:SetText(self.actionLabel or "Spell", 1, 0.82, 0.24)
+                GameTooltip:SetText((resolved and resolved.label) or self.actionLabel or "Spell", 1, 0.82, 0.24)
+            end
+            if inf.zoneGroup then
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine("Hidden outside the matching expansion zones.", 0.72, 0.72, 0.72)
             end
         elseif inf.kind == "toy" then
             if inf.itemID then GameTooltip:SetItemByID(inf.itemID) else GameTooltip:SetText(self.actionLabel or "Toy", 1, 0.82, 0.24) end
@@ -1767,7 +2005,49 @@ end
 
 local ACTION_ITEM_BUTTONS = {
     { key = "mulch", kind = "item", label = "Imbued Mulch", name = "Imbued Mulch", itemID = EL.IMBUED_MULCH_ITEM_ID, fallback = "Interface\\Icons\\INV_Misc_Herb_01", hideWhenMissing = false },
-    { key = "seed", kind = "item", label = "Resilient Seed", name = "Resilient Seed", itemID = 237497, fallback = "Interface\\Icons\\INV_Misc_Herb_06", hideWhenMissing = true },
+    { key = "seed", kind = "item", label = "Resilient Seed", name = "Resilient Seed", itemID = 237497, fallback = "Interface\\Icons\\INV_Misc_Herb_06", zoneGroup = "midnight", hideWhenMissing = true },
+    { key = "glowingSeed", kind = "item", label = "Glowing Resilient Seed", name = "Glowing Resilient Seed", itemID = 237498, fallback = "Interface\\Icons\\INV_Misc_Herb_06", zoneGroup = "midnight", hideWhenMissing = true },
+    { key = "wildSeed", kind = "item", label = "Wild Resilient Seed", name = "Wild Resilient Seed", itemID = 237499, fallback = "Interface\\Icons\\INV_Misc_Herb_06", zoneGroup = "midnight", hideWhenMissing = true },
+    { key = "primalSeed", kind = "item", label = "Primal Resilient Seed", name = "Primal Resilient Seed", itemID = 237500, fallback = "Interface\\Icons\\INV_Misc_Herb_06", zoneGroup = "midnight", hideWhenMissing = true },
+    {
+        key = "greenThumb",
+        kind = "spell",
+        label = "Green Thumb",
+        name = "Green Thumb",
+        spellID = 439871,
+        fallback = "Interface\\Icons\\INV_Misc_Herb_07",
+        hideWhenMissing = true,
+        spellVariants = {
+            { spellID = 1221172, name = "Green Thumb", label = "Green Thumb", zoneGroup = "midnight" },
+            { spellID = 439871, name = "Green Thumb", label = "Green Thumb", zoneGroup = "khazAlgar" },
+        },
+    },
+    {
+        key = "overloadHerb",
+        kind = "spell",
+        label = "Overload Herb",
+        name = "Overload Infused Herb",
+        spellID = 1223014,
+        fallback = "Interface\\Icons\\INV_Misc_Herb_07",
+        hideWhenMissing = true,
+        spellVariants = {
+            { spellID = 1223014, name = "Overload Infused Herb", label = "Overload Herb", zoneGroup = "midnight" },
+            { spellID = 423395, name = "Overload Empowered Herb", label = "Overload Herb", zoneGroup = "khazAlgar" },
+        },
+    },
+    {
+        key = "overloadOre",
+        kind = "spell",
+        label = "Overload Ore",
+        name = "Overload Infused Deposit",
+        spellID = 1225392,
+        fallback = "Interface\\Icons\\INV_Ore_Bismuth",
+        hideWhenMissing = true,
+        spellVariants = {
+            { spellID = 1225392, name = "Overload Infused Deposit", label = "Overload Ore", zoneGroup = "midnight" },
+            { spellID = 423394, name = "Overload Empowered Deposit", label = "Overload Ore", zoneGroup = "khazAlgar" },
+        },
+    },
     { key = "parcel", kind = "toy", label = "Interdimensional Parcel Signal", name = "Interdimensional Parcel Signal", itemID = 264695, fallback = "Interface\\Icons\\INV_Misc_EngGizmos_27", hideWhenMissing = true },
     { key = "bank", kind = "spell", label = "Warband Bank Distance Inhibitor", name = "Warband Bank Distance Inhibitor", spellID = 460905, spellIDs = { 460905, 465226, 460925 }, fallback = "Interface\\Icons\\INV_Engineering_90_WormholeGenerator_PortalBlue", hideWhenMissing = true },
 }
@@ -1785,7 +2065,7 @@ function EL:CreateActionBar(parent)
         local b = MakeIconActionButton(bar, info)
         bar.itemButtons[info.key] = b
         if last then
-            b:SetPoint("LEFT", last, "RIGHT", 4, 0)
+            b:SetPoint("LEFT", last, "RIGHT", 3, 0)
         else
             b:SetPoint("LEFT", bar, "LEFT", 6, 0)
         end
@@ -1808,16 +2088,21 @@ function EL:UpdateActionBar()
     for _, info in ipairs(ACTION_ITEM_BUTTONS) do
         local b = bar.itemButtons[info.key]
         if b then
+            local actionButtons = self.db and self.db.settings and self.db.settings.panel and self.db.settings.panel.actionButtons
+            local enabled = (not actionButtons) or actionButtons[info.key] ~= false
             local available = GetActionAvailable(info)
-            local show = (not b.hideWhenMissing) or available
+            local show = enabled and ((not b.hideWhenMissing) or available)
             if not locked then
+                if info.kind == "spell" then SetSpellButtonAttributes(b, info) end
                 b:SetShown(show)
+            elseif info.kind == "spell" then
+                b.resolvedSpell = ResolveActionSpell(info)
             end
             if show or (locked and b:IsShown()) then
                 if not locked then
                     b:ClearAllPoints()
                     if lastVisible then
-                        b:SetPoint("LEFT", lastVisible, "RIGHT", 4, 0)
+                        b:SetPoint("LEFT", lastVisible, "RIGHT", 3, 0)
                     else
                         b:SetPoint("LEFT", bar, "LEFT", 6, 0)
                     end
@@ -1825,6 +2110,7 @@ function EL:UpdateActionBar()
                 end
 
                 if b.icon then
+                    if not locked and info.kind == "spell" then b.icon:SetTexture(GetActionIcon(info)) end
                     b.icon:SetDesaturated(not available)
                     b.icon:SetAlpha(available and 1 or 0.38)
                 end
@@ -1853,7 +2139,7 @@ function EL:CreateSessionPanel(parent)
     session:SetHeight(SESSION_EXPANDED_H)
     AddBackdrop(session, 0.30, 0.28)
     if session.SetBackdropColor then session:SetBackdropColor(0.018, 0.020, 0.026, 0.46) end
-    if session.SetBackdropBorderColor then session:SetBackdropBorderColor(0.55, 0.48, 0.36, 0.38) end
+    if session.SetBackdropBorderColor then session:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, BORDER_ALPHA_SOFT) end
 
     session.header = CreateFrame("Frame", nil, session, "BackdropTemplate")
     session.header:SetHeight(28)
@@ -1888,7 +2174,7 @@ function EL:CreateSessionPanel(parent)
     session.reset:SetText("Reset")
     StyleBlizzardButton(session.reset)
     session.reset.text = session.reset:GetFontString()
-    session.reset:SetScript("OnClick", function() EL:ResetSession() end)
+    session.reset:SetScript("OnClick", function() if EL.ConfirmResetSession then EL:ConfirmResetSession() else EL:ResetSession() end end)
 
     session.metrics = CreateFrame("Frame", nil, session)
     session.metrics:SetPoint("TOPLEFT", session.header, "BOTTOMLEFT", 4, -4)
@@ -1989,14 +2275,25 @@ function EL:RefreshSessionPanel()
     for i = 1, SESSION_VISIBLE_ITEM_ROWS do
         displayTop[i] = lootLog[(sp.itemScrollOffset or 0) + i]
     end
+    local function ConfigureSessionRowText(row, wrapped)
+        if not row or not row.text then return end
+        row:SetHeight(wrapped and (SESSION_ITEM_ROW_H * 2) or SESSION_ITEM_ROW_H)
+        if row.text.SetWordWrap then row.text:SetWordWrap(wrapped == true) end
+        if row.text.SetMaxLines then row.text:SetMaxLines(wrapped and 2 or 1) end
+        if row.text.SetJustifyV then row.text:SetJustifyV(wrapped and "TOP" or "MIDDLE") end
+        if row.text.SetHeight then row.text:SetHeight(wrapped and (SESSION_ITEM_ROW_H * 2) or SESSION_ITEM_ROW_H) end
+    end
+
     local function ClearSessionRow(row)
         if not row then return end
+        ConfigureSessionRowText(row, false)
         if row.icon then row.icon:Hide(); row.icon:SetTexture(nil) end
         if row.text then row.text:SetText("") end
     end
 
-    local function SetSessionRow(row, text, r, g, b, icon)
+    local function SetSessionRow(row, text, r, g, b, icon, wrapped)
         if not row then return end
+        ConfigureSessionRowText(row, wrapped == true)
         if icon and row.icon then
             row.icon:SetTexture(icon)
             row.icon:Show()
@@ -2006,20 +2303,25 @@ function EL:RefreshSessionPanel()
         else
             if row.icon then row.icon:Hide(); row.icon:SetTexture(nil) end
             row.text:ClearAllPoints()
-            row.text:SetPoint("LEFT", row, "LEFT", 0, 0)
-            row.text:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+            if wrapped then
+                row.text:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+                row.text:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
+            else
+                row.text:SetPoint("LEFT", row, "LEFT", 0, 0)
+                row.text:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+            end
         end
         row.text:SetText(text or "")
         row.text:SetTextColor(r or 0.88, g or 0.90, b or 0.92)
     end
 
     if warning and (tonumber(s.totalItems) or 0) == 0 then
-        SetSessionRow(sp.items[1], "Pricing: " .. warning, 0.95, 0.62, 0.26)
+        SetSessionRow(sp.items[1], "Pricing: " .. warning, 0.95, 0.62, 0.26, nil, true)
         for i = 2, #sp.items do ClearSessionRow(sp.items[i]) end
         return
     end
     if #lootLog == 0 then
-        SetSessionRow(sp.items[1], s.isPaused and "Session paused. Press Start before gathering." or "Gather profession materials to begin tracking value.", 0.68, 0.70, 0.72)
+        SetSessionRow(sp.items[1], s.isPaused and "Session paused. Press Start before gathering." or "No session items yet. Gather profession materials to begin tracking value.", 0.68, 0.70, 0.72, nil, true)
         for i = 2, #sp.items do ClearSessionRow(sp.items[i]) end
         return
     end
@@ -2052,7 +2354,7 @@ function EL:LayoutSessionWindow()
     settings.width = width
     w:SetSize(width, height)
     ApplyFrameOpacity(w, GetSessionOpacity())
-    if w.SetBackdropBorderColor then w:SetBackdropBorderColor(0.42, 0.36, 0.28, 0.58) end
+    if w.SetBackdropBorderColor then w:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, BORDER_ALPHA_STRONG) end
     w.sessionPanel:ClearAllPoints()
     w.sessionPanel:SetPoint("TOPLEFT", w, "TOPLEFT", 6, -6)
     w.sessionPanel:SetPoint("BOTTOMRIGHT", w, "BOTTOMRIGHT", -6, 6)
@@ -2173,7 +2475,7 @@ function EL:CreatePanel()
     panel:SetClampedToScreen(true)
     AddBackdrop(panel, 0.64, 0.62)
     if panel.SetBackdropColor then panel:SetBackdropColor(0.018, 0.020, 0.026, GetPanelOpacity()) end
-    if panel.SetBackdropBorderColor then panel:SetBackdropBorderColor(0.42, 0.36, 0.28, 0.62) end
+    if panel.SetBackdropBorderColor then panel:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, BORDER_ALPHA_STRONG) end
     AddInnerBorder(panel)
     panel:Hide()
     panel:SetScript("OnShow", function()
@@ -2284,12 +2586,12 @@ function EL:CreatePanel()
     panel.header.topLine:SetHeight(1)
     panel.header.topLine:SetPoint("TOPLEFT", 2, -1)
     panel.header.topLine:SetPoint("TOPRIGHT", -2, -1)
-    panel.header.topLine:SetColorTexture(0.82, 0.74, 0.58, 0.10)
+    panel.header.topLine:SetColorTexture(0.82, 0.74, 0.58, HEADER_LINE_ALPHA_TOP)
     panel.header.bottomLine = panel.header:CreateTexture(nil, "BORDER")
     panel.header.bottomLine:SetHeight(1)
     panel.header.bottomLine:SetPoint("BOTTOMLEFT", 2, 1)
     panel.header.bottomLine:SetPoint("BOTTOMRIGHT", -2, 1)
-    panel.header.bottomLine:SetColorTexture(0.82, 0.74, 0.58, 0.22)
+    panel.header.bottomLine:SetColorTexture(0.82, 0.74, 0.58, HEADER_LINE_ALPHA_BOTTOM)
     panel.header.separators = {}
     panel.header.name = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     panel.header.prof1 = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -2549,8 +2851,8 @@ function EL:GetRow(i)
         row.bg = row:CreateTexture(nil, "BACKGROUND")
         row.bg:SetAllPoints()
         row.pinGlow = row:CreateTexture(nil, "BORDER")
-        row.pinGlow:SetPoint("TOPLEFT", row, "TOPLEFT", 2, -1)
-        row.pinGlow:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -2, 1)
+        row.pinGlow:SetPoint("TOPLEFT", row, "TOPLEFT", 3, -2)
+        row.pinGlow:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -3, 2)
         row.pinGlow:SetColorTexture(PIN_GLOW_R, PIN_GLOW_G, PIN_GLOW_B, 0.00)
         row.pinGlow:Hide()
         row.pinAccent = row:CreateTexture(nil, "ARTWORK")
@@ -2563,7 +2865,7 @@ function EL:GetRow(i)
         row.sep:SetHeight(1)
         row.sep:SetPoint("BOTTOMLEFT", 0, 0)
         row.sep:SetPoint("BOTTOMRIGHT", 0, 0)
-        row.sep:SetColorTexture(0.95, 0.82, 0.42, 0.16)
+        row.sep:SetColorTexture(0.95, 0.82, 0.42, ROW_SEPARATOR_ALPHA)
         row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         row.name:SetJustifyH("LEFT")
         row.prof1Icon = row:CreateTexture(nil, "OVERLAY")
@@ -2584,8 +2886,8 @@ function EL:GetRow(i)
         row:SetScript("OnClick", function(self, button)
             if button == "LeftButton" and self.charKey and IsAltKeyDown and IsAltKeyDown() then
                 GameTooltip:Hide()
-                if EL.ToggleCharacterFavorite then
-                    EL:ToggleCharacterFavorite(self.charKey)
+                if EL.ToggleCharacterPinned then
+                    EL:ToggleCharacterPinned(self.charKey)
                 end
                 return
             end
@@ -2613,8 +2915,8 @@ function EL:GetRow(i)
             GameTooltip:Hide()
         end)
         row.hover = row:CreateTexture(nil, "HIGHLIGHT")
-        row.hover:SetPoint("TOPLEFT", row, "TOPLEFT", 2, -1)
-        row.hover:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -2, 1)
+        row.hover:SetPoint("TOPLEFT", row, "TOPLEFT", 3, -2)
+        row.hover:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -3, 2)
         row.hover:SetColorTexture(1.00, 0.82, 0.24, PIN_HOVER_ALPHA)
         row.hover:Hide()
         p.rows[i] = row
@@ -2655,21 +2957,12 @@ function EL:RefreshPanel()
             concSoon = concSoon + 1
         end
     end
-    local nextMulch = self.GetNextMulchSummary and self:GetNextMulchSummary() or nil
-    local mulchText = "N/A"
-    if nextMulch then
-        local remaining = tonumber(nextMulch.remaining) or 0
-        local char = self.db and self.db.characters and nextMulch.charKey and self.db.characters[nextMulch.charKey] or nil
-        local r, g, b = self:GetClassColor(char and char.class or nextMulch.class)
-        local name = ColorTextByRGB(nextMulch.displayName or "Unknown", r, g, b)
-        mulchText = name .. " " .. (remaining <= 0 and "Ready" or self:FormatCountdown(remaining))
-    end
     if p.summary then
         if IsCompactModeEnabled() then
             p.summary:SetText("")
             p.summary:Hide()
         else
-            p.summary:SetText(string.format("Ready: %d | Soon: %d | Mulch: %d | Next Mulch: %s", concReady, concSoon, mulchReady, mulchText))
+            p.summary:SetText(string.format("Ready: %d | Soon: %d | Mulch: %d", concReady, concSoon, mulchReady))
             p.summary:SetTextColor(0.82, 0.80, 0.72)
             p.summary:Show()
         end
@@ -2711,22 +3004,27 @@ function EL:RefreshPanel()
         row:SetHeight(rowH)
         ApplyTrackingTextStyle(row)
         local charKey, char = entry.key, entry.char
+        local profEntries = self:GetProfessionEntriesForCharacter(charKey)
         local concEntries = self:GetConcentrationEntriesForCharacter(charKey)
-        local concData1 = concEntries[1]
-        local concData2 = concEntries[2]
+        local profData1, concData1 = self:GetDashboardProfessionData(charKey, 1)
+        local profData2, concData2 = self:GetDashboardProfessionData(charKey, 2)
         local mulchData = self.db and self.db.resources and self.db.resources.mulch and self.db.resources.mulch[charKey]
         local profValue1 = "N/A"
         local concValue1 = "N/A"
         local profValue2 = "N/A"
         local concValue2 = "N/A"
+        if profData1 then
+            profValue1 = self:GetProfessionAbbreviation(profData1)
+        end
         if concData1 then
             local q = self:GetEstimatedConcentration(concData1, now) or 0
-            profValue1 = self:GetProfessionAbbreviation(concData1)
             concValue1 = tostring(q) .. "/" .. tostring(concData1.maxQuantity or self.CONCENTRATION_MAX_DEFAULT)
+        end
+        if profData2 then
+            profValue2 = self:GetProfessionAbbreviation(profData2)
         end
         if concData2 then
             local q = self:GetEstimatedConcentration(concData2, now) or 0
-            profValue2 = self:GetProfessionAbbreviation(concData2)
             concValue2 = tostring(q) .. "/" .. tostring(concData2.maxQuantity or self.CONCENTRATION_MAX_DEFAULT)
         end
         local mulchValue = "N/A"
@@ -2741,8 +3039,8 @@ function EL:RefreshPanel()
         AnchorColumnText(row.conc1, row, cols.conc1X, cols.conc1W, "RIGHT")
         AnchorColumnText(row.conc2, row, cols.conc2X, cols.conc2W, "RIGHT")
         AnchorColumnText(row.mulch, row, cols.mulchX, math.max(1, cols.mulchW), "RIGHT")
-        AnchorProfessionCell(row, row.prof1, row.prof1Icon, cols.prof1X, cols.prof1W, visible.prof1, concData1 and self:GetProfessionIconTexture(concData1))
-        AnchorProfessionCell(row, row.prof2, row.prof2Icon, cols.prof2X, cols.prof2W, visible.prof2, concData2 and self:GetProfessionIconTexture(concData2))
+        AnchorProfessionCell(row, row.prof1, row.prof1Icon, cols.prof1X, cols.prof1W, visible.prof1, profData1 and self:GetProfessionIconTexture(profData1))
+        AnchorProfessionCell(row, row.prof2, row.prof2Icon, cols.prof2X, cols.prof2W, visible.prof2, profData2 and self:GetProfessionIconTexture(profData2))
         row.prof1:SetShown(visible.prof1 and not row.prof1._emberHasProfessionIcon)
         row.conc1:SetShown(visible.conc1 and true or false)
         row.prof2:SetShown(visible.prof2 and not row.prof2._emberHasProfessionIcon)
@@ -2752,11 +3050,12 @@ function EL:RefreshPanel()
         row.charKey = charKey
         row.concData = concData1
         row.concEntries = concEntries
+        row.profEntries = profEntries
         row.mulchData = mulchData
         row.name:SetText(self:GetCharacterDisplayName(char, charKey))
         local r, g, b = self:GetClassColor(char.class)
         row.name:SetTextColor(r, g, b)
-        local isPinned = self:IsCharacterFavorite(charKey)
+        local isPinned = self:IsCharacterPinned(charKey)
         row.name:SetShadowColor(0.00, 0.00, 0.00, 0.85)
         row.name:SetShadowOffset(1, -1)
         if row.pinGlow then
@@ -2796,8 +3095,8 @@ function EL:RefreshPanel()
         else
             row.mulch:SetTextColor(0.7, 0.7, 0.7)
         end
-        local stripe = (i % 2 == 0) and 0.035 or 0
-        row.bg:SetColorTexture(0.17 + stripe, 0.17 + stripe, 0.18 + stripe, IsCompactModeEnabled() and 0.48 or 0.52)
+        local stripe = (i % 2 == 0) and 0.030 or 0
+        row.bg:SetColorTexture(0.15 + stripe, 0.15 + stripe, 0.165 + stripe, IsCompactModeEnabled() and ROW_STRIPE_ALPHA_COMPACT or ROW_STRIPE_ALPHA)
         row:Show()
     end
     for i = #rows + 1, #p.rows do
@@ -2806,7 +3105,7 @@ function EL:RefreshPanel()
     if p.empty then
         p.empty:ClearAllPoints()
         p.empty:SetPoint("TOP", p.header, "BOTTOM", 0, -42)
-        p.empty:SetText((self.db and self.db.settings and self.db.settings.display and self.db.settings.display.attentionOnly == true) and "No characters need attention." or "No tracked professions found.")
+        p.empty:SetText((self.db and self.db.settings and self.db.settings.display and self.db.settings.display.attentionOnly == true) and "No characters need attention right now." or "No character profession data yet. Log into a character or open a profession window to start tracking.")
         p.empty:SetShown(#rows == 0)
     end
     p.content:SetHeight(math.max(40, #rows * (rowH + gap)))
@@ -2861,10 +3160,9 @@ function EL:UpdateButton()
         end
     end
 
-    local sessionShown = self.db and self.db.settings and self.db.settings.session and self.db.settings.session.shown ~= false
-    local showSessionGold = sessionShown and display.showLauncherSession ~= false
-    local showSessionTotal = sessionShown and display.showLauncherSessionTotal ~= false
-    local showSessionTime = sessionShown and display.showLauncherSessionTime ~= false
+    local showSessionGold = display.showLauncherSession ~= false
+    local showSessionTotal = display.showLauncherSessionTotal ~= false
+    local showSessionTime = display.showLauncherSessionTime ~= false
     local sdb = self.GetSessionDB and self:GetSessionDB() or {}
     if b.line3 then
         if showSessionGold then
@@ -3136,25 +3434,40 @@ function EL:ShowRowTooltip(row)
     end
 
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Tracked Professions", 0.62, 0.78, 0.92)
-    if row.concEntries and #row.concEntries > 0 then
+    GameTooltip:AddLine("Known Professions", 0.62, 0.78, 0.92)
+    if row.profEntries and #row.profEntries > 0 then
+        for i, prof in ipairs(row.profEntries) do
+            local profName = self:GetCleanProfessionName(prof.professionName)
+            local abbrev = self:GetProfessionAbbreviation(prof)
+            local conc = self:GetConcentrationEntryForProfession(row.charKey, prof)
+            GameTooltip:AddDoubleLine(string.format("%d. %s", i, profName), abbrev, 0.62, 0.78, 0.92, 1, 1, 1)
+            if conc then
+                local quantity = tonumber(self:GetEstimatedConcentration(conc)) or 0
+                local maxQuantity = tonumber(conc.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
+                local pct = maxQuantity > 0 and math.floor((quantity / maxQuantity) * 100 + 0.5) or 0
+                local fullIn = self:GetConcentrationFullIn(conc) or "Unknown"
+                local lastUpdate = tonumber(conc.lastUpdate) or 0
+                GameTooltip:AddDoubleLine("   Concentration", string.format("%d/%d (%d%%)", quantity, maxQuantity, pct), 0.72, 0.72, 0.72, 1, 1, 1)
+                GameTooltip:AddDoubleLine("   Full in", fullIn, 0.72, 0.72, 0.72, 1, 1, 1)
+                if lastUpdate > 0 then
+                    GameTooltip:AddDoubleLine("   Concentration updated", FormatTooltipAgo(lastUpdate), 0.62, 0.62, 0.62, 0.85, 0.85, 0.85)
+                end
+            else
+                GameTooltip:AddLine("   Concentration: not tracked for this profession", 0.70, 0.70, 0.70)
+            end
+        end
+    elseif row.concEntries and #row.concEntries > 0 then
         for i, data in ipairs(row.concEntries) do
             local profName = self:GetCleanProfessionName(data.professionName)
             local abbrev = self:GetProfessionAbbreviation(data)
             local quantity = tonumber(self:GetEstimatedConcentration(data)) or 0
             local maxQuantity = tonumber(data.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
             local pct = maxQuantity > 0 and math.floor((quantity / maxQuantity) * 100 + 0.5) or 0
-            local fullIn = self:GetConcentrationFullIn(data) or "Unknown"
-            local lastUpdate = tonumber(data.lastUpdate) or 0
             GameTooltip:AddDoubleLine(string.format("%d. %s", i, profName), abbrev, 0.62, 0.78, 0.92, 1, 1, 1)
             GameTooltip:AddDoubleLine("   Concentration", string.format("%d/%d (%d%%)", quantity, maxQuantity, pct), 0.72, 0.72, 0.72, 1, 1, 1)
-            GameTooltip:AddDoubleLine("   Full in", fullIn, 0.72, 0.72, 0.72, 1, 1, 1)
-            if lastUpdate > 0 then
-                GameTooltip:AddDoubleLine("   Updated", FormatTooltipAgo(lastUpdate), 0.62, 0.62, 0.62, 0.85, 0.85, 0.85)
-            end
         end
     else
-        GameTooltip:AddLine("No concentration professions tracked.", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("No profession identity tracked yet.", 0.7, 0.7, 0.7)
     end
 
     GameTooltip:AddLine(" ")
@@ -3175,9 +3488,9 @@ function EL:ShowRowTooltip(row)
     end
 
     GameTooltip:AddLine(" ")
-    GameTooltip:AddDoubleLine("Pinned", self:IsCharacterFavorite(row.charKey) and "Yes" or "No", 0.95, 0.82, 0.38, 1, 1, 1)
-    GameTooltip:AddLine((self:IsCharacterFavorite(row.charKey) and "Alt-left-click: unpin this character" or "Alt-left-click: pin this character"), 0.95, 0.82, 0.38)
-    GameTooltip:AddLine("Right-click: hide this character", 0.7, 0.7, 0.7)
+    GameTooltip:AddDoubleLine("Pinned", self:IsCharacterPinned(row.charKey) and "Yes" or "No", 0.95, 0.82, 0.38, 1, 1, 1)
+    GameTooltip:AddLine((self:IsCharacterPinned(row.charKey) and "Alt-click: unpin this character" or "Alt-click: pin this character"), 0.95, 0.82, 0.38)
+    GameTooltip:AddLine("Right-click: hide from the table", 0.7, 0.7, 0.7)
     GameTooltip:AddLine("Shift-right-click: reset this character's data", 0.95, 0.62, 0.26)
     GameTooltip:Show()
 end

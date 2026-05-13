@@ -2,7 +2,7 @@
 ## Title: EmberLedger
 ## Notes: Account-wide alt resource dashboard for concentration, Imbued Mulch, and profession session value tracking, and future resource timers.
 ## Author: Jeff Ekmanis / ChatGPT
-## Version: 0.20.0 Beta
+## Version: 1.0.0
 ## SavedVariables: EmberLedgerDB
 ## DefaultState: Enabled
 

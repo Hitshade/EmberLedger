@@ -1,3 +1,125 @@
+v1.0.0
+- Promoted EmberLedger from the final v0.24.13 Beta cleanup baseline to the first stable 1.0 release.
+- Updated addon metadata, internal fallback version text, and saved-variable version metadata for v1.0.0.
+- Preserved the current tested feature set: profession tracking, concentration tracking, Imbued Mulch readiness, session tracking, launcher customization, action bar button options, pinned characters, and Options polish.
+- No seed flyout, minimap button, import tools, backup tools, or large behavior rewrites were added in this release.
+
+v0.24.13 Beta
+- Performed a pre-1.0 cleanup and code inspection pass.
+- Confirmed legacy saved-variable cleanup is single-pass during database initialization.
+- Added explicit normalization for Action Bar button option defaults and pruned unknown stale action-button keys.
+- Added Options frame position defaults to the saved-variable defaults.
+- Aligned internal database version metadata with the current package version.
+- Updated action bar seed labels to use the full Resilient Seed item names consistently.
+- No feature scope changes, no seed flyout, no minimap button, and no import/backup tools.
+
+v0.24.12 Beta
+- Session window status/empty-state text can now wrap to two lines when the window is scaled down.
+- Preserved normal single-line item rows for actual session loot entries.
+- No action bar, secure button, minimap, import, backup, or seed flyout changes.
+
+
+v0.24.11 Beta
+- Fixed launcher session display independence.
+- Toggling the standalone Session window no longer hides Session rate, Session total, or Session time from the launcher display.
+- Launcher session lines remain controlled only by the Launcher display options.
+
+v0.24.10 Beta
+- Changed the Maintenance options tab icon to the Engineering icon so it no longer duplicates the General tab icon.
+- No action bar behavior changes.
+- No secure button changes.
+- No seed flyout added.
+
+v0.24.9 Beta
+- Added a cogwheel-style icon for the Maintenance options tab.
+- Improved Tracking options spacing to prevent long checkbox labels from bleeding into the next checkbox.
+- No action bar behavior, secure button, seed flyout, minimap, import, or backup changes.
+
+v0.24.8 Beta
+- Renamed the Options sidebar category from Actions to Action Bar so the category matches the action bar controls.
+- Moved reset tools into a separate Maintenance category to keep resets separate from action bar configuration.
+- Renamed action bar seed checkboxes to use the full Resilient Seed item names.
+- Renamed the Parcel Signal checkbox to Interdimensional Parcel for clearer labeling.
+- Kept action bar button behavior, button order, secure action attributes, minimap, import, backup, and seed flyout behavior unchanged.
+
+v0.24.7 Beta
+- Registered the EmberLedger Options window with WoW's UISpecialFrames list so pressing Esc closes it.
+- Added duplicate-registration protection for the Options frame Esc-close registration.
+- Kept action bar logic, secure button attributes, layout, minimap, import, and backup behavior unchanged.
+
+v0.24.6 Beta
+- Tightened the main tracking window auto-height calculation so the action bar is no longer double-counted in the bottom spacing.
+- Reduced the main tracking window action bar bottom offset slightly to remove extra blank space while preserving button layout.
+- Increased the Action Bar Buttons options container height so the seed checkboxes fit cleanly inside the section.
+
+v0.24.5 Beta
+- Added Action Bar Buttons options so each convenience button can be individually enabled or disabled.
+- Added separate General and Seeds groups for action bar button visibility.
+- Kept all action bar buttons enabled by default to preserve existing v0.24.4 behavior.
+- Did not add the abandoned seed flyout or change secure action button behavior.
+
+v0.24.4 Beta
+- Refreshed action bar visibility on BAG_UPDATE_DELAYED so item-based buttons update more reliably when seed, mulch, or other action-bar items enter or leave bags.
+- Kept the v0.24.3 action bar structure unchanged and did not add the abandoned seed flyout.
+
+v0.24.3 Beta
+- Expanded action bar visibility so spell and ability buttons are hidden unless the current character knows the matching spell.
+- Added Midnight seed buttons for Glowing Resilient Seed, Wild Resilient Seed, and Primal Resilient Seed.
+- Added Overload Herb and Overload Ore buttons with support for Midnight and Khaz Algar variants.
+- Added expansion-zone gating for expansion-specific gathering actions so Khaz Algar actions hide outside Khaz Algar and Midnight actions hide outside Midnight zones.
+- Refreshed action bar visibility on zone and spellbook changes while deferring secure button changes during combat.
+
+v0.24.2 Beta
+- Added Green Thumb to the action bar as a Herbalism utility spell button.
+- Included support for both known Green Thumb spell variants where available.
+- Tightened spell action availability so spell buttons are hidden when the current character does not know the spell.
+
+v0.24.1 Beta
+- Adjusted dashboard display ordering for characters with only one concentration-tracked profession.
+- If a character has two known professions but only one has concentration data, the concentration profession is promoted into P1 / Conc 1 for display.
+- The second known profession remains visible in P2 / Conc 2 when the secondary columns are shown.
+- This is display-only and does not change stored profession slot data.
+- Kept concentration, Imbued Mulch, session, pinning, and reset behavior unchanged.
+
+v0.24.0 Beta
+- Added profession identity tracking separate from concentration tracking.
+- Characters now store their primary professions from GetProfessions, even when those professions do not use concentration.
+- P1/P2 columns now prefer known character professions, with concentration values attached when matching data exists.
+- Characters with gathering or other non-concentration professions can now show their professions instead of N/A.
+- Updated row tooltips to show Known Professions and clarify when concentration is not tracked for a profession.
+- Added /el professions and /el refresh professions to manually refresh current-character profession identity.
+- Kept existing concentration, Imbued Mulch, session, pinning, and reset behavior intact.
+
+EmberLedger v0.23.0 Beta
+
+## v0.23.0 Beta
+- Standardized window border color and opacity across Launcher, Tracking, Session, and Options.
+- Refined row striping, hover overlays, and pinned-row highlights for a cleaner final visual style.
+- Improved tracking and session empty-state text.
+- Clarified row tooltip instructions for pinning, hiding, and resetting character data.
+- No minimap, import, backup, or major new system was added.
+
+EmberLedger v0.22.0 Beta
+- Added reset and maintenance cleanup tools without adding import or backup features.
+- Moved reset actions into the Options > Actions page for easier access.
+- Added confirmation prompts for Reset Windows, Reset Session, Reset Hidden, and Reset Pinned actions.
+- Added Reset Pinned to clear all pinned character markers without deleting character data.
+- Kept the v0.21.0 pinning behavior, Alt-click interaction, and pinned row visuals unchanged.
+- Added slash command aliases for reset windows/layout, reset session, reset hidden, and reset pinned.
+
+## v0.21.0 Beta
+- Cleaned up pinning terminology across the Options panel, tooltips, sorting labels, and internal helper paths.
+- Added pinned-character helper functions while preserving the old favoriteCharacters saved-variable key for upgrade compatibility.
+- Added a showPinnedFirst display setting and synchronized it with the legacy showFavoritesFirst value so existing user settings continue to work.
+- Kept Alt-left-click pinning, pinned-row background glow, and pinned-first sorting behavior unchanged.
+- No minimap, import, or backup feature was added.
+
+## v0.20.1 Beta
+- Removed the Next Mulch field from the Profession Tracking header summary ticker.
+- The summary ticker now displays only Ready, Soon, and Mulch counts.
+- This reduces ticker width and prevents layout problems when the tracking window is scaled smaller.
+- No Imbued Mulch tracking logic, launcher mulch line behavior, tooltips, or table column behavior was intentionally changed.
+
 ## v0.20.0 Beta
 - Refined the pinned-row visual treatment after the v0.19.2 background glow change.
 - Softened pinned-row glow opacity so pinned rows are visible without looking muddy or distorted.
