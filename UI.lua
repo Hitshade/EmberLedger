@@ -1103,7 +1103,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.2.1"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.2.2"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
     f.copySummary = MakeSettingsButton(f.footerSection, "Copy Summary", 112, function() EL:ShowCopySessionSummaryDialog() end)
     f.copySummary:SetPoint("TOPRIGHT", -12, -32)
@@ -1561,7 +1561,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.2.1"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.2.2"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -2548,6 +2548,7 @@ function EL:ShowSessionWindowFromSavedState()
     if self.db and self.db.settings and self.db.settings.session and self.db.settings.session.shown == false then return end
     SetFramePointFromDB(self.sessionWindow, self.db.settings.session)
     self:LayoutSessionWindow()
+    if self.RefreshSessionPanel then self:RefreshSessionPanel() end
     self.sessionWindow:Show()
 end
 

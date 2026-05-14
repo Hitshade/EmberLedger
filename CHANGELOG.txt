@@ -1,3 +1,15 @@
+v1.2.2 Performance Hotfix
+------------------------
+Reduced unnecessary background UI refresh work.
+
+Changes:
+- Reduced once-per-second refresh work while the main tracking panel is hidden.
+- Reduced once-per-second refresh work while the standalone Session window is hidden.
+- Limited ticker-driven action bar refreshes to cases where the main panel action bar is visible.
+- Added a fresh Session window refresh when the Session window is shown so hidden-window throttling does not leave stale text.
+- Preserved launcher updates, manual refreshes, and event-driven tracking/session updates.
+- No tracking logic, sorting, saved-variable migration, session calculation, launcher behavior, action bar behavior, or Blizzard frame behavior changes.
+
 v1.2.1
 - Performed release cleanup and code inspection after the v1.2.0 hidden-character and Options polish pass.
 - Removed a harmless duplicate Launcher Session Time toggle refresh call from the Options panel refresh routine.

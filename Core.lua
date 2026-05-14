@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.2.1"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.2.2"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -34,7 +34,7 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 10201
+EL.DB_VERSION = 10202
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -72,7 +72,7 @@ EL.PROFESSION_ABBREVIATIONS = {
 }
 
 local defaults = {
-    version = 10201,
+    version = 10202,
     characters = {},
     resources = {
         concentration = {},
@@ -1732,9 +1732,15 @@ end
 
 function EL:RequestUpdate()
     if self.UpdateButton then self:UpdateButton() end
-    if self.RefreshPanel then self:RefreshPanel() end
-    if self.RefreshSessionPanel then self:RefreshSessionPanel() end
-    if self.RequestActionBarRefresh then self:RequestActionBarRefresh() end
+
+    local panelShown = self.panel and self.panel:IsShown()
+    if panelShown and self.RefreshPanel then self:RefreshPanel() end
+
+    local sessionShown = self.sessionWindow and self.sessionWindow:IsShown()
+    if sessionShown and self.RefreshSessionPanel then self:RefreshSessionPanel() end
+
+    local actionBarShown = panelShown and self.panel.actionBar and self.panel.actionBar:IsShown()
+    if actionBarShown and self.RequestActionBarRefresh then self:RequestActionBarRefresh() end
 end
 
 function EL:Print(msg)
