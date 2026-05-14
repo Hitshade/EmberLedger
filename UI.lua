@@ -1103,7 +1103,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.2.2"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.2.3"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
     f.copySummary = MakeSettingsButton(f.footerSection, "Copy Summary", 112, function() EL:ShowCopySessionSummaryDialog() end)
     f.copySummary:SetPoint("TOPRIGHT", -12, -32)
@@ -1512,12 +1512,19 @@ function EL:ToggleSectionSetting(section)
             if self.db.settings.button.shown ~= false then self.button:Show() else self.button:Hide() end
         end
     elseif section == "characters" then
-        if self.db.settings.panel.charactersShown ~= false and self.SaveExpandedPanelHeight then
+        local shouldShow = not (self.db.settings.panel.windowOpen == true and self.panel and self.panel:IsShown())
+        if not shouldShow and self.SaveExpandedPanelHeight then
             self:SaveExpandedPanelHeight()
         end
-        self.db.settings.panel.charactersShown = not (self.db.settings.panel.charactersShown ~= false)
+        self.db.settings.panel.charactersShown = shouldShow
         self.db.settings.panel.charactersCollapsed = false
-        self:NotifyToggle(SECTION_TOGGLE_LABELS.characters, self.db.settings.panel.charactersShown ~= false)
+        self.db.settings.panel.windowOpen = shouldShow
+        self:NotifyToggle(SECTION_TOGGLE_LABELS.characters, shouldShow)
+        if shouldShow then
+            if self.ShowPanelFromSavedState then self:ShowPanelFromSavedState() end
+        else
+            if self.panel then self.panel:Hide() end
+        end
     elseif section == "session" then
         self.db.settings.session.shown = not (self.db.settings.session.shown ~= false)
         self:NotifyToggle(SECTION_TOGGLE_LABELS.session, self.db.settings.session.shown ~= false)
@@ -1561,7 +1568,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.2.2"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.2.3"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -2504,12 +2511,16 @@ function EL:CreateSessionWindow()
     frame:SetScript("OnShow", function()
         if EL.db and EL.db.settings and EL.db.settings.session then
             EL.db.settings.session.windowOpen = true
+            EL.db.settings.session.shown = true
         end
+        if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
     end)
     frame:SetScript("OnHide", function()
         if EL.db and EL.db.settings and EL.db.settings.session then
             EL.db.settings.session.windowOpen = false
+            EL.db.settings.session.shown = false
         end
+        if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
     end)
     frame:SetScript("OnDragStart", function(self) if not (EL.db.settings.lockWindows == true) or IsShiftKeyDown() then self:StartMoving() end end)
     frame:SetScript("OnDragStop", function(self)
@@ -2581,12 +2592,16 @@ function EL:CreatePanel()
     panel:SetScript("OnShow", function()
         if EL.db and EL.db.settings and EL.db.settings.panel then
             EL.db.settings.panel.windowOpen = true
+            EL.db.settings.panel.charactersShown = true
         end
+        if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
     end)
     panel:SetScript("OnHide", function()
         if EL.db and EL.db.settings and EL.db.settings.panel then
             EL.db.settings.panel.windowOpen = false
+            EL.db.settings.panel.charactersShown = false
         end
+        if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
     end)
     panel:SetScale(math.max(PANEL_MIN_SCALE, math.min(PANEL_MAX_SCALE, tonumber(s.scale) or 1)))
 

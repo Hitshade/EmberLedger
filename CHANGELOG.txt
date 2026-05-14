@@ -1,3 +1,11 @@
+v1.2.3 Window Visibility Toggle Fix
+
+- Fixed main tracking window close behavior so closing the window turns off the Show tracking window option.
+- Fixed standalone Session window close behavior so closing the window turns off the Show session window option.
+- Re-enabling either option in EmberLedger Settings now shows the matching window again.
+- Preserved the v1.2.2 performance refresh throttling.
+- No tracking, sorting, session calculation, launcher, action bar, or Blizzard frame behavior changes.
+
 v1.2.2 Performance Hotfix
 ------------------------
 Reduced unnecessary background UI refresh work.

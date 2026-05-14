@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.2.2"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.2.3"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -34,7 +34,7 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 10202
+EL.DB_VERSION = 10203
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -72,7 +72,7 @@ EL.PROFESSION_ABBREVIATIONS = {
 }
 
 local defaults = {
-    version = 10202,
+    version = 10203,
     characters = {},
     resources = {
         concentration = {},
