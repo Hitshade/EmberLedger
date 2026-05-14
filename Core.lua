@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.3.2"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.3.5"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -34,7 +34,7 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 10302
+EL.DB_VERSION = 10305
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -72,7 +72,7 @@ EL.PROFESSION_ABBREVIATIONS = {
 }
 
 local defaults = {
-    version = 10302,
+    version = 10305,
     characters = {},
     resources = {
         concentration = {},
@@ -102,7 +102,6 @@ local defaults = {
             charactersCollapsed = false,
             sessionCollapsed = false,
             charactersShown = true,
-            actionBarShown = true,
             actionButtons = {
                 mulch = true,
                 seed = true,
@@ -1744,6 +1743,14 @@ function EL:IsActionBarEnabled()
     return perf.actionBar ~= false
 end
 
+function EL:ShouldRefreshActionBar()
+    if self.IsActionBarEnabled and not self:IsActionBarEnabled() then return false end
+    local panel = self.panel
+    if not (panel and panel:IsShown()) then return false end
+    local bar = panel.actionBar
+    return bar and bar:IsShown()
+end
+
 function EL:RequestUpdate()
     if self.UpdateButton then self:UpdateButton() end
 
@@ -1753,8 +1760,7 @@ function EL:RequestUpdate()
     local sessionShown = self:IsSessionTrackingEnabled() and self.sessionWindow and self.sessionWindow:IsShown()
     if sessionShown and self.RefreshSessionPanel then self:RefreshSessionPanel() end
 
-    local actionBarShown = self:IsActionBarEnabled() and panelShown and self.panel.actionBar and self.panel.actionBar:IsShown()
-    if actionBarShown and self.RequestActionBarRefresh then self:RequestActionBarRefresh() end
+    if self:ShouldRefreshActionBar() and self.RequestActionBarRefresh then self:RequestActionBarRefresh() end
 end
 
 function EL:Print(msg)
@@ -1875,7 +1881,7 @@ EL.frame:SetScript("OnEvent", function(_, event, ...)
                 if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
             end
         elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" or event == "SPELLS_CHANGED" or event == "BAG_UPDATE_DELAYED" then
-            if EL:IsActionBarEnabled() and EL.RequestActionBarRefresh then EL:RequestActionBarRefresh() end
+            if EL.ShouldRefreshActionBar and EL:ShouldRefreshActionBar() and EL.RequestActionBarRefresh then EL:RequestActionBarRefresh() end
         end
         for _, module in pairs(EL.modules) do
             if module and module.OnEvent then

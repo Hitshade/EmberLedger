@@ -1,4 +1,4 @@
-# 🔥 EmberLedger
+# 🔥 EmberLedger v1.3.5
 
 **EmberLedger** was vibe coded with the help of AI, so no one should be surprised if parts of it are a little unconventional under the hood. The goal was not to build a perfect academic addon framework. The goal was to make a clean, practical, lightweight profession tracker that solves a real problem for players managing multiple profession characters.
 

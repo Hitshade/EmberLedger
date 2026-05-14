@@ -1,3 +1,30 @@
+v1.3.5 Action Bar Options Cleanup
+
+- Removed the redundant Show action bar checkbox from Options > Action Bar.
+- Action bar visibility is now controlled only by Options > Performance > Enable action bar.
+- Kept individual action bar button visibility settings under Options > Action Bar.
+- Ignored the legacy actionBarShown setting so older saved settings cannot hide the bar separately from the Performance toggle.
+- Reviewed Options for other redundancies; session/main-window visibility controls remain because they hide windows, while Performance controls disable background systems.
+- Updated README title and release metadata for v1.3.5.
+
+v1.3.4 Options Menu Polish
+
+- Merged the old Display page into General for a cleaner Options menu.
+- Renamed the Tracking Options category to Main Window for clearer wording.
+- Moved Copy Summary from General/Information into the Session options page.
+- Added a short tooltip for Copy Summary in the Session page.
+- Updated README title and release metadata for v1.3.4.
+- No tracking, sorting, session calculation, launcher, action bar, or Blizzard frame behavior changes.
+
+v1.3.3 Maintenance Cleanup
+
+- Updated README title and release metadata for v1.3.3.
+- Added README.md to the packaged addon alongside README.txt.
+- Skipped hidden Settings panel refresh work unless the panel is open.
+- Skipped event-driven action bar refresh requests when the action bar is not actually visible.
+- Scanned for abandoned Blizzard frame-hiding code and seed flyout leftovers.
+- No tracking, sorting, session calculation, launcher, Blizzard frame, or saved-variable migration behavior changes.
+
 v1.3.2 Performance Controls Hotfix
 
 - Fixed tracking window auto-height when the action bar is disabled from Performance settings.

@@ -184,7 +184,7 @@ local function GetCurrentPanelMinHeight(panel)
     local settings = db and db.settings and db.settings.panel or {}
     local charShown = settings.charactersShown ~= false
     settings.charactersCollapsed = false
-    local actionBarShown = settings.actionBarShown ~= false and (not EL.IsActionBarEnabled or EL:IsActionBarEnabled())
+    local actionBarShown = not EL.IsActionBarEnabled or EL:IsActionBarEnabled()
 
     -- The main window can be used as a compact convenience/action bar when
     -- the character table is hidden from Options. Keep the dynamic minimum
@@ -231,7 +231,7 @@ function EL:GetTrackingPanelAutoSize()
     local settings = self.db and self.db.settings and self.db.settings.panel or {}
     local charShown = settings.charactersShown ~= false
     settings.charactersCollapsed = false
-    local actionBarShown = settings.actionBarShown ~= false and (not self.IsActionBarEnabled or self:IsActionBarEnabled())
+    local actionBarShown = not self.IsActionBarEnabled or self:IsActionBarEnabled()
 
     local width = (self.GetTrackingPanelMaxWidth and self:GetTrackingPanelMaxWidth()) or PANEL_MIN_W
     local rowCount = charShown and math.min(TRACKING_MAX_VISIBLE_ROWS, self:GetVisibleTrackingRowCount()) or 0
@@ -684,7 +684,7 @@ function EL:ConfirmResetSession()
 end
 
 function EL:ConfirmRestoreHiddenCharacters()
-    ShowSettingsConfirm("Unhide all hidden characters and return them to the tracking table?", "Unhide All", function()
+    ShowSettingsConfirm("Unhide all hidden characters and return them to the main window table?", "Unhide All", function()
         if EL.RestoreHiddenCharacters then EL:RestoreHiddenCharacters() end
     end)
 end
@@ -853,10 +853,9 @@ function EL:CreateSettingsPanel(parent)
 
     local navItems = {
         {"General", "Interface\\Icons\\INV_Misc_Gear_01"},
-        {"Display", "Interface\\Icons\\INV_Misc_Spyglass_03"},
         {"Launcher", "Interface\\Icons\\INV_Misc_Rune_01"},
         {"Session", "Interface\\Icons\\INV_Misc_Coin_01"},
-        {"Tracking", "Interface\\Icons\\INV_Inscription_Tradeskill01"},
+        {"Main Window", "Interface\\Icons\\INV_Inscription_Tradeskill01"},
         {"Action Bar", "Interface\\Icons\\INV_Misc_EngGizmos_17"},
         {"Performance", "Interface\\Icons\\Ability_Rogue_Sprint"},
         {"Maintenance", "Interface\\Icons\\Trade_Engineering"},
@@ -902,7 +901,7 @@ function EL:CreateSettingsPanel(parent)
     f.generalSection = MakeSettingsSection(f, "General Controls", contentX, -42, contentW, 144)
     f.showLauncher = MakeSettingsCheck(f.generalSection, "Show launcher", function() EL:ToggleSectionSetting("launcher") end)
     f.showLauncher:SetPoint("TOPLEFT", 12, -36)
-    f.toggleCharactersSection = MakeSettingsCheck(f.generalSection, "Show tracking window", function() EL:ToggleSectionSetting("characters") end)
+    f.toggleCharactersSection = MakeSettingsCheck(f.generalSection, "Show main window", function() EL:ToggleSectionSetting("characters") end)
     f.toggleCharactersSection:SetPoint("TOPLEFT", 12, -62)
     f.toggleSessionSection = MakeSettingsCheck(f.generalSection, "Show session window", function() EL:ToggleSectionSetting("session") end)
     f.toggleSessionSection:SetPoint("TOPLEFT", 238, -36)
@@ -949,7 +948,7 @@ function EL:CreateSettingsPanel(parent)
     end)
     f.thresholdSlider:SetPoint("TOPLEFT", 12, -38)
 
-    f.trackingColumnsSection = MakeSettingsSection(f, "Tracking Table", contentX, -598, contentW, 124)
+    f.trackingColumnsSection = MakeSettingsSection(f, "Main Window Table", contentX, -598, contentW, 124)
     local trackingColumnLeftX = 12
     local trackingColumnRightX = 250
     f.toggleProf1Column = MakeSettingsCheck(f.trackingColumnsSection, "Show Prof 1 column", function() EL:ToggleTrackingColumn("prof1") end)
@@ -979,7 +978,7 @@ function EL:CreateSettingsPanel(parent)
     f.toggleTime:SetPoint("TOPLEFT", 178, -56)
     SetSettingsTooltip(f.toggleTime, "Launcher session time", {"Controls the session timer line on the launcher only.", "This does not show or hide the standalone Session window."})
 
-    f.sessionOptions = MakeSettingsSection(f, "Session Tracking", contentX, -698, contentW, 132)
+    f.sessionOptions = MakeSettingsSection(f, "Session Tracking", contentX, -698, contentW, 162)
     f.filterHerbs = MakeSettingsCheck(f.sessionOptions, "Herbs", function() EL:ToggleSessionFilterSetting("trackHerbs") end)
     f.filterHerbs:SetPoint("TOPLEFT", 12, -34)
     f.filterOre = MakeSettingsCheck(f.sessionOptions, "Ore", function() EL:ToggleSessionFilterSetting("trackOre") end)
@@ -995,19 +994,17 @@ function EL:CreateSettingsPanel(parent)
     f.filterOther = MakeSettingsCheck(f.sessionOptions, "Other materials", function() EL:ToggleSessionFilterSetting("trackOtherMaterials") end)
     f.filterOther:SetPoint("TOPLEFT", 12, -86)
     f.pricingSourceLabel = f.sessionOptions:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    f.pricingSourceLabel:SetPoint("TOPLEFT", 238, -88)
+    f.pricingSourceLabel:SetPoint("TOPLEFT", 12, -114)
     f.pricingSourceLabel:SetText("Pricing:")
     f.pricingSourceLabel:SetTextColor(0.76, 0.76, 0.70)
     f.pricingSourceValue = f.sessionOptions:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     f.pricingSourceValue:SetPoint("LEFT", f.pricingSourceLabel, "RIGHT", 5, 0)
     f.pricingSourceValue:SetTextColor(1.00, 0.92, 0.56)
+    f.copySummary = MakeSettingsButton(f.sessionOptions, "Copy Summary", 112, function() EL:ShowCopySessionSummaryDialog() end)
+    f.copySummary:SetPoint("TOPRIGHT", -12, -108)
+    SetSettingsTooltip(f.copySummary, "Copy Summary", {"Copies a quick summary of the current session totals."})
 
-    f.actionSection = MakeSettingsSection(f, "Action Bar", contentX, -42, contentW, 74)
-    f.toggleActionBar = MakeSettingsCheck(f.actionSection, "Show action bar", function() EL:ToggleSectionSetting("actions") end)
-    f.toggleActionBar:SetPoint("TOPLEFT", 10, -34)
-    SetSettingsTooltip(f.toggleActionBar, "Show action bar", {"Toggles the compact EmberLedger action bar.", "Individual buttons can still be enabled or disabled below."})
-
-    f.actionButtonsSection = MakeSettingsSection(f, "Button Visibility", contentX, -128, contentW, 232)
+    f.actionButtonsSection = MakeSettingsSection(f, "Button Visibility", contentX, -42, contentW, 232)
     f.actionGeneralLabel = f.actionButtonsSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     f.actionGeneralLabel:SetPoint("TOPLEFT", 12, -32)
     f.actionGeneralLabel:SetText("General")
@@ -1043,19 +1040,19 @@ function EL:CreateSettingsPanel(parent)
 
     -- Keep Options help consistent across all checkboxes. These are text-only tooltips.
     SetSettingsTooltip(f.showLauncher, "Show launcher", {"Shows or hides the movable EmberLedger launcher button."})
-    SetSettingsTooltip(f.toggleCharactersSection, "Show tracking window", {"Shows or hides the main character tracking window."})
+    SetSettingsTooltip(f.toggleCharactersSection, "Show main window", {"Shows or hides the main EmberLedger window."})
     SetSettingsTooltip(f.toggleSessionSection, "Show session window", {"Toggles only the standalone Session window.", "Launcher session lines are controlled separately on the Launcher page."})
     SetSettingsTooltip(f.lockWindows, "Lock windows", {"Prevents EmberLedger windows from being dragged unless Shift is held."})
     SetSettingsTooltip(f.toggleAttentionOnly, "Attention Only view", {"Shows only characters with concentration or mulch states that need attention."})
     SetSettingsTooltip(f.toggleCompactMode, "Compact tracking rows", {"Uses tighter tracking rows and hides extra header text in compact mode."})
-    SetSettingsTooltip(f.togglePinnedFirst, "Show pinned first", {"Keeps pinned characters above unpinned characters when sorting the tracking table."})
+    SetSettingsTooltip(f.togglePinnedFirst, "Show pinned first", {"Keeps pinned characters above unpinned characters when sorting the main window table."})
     SetSettingsTooltip(f.toggleCurrentCharacterHighlight, "Highlight current character", {"Adds a subtle row highlight to the character you are currently playing.", "This does not change sorting or tracking behavior."})
 
-    SetSettingsTooltip(f.toggleProf1Column, "Show Prof 1 column", {"Shows the first tracked profession column in the main tracking table."})
-    SetSettingsTooltip(f.toggleConc1Column, "Show Conc 1 column", {"Shows the first concentration column in the main tracking table."})
+    SetSettingsTooltip(f.toggleProf1Column, "Show Prof 1 column", {"Shows the first tracked profession column in the main window table."})
+    SetSettingsTooltip(f.toggleConc1Column, "Show Conc 1 column", {"Shows the first concentration column in the main window table."})
     SetSettingsTooltip(f.toggleProf2Column, "Allow Prof 2 column", {"Allows the second profession column when tracked data needs it."})
     SetSettingsTooltip(f.toggleConc2Column, "Allow Conc 2 column", {"Allows the second concentration column when tracked data needs it."})
-    SetSettingsTooltip(f.toggleMulchColumn, "Show Imbued Mulch column", {"Shows or hides the Imbued Mulch readiness column in the tracking table."})
+    SetSettingsTooltip(f.toggleMulchColumn, "Show Imbued Mulch column", {"Shows or hides the Imbued Mulch readiness column in the main window table."})
     SetSettingsTooltip(f.toggleCharacterRealm, "Show character realm", {"Shows the realm name beside character names when available."})
 
     SetSettingsTooltip(f.toggleConc, "Concentration alert", {"Shows the launcher line for characters at or above the concentration threshold."})
@@ -1072,7 +1069,6 @@ function EL:CreateSettingsPanel(parent)
     SetSettingsTooltip(f.filterFish, "Fish", {"Includes fish loot in session value tracking."})
     SetSettingsTooltip(f.filterOther, "Other materials", {"Includes other recognized materials in session value tracking."})
 
-    SetSettingsTooltip(f.toggleActionBar, "Show action bar", {"Toggles the compact EmberLedger action bar.", "Individual buttons can still be enabled or disabled below."})
     SetSettingsTooltip(f.actionMulchButton, "Imbued Mulch button", {"Allows the Imbued Mulch button to appear on the action bar when available."})
     SetSettingsTooltip(f.actionGreenThumbButton, "Green Thumb button", {"Allows the Green Thumb button to appear on the action bar when available."})
     SetSettingsTooltip(f.actionOverloadHerbButton, "Overload Herb button", {"Allows the Overload Herb button to appear on the action bar when available."})
@@ -1108,16 +1104,14 @@ function EL:CreateSettingsPanel(parent)
     f.resetPinned:SetPoint("LEFT", f.resetHidden, "RIGHT", 12, 0)
     SetSettingsTooltip(f.resetPos, "Reset Windows", {"Returns EmberLedger windows to their default screen positions.", "Scale and visibility settings are kept."})
     SetSettingsTooltip(f.resetSession, "Reset Session", {"Clears current session totals and tracked items."})
-    SetSettingsTooltip(f.resetHidden, "Unhide All", {"Restores every hidden character to the main tracking table."})
+    SetSettingsTooltip(f.resetHidden, "Unhide All", {"Restores every hidden character to the main window table."})
     SetSettingsTooltip(f.resetPinned, "Reset Pinned", {"Removes all pinned character markers without deleting character data."})
 
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.3.2"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.3.5"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
-    f.copySummary = MakeSettingsButton(f.footerSection, "Copy Summary", 112, function() EL:ShowCopySessionSummaryDialog() end)
-    f.copySummary:SetPoint("TOPRIGHT", -12, -32)
 
     f.allSettingsSections = {
         f.generalSection,
@@ -1127,19 +1121,17 @@ function EL:CreateSettingsPanel(parent)
         f.trackingColumnsSection,
         f.launcherSection,
         f.sessionOptions,
-        f.actionSection,
         f.actionButtonsSection,
         f.performanceSection,
         f.maintenanceSection,
         f.footerSection,
     }
     f.settingsPages = {
-        General = {f.generalSection, f.footerSection},
-        Display = {f.appearanceSection, f.scaleSection},
+        General = {f.generalSection, f.appearanceSection, f.scaleSection, f.footerSection},
         Launcher = {f.launcherSection},
         Session = {f.sessionOptions},
-        Tracking = {f.thresholdSection, f.trackingColumnsSection},
-        ["Action Bar"] = {f.actionSection, f.actionButtonsSection},
+        ["Main Window"] = {f.thresholdSection, f.trackingColumnsSection},
+        ["Action Bar"] = {f.actionButtonsSection},
         Performance = {f.performanceSection},
         Maintenance = {f.maintenanceSection},
     }
@@ -1173,6 +1165,8 @@ function EL:SelectSettingsPage(pageName)
     if not f then return end
     pageName = pageName or f.currentPage or "General"
     if pageName == "Actions" then pageName = "Action Bar" end
+    if pageName == "Tracking" then pageName = "Main Window" end
+    if pageName == "Display" then pageName = "General" end
     f.currentPage = pageName
 
     if f.allSettingsSections then
@@ -1203,6 +1197,7 @@ end
 function EL:RefreshSettingsPanel()
     local f = self.settingsPanel
     if not f then return end
+    if f.IsShown and not f:IsShown() then return end
     local display = self.db.settings.display
     local alerts = self.db.settings.alerts
     if f.panelOpacityValue then f.panelOpacityValue:SetText(string.format("%d%%", math.floor((tonumber(display.panelOpacity) or 0.55) * 100 + 0.5))) end
@@ -1244,7 +1239,6 @@ function EL:RefreshSettingsPanel()
     setToggle(f.enableActionBar, performanceSettings.actionBar ~= false)
     setToggle(f.toggleCharactersSection, panelSettings.charactersShown ~= false)
     setToggle(f.toggleSessionSection, sessionSettings.shown ~= false)
-    setToggle(f.toggleActionBar, panelSettings.actionBarShown ~= false)
     local actionButtons = panelSettings.actionButtons or {}
     setToggle(f.actionMulchButton, actionButtons.mulch ~= false)
     setToggle(f.actionSeedButton, actionButtons.seed ~= false)
@@ -1257,7 +1251,7 @@ function EL:RefreshSettingsPanel()
     setToggle(f.actionParcelButton, actionButtons.parcel ~= false)
     setToggle(f.actionBankButton, actionButtons.bank ~= false)
     local actionControlsAlpha = (performanceSettings.actionBar ~= false) and 1.0 or 0.45
-    for _, btn in ipairs({ f.toggleActionBar, f.actionMulchButton, f.actionSeedButton, f.actionGlowingSeedButton, f.actionWildSeedButton, f.actionPrimalSeedButton, f.actionGreenThumbButton, f.actionOverloadHerbButton, f.actionOverloadOreButton, f.actionParcelButton, f.actionBankButton }) do
+    for _, btn in ipairs({ f.actionMulchButton, f.actionSeedButton, f.actionGlowingSeedButton, f.actionWildSeedButton, f.actionPrimalSeedButton, f.actionGreenThumbButton, f.actionOverloadHerbButton, f.actionOverloadOreButton, f.actionParcelButton, f.actionBankButton }) do
         if btn and btn.SetAlpha then btn:SetAlpha(actionControlsAlpha) end
     end
     local sessionControlsAlpha = (performanceSettings.sessionTracking ~= false) and 1.0 or 0.45
@@ -1301,9 +1295,9 @@ function EL:ShowSettingsPanel()
     else
         self.settingsPanel:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     end
-    self:RefreshSettingsPanel()
-    self:SelectSettingsPage(self.settingsPanel.currentPage or "General")
     self.settingsPanel:Show()
+    self:SelectSettingsPage(self.settingsPanel.currentPage or "General")
+    self:RefreshSettingsPanel()
 end
 
 function EL:ToggleSettingsPanel()
@@ -1405,9 +1399,8 @@ local SESSION_FILTER_LABELS = {
 }
 
 local SECTION_TOGGLE_LABELS = {
-    characters = "Tracking window",
+    characters = "Main window",
     session = "Session window",
-    actions = "Action bar",
 }
 
 local function OnOffText(value)
@@ -1612,18 +1605,12 @@ function EL:ToggleSectionSetting(section)
         else
             if self.sessionWindow then self.sessionWindow:Hide() end
         end
-    elseif section == "actions" then
-        self.db.settings.panel.actionBarShown = not (self.db.settings.panel.actionBarShown ~= false)
-        self:NotifyToggle(SECTION_TOGGLE_LABELS.actions, self.db.settings.panel.actionBarShown ~= false)
     end
 
     if section == "session" then
         -- Session is now a standalone window. Toggling it from options should
         -- not resize or relayout the main EmberLedger panel.
         if self.LayoutSessionWindow then self:LayoutSessionWindow() end
-    elseif self:IsCombatLocked() and section == "actions" then
-        self.pendingSecureLayout = true
-        self:Print("Convenience bar visibility will update after combat.")
     else
         if self.LayoutPanel then self:LayoutPanel() end
         if self.AutoSizePanelHeight then self:AutoSizePanelHeight("sectionToggle") end
@@ -1647,7 +1634,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.3.2"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.3.5"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -2956,7 +2943,7 @@ function EL:LayoutPanel()
     local settings = self.db and self.db.settings and self.db.settings.panel or {}
     local charShown = settings.charactersShown ~= false
     settings.charactersCollapsed = false
-    local actionBarShown = settings.actionBarShown ~= false and (not self.IsActionBarEnabled or self:IsActionBarEnabled())
+    local actionBarShown = not self.IsActionBarEnabled or self:IsActionBarEnabled()
 
     if p.characterToggle then
         p.characterToggle:Hide()
