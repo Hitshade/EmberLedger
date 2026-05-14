@@ -1,9 +1,15 @@
-EmberLedger v1.2.3
+EmberLedger v1.3.2
 
-Performance hotfix release.
+Performance controls release.
 
 EmberLedger is an account-wide World of Warcraft profession utility addon for tracking character professions, profession concentration, Imbued Mulch readiness, pinned characters, session gold/items, and compact action bar utility buttons.
 
+
+Notable v1.3.2 performance controls:
+- Added a dedicated Performance page in EmberLedger Settings.
+- Enable session tracking can now fully disable most session loot and bag processing.
+- Enable action bar can now hide the utility action bar and skip action bar refresh work.
+- Settings no longer refresh from the routine launcher ticker path.
 
 Notable v1.2.3 behavior fix:
 - Closing the main tracking window now turns off the Show tracking window option.
@@ -26,6 +32,9 @@ Notable v1.2.1 release cleanup items:
 - Preserved v1.2.0 hidden-character management, Options organization, and empty-state behavior.
 
 Recent post-1.0 polish items:
+- v1.3.2 fixed action bar disable layout sizing and restores the Session window after re-enabling session tracking when it was previously open.
+- v1.3.1 fixed the Performance settings page so it appears in the Options sidebar.
+- v1.3.0 added Performance controls for disabling session tracking and the action bar system.
 - v1.2.3 fixed window close behavior so Settings visibility toggles stay in sync.
 - v1.2.2 reduced hidden-window refresh work to address possible performance complaints.
 - v1.2.0 added hidden-character management polish and light Options organization cleanup.

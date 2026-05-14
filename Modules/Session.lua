@@ -101,6 +101,7 @@ local function IsCategoryEnabled(settings, category)
 end
 
 function EL:IsSessionTrackedItem(itemLinkOrID)
+    if self.IsSessionTrackingEnabled and not self:IsSessionTrackingEnabled() then return false end
     if not itemLinkOrID then return false end
     local itemID, _, itemSubType, _, _, classID, subClassID = GetItemInfoInstantSafe(itemLinkOrID)
     if not itemID or EXCLUDED_ITEM_IDS[itemID] then return false end
@@ -132,6 +133,7 @@ end
 
 function EL:CountSessionItemsInBags()
     local counts = {}
+    if self.IsSessionTrackingEnabled and not self:IsSessionTrackingEnabled() then return counts end
     local maxBag = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
     for bag = 0, maxBag do
         local slots = C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bag) or 0
@@ -155,6 +157,7 @@ local function PushRecent(session, entry)
 end
 
 function EL:RecordPendingSessionChatLoot(itemID, quantity)
+    if self.IsSessionTrackingEnabled and not self:IsSessionTrackingEnabled() then return end
     if not itemID or not quantity or quantity <= 0 then return end
     local s = self:GetSessionDB()
     local now = GetTime()
@@ -168,6 +171,7 @@ function EL:RecordPendingSessionChatLoot(itemID, quantity)
 end
 
 function EL:ConsumePendingSessionChatLoot(itemID, quantity)
+    if self.IsSessionTrackingEnabled and not self:IsSessionTrackingEnabled() then return quantity end
     if not itemID or not quantity or quantity <= 0 then return quantity end
     local s = self:GetSessionDB()
     local pending = s.pendingChatLoot[itemID]
@@ -183,6 +187,7 @@ function EL:ConsumePendingSessionChatLoot(itemID, quantity)
 end
 
 function EL:AddSessionLootValue(itemID, quantity)
+    if self.IsSessionTrackingEnabled and not self:IsSessionTrackingEnabled() then return end
     if not itemID or not quantity or quantity <= 0 then return end
     if not self:IsSessionTrackedItem(itemID) then
         if self.Debug then self:Debug("Ignored session item: " .. tostring(itemID)) end
@@ -233,6 +238,7 @@ function EL:AddSessionLootValue(itemID, quantity)
 end
 
 function M:ProcessChatLoot(msg)
+    if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then return end
     if not msg then return end
     local ok, itemLink = pcall(string.match, msg, "(|c%x+|Hitem:.-|h%[.-%]|h|r)")
     if not ok or not itemLink then return end
@@ -245,6 +251,7 @@ function M:ProcessChatLoot(msg)
 end
 
 function M:PrimeBagBaseline(forceReady)
+    if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then return end
     local s = EL:GetSessionDB()
     if s.isPaused then return end
     s.lastBagCounts = EL:CountSessionItemsInBags()
@@ -255,6 +262,7 @@ function M:PrimeBagBaseline(forceReady)
 end
 
 function M:ProcessBagDiff()
+    if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then return end
     local s = EL:GetSessionDB()
     if s.isPaused then return end
     local current = EL:CountSessionItemsInBags()
@@ -290,6 +298,7 @@ function M:ProcessBagDiff()
 end
 
 function M:Refresh()
+    if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then return end
     local s = EL:GetSessionDB()
     if s.isPaused then return end
     if (tonumber(s.baselinePrimingUntil) or 0) > GetTime() then
@@ -306,10 +315,13 @@ end
 
 function M:OnLoad()
     EL:GetSessionDB()
-    EL:AutoStartSessionOnLogin()
+    if EL.IsSessionTrackingEnabled and EL:IsSessionTrackingEnabled() then
+        EL:AutoStartSessionOnLogin()
+    end
 end
 
 function M:OnEvent(event, ...)
+    if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then return end
     if event == "CHAT_MSG_LOOT" then
         self:ProcessChatLoot(...)
     elseif event == "BAG_UPDATE_DELAYED" then

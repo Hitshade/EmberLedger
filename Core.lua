@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.2.3"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.3.2"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -34,7 +34,7 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 10203
+EL.DB_VERSION = 10302
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -72,7 +72,7 @@ EL.PROFESSION_ABBREVIATIONS = {
 }
 
 local defaults = {
-    version = 10203,
+    version = 10302,
     characters = {},
     resources = {
         concentration = {},
@@ -164,6 +164,10 @@ local defaults = {
             showPinnedFirst = true,
             highlightCurrentCharacter = true,
             showFavoritesFirst = true, -- legacy saved key retained for compatibility
+        },
+        performance = {
+            sessionTracking = true,
+            actionBar = true,
         },
         hiddenCharacters = {},
         favoriteCharacters = {},
@@ -1730,16 +1734,26 @@ function EL:GetCharacterRows()
     return rows
 end
 
+function EL:IsSessionTrackingEnabled()
+    local perf = self.db and self.db.settings and self.db.settings.performance or {}
+    return perf.sessionTracking ~= false
+end
+
+function EL:IsActionBarEnabled()
+    local perf = self.db and self.db.settings and self.db.settings.performance or {}
+    return perf.actionBar ~= false
+end
+
 function EL:RequestUpdate()
     if self.UpdateButton then self:UpdateButton() end
 
     local panelShown = self.panel and self.panel:IsShown()
     if panelShown and self.RefreshPanel then self:RefreshPanel() end
 
-    local sessionShown = self.sessionWindow and self.sessionWindow:IsShown()
+    local sessionShown = self:IsSessionTrackingEnabled() and self.sessionWindow and self.sessionWindow:IsShown()
     if sessionShown and self.RefreshSessionPanel then self:RefreshSessionPanel() end
 
-    local actionBarShown = panelShown and self.panel.actionBar and self.panel.actionBar:IsShown()
+    local actionBarShown = self:IsActionBarEnabled() and panelShown and self.panel.actionBar and self.panel.actionBar:IsShown()
     if actionBarShown and self.RequestActionBarRefresh then self:RequestActionBarRefresh() end
 end
 
@@ -1861,7 +1875,7 @@ EL.frame:SetScript("OnEvent", function(_, event, ...)
                 if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
             end
         elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" or event == "SPELLS_CHANGED" or event == "BAG_UPDATE_DELAYED" then
-            if EL.RequestActionBarRefresh then EL:RequestActionBarRefresh() end
+            if EL:IsActionBarEnabled() and EL.RequestActionBarRefresh then EL:RequestActionBarRefresh() end
         end
         for _, module in pairs(EL.modules) do
             if module and module.OnEvent then

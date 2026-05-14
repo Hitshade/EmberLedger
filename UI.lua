@@ -57,7 +57,9 @@ local function GetTrackingActionBarBottomOffset()
 end
 
 local function GetTrackingBottomPadding(actionBarShown)
-    return actionBarShown and (GetTrackingActionBarBottomOffset() + ACTION_BAR_H + 8) or 20
+    -- Match the scroll frame's bottom anchor when the action bar is hidden so
+    -- auto-height calculations do not clip the last visible character row.
+    return actionBarShown and (GetTrackingActionBarBottomOffset() + ACTION_BAR_H + 8) or 34
 end
 
 local function ApplyTrackingTextStyle(row)
@@ -182,7 +184,7 @@ local function GetCurrentPanelMinHeight(panel)
     local settings = db and db.settings and db.settings.panel or {}
     local charShown = settings.charactersShown ~= false
     settings.charactersCollapsed = false
-    local actionBarShown = settings.actionBarShown ~= false
+    local actionBarShown = settings.actionBarShown ~= false and (not EL.IsActionBarEnabled or EL:IsActionBarEnabled())
 
     -- The main window can be used as a compact convenience/action bar when
     -- the character table is hidden from Options. Keep the dynamic minimum
@@ -229,7 +231,7 @@ function EL:GetTrackingPanelAutoSize()
     local settings = self.db and self.db.settings and self.db.settings.panel or {}
     local charShown = settings.charactersShown ~= false
     settings.charactersCollapsed = false
-    local actionBarShown = settings.actionBarShown ~= false
+    local actionBarShown = settings.actionBarShown ~= false and (not self.IsActionBarEnabled or self:IsActionBarEnabled())
 
     local width = (self.GetTrackingPanelMaxWidth and self:GetTrackingPanelMaxWidth()) or PANEL_MIN_W
     local rowCount = charShown and math.min(TRACKING_MAX_VISIBLE_ROWS, self:GetVisibleTrackingRowCount()) or 0
@@ -856,6 +858,7 @@ function EL:CreateSettingsPanel(parent)
         {"Session", "Interface\\Icons\\INV_Misc_Coin_01"},
         {"Tracking", "Interface\\Icons\\INV_Inscription_Tradeskill01"},
         {"Action Bar", "Interface\\Icons\\INV_Misc_EngGizmos_17"},
+        {"Performance", "Interface\\Icons\\Ability_Rogue_Sprint"},
         {"Maintenance", "Interface\\Icons\\Trade_Engineering"},
     }
     f.navLabels = {}
@@ -1081,6 +1084,14 @@ function EL:CreateSettingsPanel(parent)
     SetSettingsTooltip(f.actionWildSeedButton, "Wild Resilient Seed button", {"Allows this seed button to appear on the action bar when available."})
     SetSettingsTooltip(f.actionPrimalSeedButton, "Primal Resilient Seed button", {"Allows this seed button to appear on the action bar when available."})
 
+    f.performanceSection = MakeSettingsSection(f, "Performance", contentX, -42, contentW, 124)
+    f.enableSessionTracking = MakeSettingsCheck(f.performanceSection, "Enable session tracking", function() EL:TogglePerformanceSetting("sessionTracking") end)
+    f.enableSessionTracking:SetPoint("TOPLEFT", 12, -36)
+    f.enableActionBar = MakeSettingsCheck(f.performanceSection, "Enable action bar", function() EL:TogglePerformanceSetting("actionBar") end)
+    f.enableActionBar:SetPoint("TOPLEFT", 12, -64)
+    SetSettingsTooltip(f.enableSessionTracking, "Enable session tracking", {"Tracks session time, gathered items, and session value.", "Turn off to stop most background loot and bag processing."})
+    SetSettingsTooltip(f.enableActionBar, "Enable action bar", {"Allows EmberLedger utility buttons in the main window.", "Turn off to hide the bar and skip action bar refresh work."})
+
     f.maintenanceSection = MakeSettingsSection(f, "Maintenance / Resets", contentX, -372, contentW, 154)
     f.hiddenStatus = f.maintenanceSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.hiddenStatus:SetPoint("TOPLEFT", 12, -36)
@@ -1103,7 +1114,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.2.3"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.3.2"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
     f.copySummary = MakeSettingsButton(f.footerSection, "Copy Summary", 112, function() EL:ShowCopySessionSummaryDialog() end)
     f.copySummary:SetPoint("TOPRIGHT", -12, -32)
@@ -1118,6 +1129,7 @@ function EL:CreateSettingsPanel(parent)
         f.sessionOptions,
         f.actionSection,
         f.actionButtonsSection,
+        f.performanceSection,
         f.maintenanceSection,
         f.footerSection,
     }
@@ -1128,6 +1140,7 @@ function EL:CreateSettingsPanel(parent)
         Session = {f.sessionOptions},
         Tracking = {f.thresholdSection, f.trackingColumnsSection},
         ["Action Bar"] = {f.actionSection, f.actionButtonsSection},
+        Performance = {f.performanceSection},
         Maintenance = {f.maintenanceSection},
     }
 
@@ -1226,6 +1239,9 @@ function EL:RefreshSettingsPanel()
     setToggle(f.toggleCurrentCharacterHighlight, display.highlightCurrentCharacter ~= false)
     local panelSettings = self.db.settings.panel or {}
     local sessionSettings = self.db.settings.session or {}
+    local performanceSettings = self.db.settings.performance or {}
+    setToggle(f.enableSessionTracking, performanceSettings.sessionTracking ~= false)
+    setToggle(f.enableActionBar, performanceSettings.actionBar ~= false)
     setToggle(f.toggleCharactersSection, panelSettings.charactersShown ~= false)
     setToggle(f.toggleSessionSection, sessionSettings.shown ~= false)
     setToggle(f.toggleActionBar, panelSettings.actionBarShown ~= false)
@@ -1240,6 +1256,14 @@ function EL:RefreshSettingsPanel()
     setToggle(f.actionOverloadOreButton, actionButtons.overloadOre ~= false)
     setToggle(f.actionParcelButton, actionButtons.parcel ~= false)
     setToggle(f.actionBankButton, actionButtons.bank ~= false)
+    local actionControlsAlpha = (performanceSettings.actionBar ~= false) and 1.0 or 0.45
+    for _, btn in ipairs({ f.toggleActionBar, f.actionMulchButton, f.actionSeedButton, f.actionGlowingSeedButton, f.actionWildSeedButton, f.actionPrimalSeedButton, f.actionGreenThumbButton, f.actionOverloadHerbButton, f.actionOverloadOreButton, f.actionParcelButton, f.actionBankButton }) do
+        if btn and btn.SetAlpha then btn:SetAlpha(actionControlsAlpha) end
+    end
+    local sessionControlsAlpha = (performanceSettings.sessionTracking ~= false) and 1.0 or 0.45
+    for _, btn in ipairs({ f.toggleSessionSection, f.filterHerbs, f.filterOre, f.filterCloth, f.filterLeather, f.filterEnchanting, f.filterFish, f.filterOther, f.resetSession }) do
+        if btn and btn.SetAlpha then btn:SetAlpha(sessionControlsAlpha) end
+    end
     setToggle(f.filterHerbs, sessionSettings.trackHerbs ~= false)
     setToggle(f.filterOre, sessionSettings.trackOre ~= false)
     setToggle(f.filterCloth, sessionSettings.trackCloth ~= false)
@@ -1472,7 +1496,7 @@ function EL:ToggleSessionFilterSetting(key)
     local enabled = not (self.db.settings.session[key] ~= false)
     self.db.settings.session[key] = enabled
     self:NotifyToggle(SESSION_FILTER_LABELS[key] or key, enabled)
-    if self.CountSessionItemsInBags then
+    if self:IsSessionTrackingEnabled() and self.CountSessionItemsInBags then
         local s = self:GetSessionDB()
         s.lastBagCounts = self:CountSessionItemsInBags()
         s.bagBaselineReady = true
@@ -1489,6 +1513,61 @@ function EL:ToggleLockWindows()
     self:Print("Windows " .. (self.db.settings.lockWindows and "locked. Hold Shift and drag to move them." or "unlocked."))
 end
 
+local PERFORMANCE_TOGGLE_LABELS = {
+    sessionTracking = "Session tracking",
+    actionBar = "Action bar system",
+}
+
+function EL:TogglePerformanceSetting(key)
+    if not key then return end
+    self.db.settings.performance = self.db.settings.performance or {}
+    local enabled = not (self.db.settings.performance[key] ~= false)
+    self.db.settings.performance[key] = enabled
+    self:NotifyToggle(PERFORMANCE_TOGGLE_LABELS[key] or key, enabled)
+
+    if key == "sessionTracking" then
+        self.db.settings.session = self.db.settings.session or {}
+        local sessionSettings = self.db.settings.session
+        if enabled then
+            if self.AutoStartSessionOnLogin then self:AutoStartSessionOnLogin() end
+            local s = self.GetSessionDB and self:GetSessionDB()
+            if s and self.CountSessionItemsInBags then
+                s.lastBagCounts = self:CountSessionItemsInBags()
+                s.bagBaselineReady = true
+                s.baselinePrimingUntil = nil
+            end
+            local shouldReopen = sessionSettings.reopenAfterPerformanceEnable == true
+            sessionSettings.reopenAfterPerformanceEnable = nil
+            if shouldReopen then
+                sessionSettings.shown = true
+                sessionSettings.windowOpen = true
+                if self.ShowSessionWindowFromSavedState then self:ShowSessionWindowFromSavedState() end
+            elseif self.RefreshSessionPanel then
+                self:RefreshSessionPanel()
+            end
+        else
+            sessionSettings.reopenAfterPerformanceEnable = (self.sessionWindow and self.sessionWindow:IsShown()) or sessionSettings.windowOpen == true
+            if self.sessionWindow then
+                self._suppressSessionWindowHideSetting = true
+                self.sessionWindow:Hide()
+                self._suppressSessionWindowHideSetting = false
+            end
+            sessionSettings.windowOpen = false
+        end
+    elseif key == "actionBar" then
+        if enabled then
+            if self:IsActionBarEnabled() and self.RequestActionBarRefresh then self:RequestActionBarRefresh() end
+        elseif self.panel and self.panel.actionBar then
+            self.panel.actionBar:Hide()
+        end
+        if self.LayoutPanel then self:LayoutPanel() end
+        if self.AutoSizePanelHeight then self:AutoSizePanelHeight("actionBarPerformanceToggle") end
+    end
+
+    if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+    if self.RequestUpdate then self:RequestUpdate() end
+end
+
 function EL:ToggleActionBarButton(key, label)
     if not key then return end
     self.db.settings.panel = self.db.settings.panel or {}
@@ -1496,7 +1575,7 @@ function EL:ToggleActionBarButton(key, label)
     local buttons = self.db.settings.panel.actionButtons
     buttons[key] = not (buttons[key] ~= false)
     self:NotifyToggle(label or key, buttons[key] ~= false)
-    if self.RequestActionBarRefresh then self:RequestActionBarRefresh() end
+    if self:IsActionBarEnabled() and self.RequestActionBarRefresh then self:RequestActionBarRefresh() end
     if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
     if self.RequestUpdate then self:RequestUpdate() end
 end
@@ -1568,7 +1647,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.2.3"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.3.2"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -2181,10 +2260,15 @@ function EL:CreateActionBar(parent)
     bar.logout = MakeLogoutButton(bar)
     bar.logout:SetPoint("RIGHT", bar, "RIGHT", -6, 0)
 
-    self:RequestActionBarRefresh()
+    if self:IsActionBarEnabled() then self:RequestActionBarRefresh() end
 end
 
 function EL:UpdateActionBar()
+    if self.IsActionBarEnabled and not self:IsActionBarEnabled() then
+        local bar = self.panel and self.panel.actionBar
+        if bar then bar:Hide() end
+        return
+    end
     local bar = self.panel and self.panel.actionBar
     if not bar or not bar.itemButtons then return end
     local locked = self:IsCombatLocked()
@@ -2349,6 +2433,21 @@ function EL:RefreshSessionPanel()
     local shown = self.db and self.db.settings and self.db.settings.session and self.db.settings.session.shown ~= false
     if not shown then return end
     sp:SetShown(true)
+    if self.IsSessionTrackingEnabled and not self:IsSessionTrackingEnabled() then
+        if sp.summary then
+            sp.summary:SetText("Session tracking is disabled.\nEnable it under Performance to track time, gathered items, and value.")
+            sp.summary:SetTextColor(0.82, 0.78, 0.68)
+            sp.summary:Show()
+        end
+        if sp.metrics then sp.metrics:SetShown(false) end
+        if sp.metricDiv1 then sp.metricDiv1:SetShown(false) end
+        if sp.metricDiv2 then sp.metricDiv2:SetShown(false) end
+        if sp.toggle then sp.toggle:SetShown(false) end
+        if sp.reset then sp.reset:SetShown(false) end
+        if sp.itemClip then sp.itemClip:SetShown(false) end
+        for _, row in ipairs(sp.items or {}) do row:SetShown(false) end
+        return
+    end
     local collapsed = false
     if sp.collapse then sp.collapse:Hide() end
     if sp.metrics then sp.metrics:SetShown(true) end
@@ -2518,7 +2617,9 @@ function EL:CreateSessionWindow()
     frame:SetScript("OnHide", function()
         if EL.db and EL.db.settings and EL.db.settings.session then
             EL.db.settings.session.windowOpen = false
-            EL.db.settings.session.shown = false
+            if not EL._suppressSessionWindowHideSetting then
+                EL.db.settings.session.shown = false
+            end
         end
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
     end)
@@ -2855,7 +2956,7 @@ function EL:LayoutPanel()
     local settings = self.db and self.db.settings and self.db.settings.panel or {}
     local charShown = settings.charactersShown ~= false
     settings.charactersCollapsed = false
-    local actionBarShown = settings.actionBarShown ~= false
+    local actionBarShown = settings.actionBarShown ~= false and (not self.IsActionBarEnabled or self:IsActionBarEnabled())
 
     if p.characterToggle then
         p.characterToggle:Hide()
@@ -3314,10 +3415,11 @@ function EL:UpdateButton()
         end
     end
 
-    local showSessionGold = display.showLauncherSession ~= false
-    local showSessionTotal = display.showLauncherSessionTotal ~= false
-    local showSessionTime = display.showLauncherSessionTime ~= false
-    local sdb = self.GetSessionDB and self:GetSessionDB() or {}
+    local sessionEnabled = not self.IsSessionTrackingEnabled or self:IsSessionTrackingEnabled()
+    local showSessionGold = sessionEnabled and display.showLauncherSession ~= false
+    local showSessionTotal = sessionEnabled and display.showLauncherSessionTotal ~= false
+    local showSessionTime = sessionEnabled and display.showLauncherSessionTime ~= false
+    local sdb = sessionEnabled and self.GetSessionDB and self:GetSessionDB() or {}
     if b.line3 then
         if showSessionGold then
             b.line3:SetText(self:FormatMoneyText(self:GetSessionGoldPerHour()) .. "/hr")
@@ -3371,7 +3473,6 @@ function EL:UpdateButton()
     if math.abs((b:GetWidth() or 0) - targetW) > 2 or math.abs((b:GetHeight() or 0) - targetH) > 2 then
         b:SetSize(targetW, targetH)
     end
-    if self.settingsPanel and self.settingsPanel:IsShown() then self:RefreshSettingsPanel() end
 end
 
 function EL:ApplyPanelScale()

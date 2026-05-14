@@ -1,3 +1,27 @@
+v1.3.2 Performance Controls Hotfix
+
+- Fixed tracking window auto-height when the action bar is disabled from Performance settings.
+- Fixed session tracking re-enable behavior so the Session window reopens when it was open before session tracking was disabled.
+- Preserved v1.3.1 Performance settings visibility and v1.3.0 performance controls.
+- No tracking, sorting, launcher, action bar button, Blizzard frame, import/export, backup, or minimap changes.
+
+v1.3.1 Performance Options Visibility Fix
+
+- Fixed the Options sidebar so the new Performance page appears as its own category.
+- The Performance page now exposes Enable session tracking and Enable action bar as intended.
+- Preserved the v1.3.0 performance controls and behavior.
+- No tracking, session calculation, launcher, action bar button, Blizzard frame, or saved-data behavior changes.
+
+v1.3.0 Performance Controls
+
+- Added a dedicated Performance page in EmberLedger Settings.
+- Added Enable session tracking. When off, EmberLedger skips most session loot and bag processing and closes the Session window.
+- Added Enable action bar. When off, EmberLedger hides the utility action bar and skips action bar refresh work.
+- Removed routine Settings refresh work from the launcher ticker path. Settings now refresh when opened or when options change.
+- Added short tooltips explaining what each Performance option disables.
+- Preserved core profession, concentration, Imbued Mulch, launcher, sorting, hidden/pinned character, and window behavior.
+- No seed flyout, minimap button, import/export tools, backup tools, or major UI rewrite was added.
+
 v1.2.3 Window Visibility Toggle Fix
 
 - Fixed main tracking window close behavior so closing the window turns off the Show tracking window option.
