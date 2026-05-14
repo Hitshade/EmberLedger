@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.0.0"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.2.1"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -34,7 +34,7 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 10000
+EL.DB_VERSION = 10201
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -72,7 +72,7 @@ EL.PROFESSION_ABBREVIATIONS = {
 }
 
 local defaults = {
-    version = 10000,
+    version = 10201,
     characters = {},
     resources = {
         concentration = {},
@@ -162,6 +162,7 @@ local defaults = {
             attentionOnly = false,
             compactMode = false,
             showPinnedFirst = true,
+            highlightCurrentCharacter = true,
             showFavoritesFirst = true, -- legacy saved key retained for compatibility
         },
         hiddenCharacters = {},
@@ -823,6 +824,17 @@ function EL:IsCharacterHidden(charKey)
     return self.db and self.db.settings and self.db.settings.hiddenCharacters and self.db.settings.hiddenCharacters[charKey] and true or false
 end
 
+function EL:CountHiddenCharacters()
+    local hidden = self.db and self.db.settings and self.db.settings.hiddenCharacters
+    local count = 0
+    if type(hidden) == "table" then
+        for _, value in pairs(hidden) do
+            if value then count = count + 1 end
+        end
+    end
+    return count
+end
+
 function EL:SetCharacterHidden(charKey, hidden)
     if not (self.db and self.db.settings and charKey) then return end
     self.db.settings.hiddenCharacters = self.db.settings.hiddenCharacters or {}
@@ -830,10 +842,12 @@ function EL:SetCharacterHidden(charKey, hidden)
 end
 
 function EL:RestoreHiddenCharacters()
-    if not (self.db and self.db.settings) then return end
+    if not (self.db and self.db.settings) then return 0 end
+    local count = self.CountHiddenCharacters and self:CountHiddenCharacters() or 0
     self.db.settings.hiddenCharacters = {}
     self:RequestUpdate()
-    self:Print("Hidden characters restored.")
+    self:Print(count > 0 and ("Hidden characters restored: " .. tostring(count)) or "No hidden characters to restore.")
+    return count
 end
 
 function EL:IsCharacterPinned(charKey)
@@ -1727,6 +1741,22 @@ function EL:Print(msg)
     print("|cffff7a1aEmberLedger:|r " .. tostring(msg))
 end
 
+function EL:PrintSlashHelp()
+    self:Print("Commands:")
+    self:Print("/el or /ember - Toggle EmberLedger.")
+    self:Print("/el settings - Open Options.")
+    self:Print("/el session - Toggle the standalone Session window.")
+    self:Print("/el refresh - Refresh tracked profession data.")
+    self:Print("/el scale - Show the current main window scale.")
+    self:Print("/el scale 0.85 - Set main window scale from 0.60 to 1.40.")
+    self:Print("/el threshold 900 - Set concentration alert threshold.")
+    self:Print("/el lock or /el unlock - Lock or unlock EmberLedger windows.")
+    self:Print("/el reset layout - Reset window positions.")
+    self:Print("/el reset session - Reset current session totals.")
+    self:Print("/el restore - Restore hidden characters.")
+    self:Print("/el reset pinned - Remove all pinned markers.")
+end
+
 SLASH_EMBERLEDGER1 = "/ember"
 SLASH_EMBERLEDGER2 = "/emberledger"
 SLASH_EMBERLEDGER3 = "/el"
@@ -1742,6 +1772,8 @@ SlashCmdList.EMBERLEDGER = function(msg)
         else
             EL:Print("Use /el scale 0.6 through /el scale 1.4")
         end
+    elseif msg == "help" or msg == "?" then
+        if EL.PrintSlashHelp then EL:PrintSlashHelp() end
     elseif msg == "scale" then
         local current = EL.db and EL.db.settings and EL.db.settings.panel and EL.db.settings.panel.scale or 1
         EL:Print("Current window scale: " .. string.format("%.2f", current) .. ". Use /el scale 0.85, /el scale 1, etc.")

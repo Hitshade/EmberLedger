@@ -1,17 +1,36 @@
-EmberLedger v1.0.0
+EmberLedger v1.2.1
 
-Stable 1.0 release.
+Post-1.0 release cleanup update.
 
 EmberLedger is an account-wide World of Warcraft profession utility addon for tracking character professions, profession concentration, Imbued Mulch readiness, pinned characters, session gold/items, and compact action bar utility buttons.
 
-Notable v1.0.0 readiness items:
-- Promoted the final v0.24.13 Beta cleanup baseline to v1.0.0.
-- Updated addon metadata and saved-variable version metadata for the stable release.
-- Preserved the tested pre-1.0 feature set without adding risky new systems.
-- No seed flyout, minimap button, import tools, or backup tools were added for this release.
+Notable v1.2.1 release cleanup items:
+- Performed a final code inspection after the v1.2.0 hidden-character and Options polish pass.
+- Removed a harmless duplicate Launcher Session Time refresh call in the Options panel refresh routine.
+- Confirmed no Blizzard frame hiding, seed flyout, minimap, import/export, backup, tracking, session, launcher, or action bar behavior changes were added.
+- Preserved v1.2.0 hidden-character management, Options organization, and empty-state behavior.
+
+Recent post-1.0 polish items:
+- v1.2.0 added hidden-character management polish and light Options organization cleanup.
+- v1.1.0 added clearer empty-state messages and passive first-use guidance.
+- v1.0.8 improved Blizzard AddOns button wording and Options tooltip consistency.
+- v1.0.7 removed the experimental Blizzard Options frame-hiding behavior after testing showed it could affect other Blizzard UI windows.
+- v1.0.6 added concise hover tooltips to all Options menu checkboxes.
+- v1.0.3 fixed an Options tooltip argument error.
+- v1.0.2 added a subtle current-character row highlight and an Options toggle.
+- v1.0.1 added /el help and clarified several important Options tooltips.
 
 Slash commands:
-/el or /ember toggles the launcher/main window behavior.
+/el or /ember toggles EmberLedger.
+/el help shows the in-game command list.
 /el settings opens EmberLedger Options.
 /el session toggles the standalone Session window.
 /el refresh refreshes tracked profession data.
+/el scale shows the current main window scale.
+/el scale 0.85 sets the main window scale.
+/el threshold 900 sets the concentration alert threshold.
+/el lock or /el unlock locks or unlocks EmberLedger windows.
+/el reset layout resets window positions.
+/el reset session resets current session totals.
+/el restore restores hidden characters.
+/el reset pinned removes all pinned character markers.

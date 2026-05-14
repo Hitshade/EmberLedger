@@ -1,3 +1,70 @@
+v1.2.1
+- Performed release cleanup and code inspection after the v1.2.0 hidden-character and Options polish pass.
+- Removed a harmless duplicate Launcher Session Time toggle refresh call from the Options panel refresh routine.
+- Updated version metadata and documentation for the v1.2.1 cleanup release.
+- No tracking, sorting, session, launcher, action bar, Blizzard frame, seed flyout, minimap, import/export, backup, or saved-variable migration behavior changes were added.
+
+v1.2.0
+- Added hidden-character management polish in Options.
+- Renamed the hidden-character reset control to "Unhide All" for clearer wording.
+- Added a hidden-character count to the Maintenance / Resets page.
+- Added hover tooltips to Maintenance / Resets buttons.
+- Lightly reorganized Options section titles for clearer scanning.
+- No tracking, session, launcher, action bar, Blizzard frame, import/export, backup, minimap, or seed flyout changes were added.
+
+v1.1.0
+- Added clearer empty-state messages for new installs, Attention Only view, and fully hidden character lists.
+- Added passive first-use guidance in the main tracking window when no characters have been tracked yet.
+- Kept launcher tooltip behavior unchanged.
+- No tracking, session, action bar, Blizzard frame, import/export, backup, or saved-variable migration changes.
+
+v1.0.8
+- Renamed the Blizzard AddOns entry button from "Open EmberLedger Options" to "Open EmberLedger Settings" for clearer wording.
+- Lightly tuned several Options tooltip lines for consistency and readability.
+- Did not add a standalone-options note to the Blizzard AddOns panel.
+- Did not touch Blizzard frame closing, hiding, or protected UI behavior.
+- No tracking, session, launcher, action bar, saved-variable migration, minimap, import, backup, or seed flyout changes were added.
+
+v1.0.7
+- Hotfix: removed the Blizzard Options frame-hiding behavior that could leave Blizzard UI windows hidden after opening EmberLedger Options from the AddOns panel.
+- The Blizzard AddOns entry now opens EmberLedger Options without attempting to close or hide Blizzard settings frames.
+- Preserved v1.0.6 Options tooltip consistency changes.
+
+v1.0.6
+- Added concise hover tooltips to all Options menu checkboxes.
+- Standardized tooltip coverage across General, Tracking, Launcher, Session, and Action Bar pages.
+- No tracking, session, launcher, action bar, saved-variable migration, minimap, import, backup, or seed flyout changes were added.
+
+v1.0.5
+- Hotfixed the Blizzard Options close behavior from v1.0.4 to avoid protected Blizzard close paths that could trigger ADDON_ACTION_FORBIDDEN errors.
+- This experimental Blizzard Options hiding approach was later removed in v1.0.7 after testing showed broader Blizzard UI side effects.
+- No tracking, session, launcher, action bar, saved-variable migration, minimap, import, backup, or seed flyout changes were added.
+
+v1.0.4
+- Opening EmberLedger Options from Blizzard AddOns/Options now closes the Blizzard options window first to prevent overlapping panels.
+- Added a dedicated ShowSettingsPanel helper so the Blizzard Options button opens EmberLedger Options without accidentally toggling an already-open panel closed.
+- Preserved the standalone /el settings toggle behavior.
+- No tracking, session, launcher, action bar, saved-variable migration, minimap, import, backup, or seed flyout changes were added.
+
+v1.0.3
+- Fixed an Options tooltip error caused by passing tooltip title wrapping as the wrong argument to GameTooltip:SetText.
+- Preserved the v1.0.2 current-character row highlight behavior.
+
+v1.0.2
+- Added a subtle current-character row highlight to the main tracking table so the logged-in character is easier to find.
+- Added a General Options toggle for the current-character highlight.
+- Added a tooltip line showing when a row is the current character.
+- Preserved existing sorting, tracking, session, launcher, action bar, and saved-variable behavior.
+- No seed flyout, minimap button, import tools, backup tools, saved-variable migration, or large UI rewrite was added.
+
+v1.0.1
+- Added /el help as a lightweight in-game slash command reference.
+- Added clarification tooltips for the standalone Session window option and launcher session display toggles.
+- Added clarification tooltip text for action bar visibility so button options are clearer without changing secure button behavior.
+- Cleaned README and changelog wording for the first post-1.0 patch release.
+- Preserved v1.0.0 tracking, session, launcher, action bar, and saved-variable behavior.
+- No seed flyout, minimap button, import tools, backup tools, saved-variable migration, or large UI rewrite was added.
+
 v1.0.0
 - Promoted EmberLedger from the final v0.24.13 Beta cleanup baseline to the first stable 1.0 release.
 - Updated addon metadata, internal fallback version text, and saved-variable version metadata for v1.0.0.

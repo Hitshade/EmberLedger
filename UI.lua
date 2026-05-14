@@ -682,7 +682,7 @@ function EL:ConfirmResetSession()
 end
 
 function EL:ConfirmRestoreHiddenCharacters()
-    ShowSettingsConfirm("Restore all hidden characters to the tracking table?", "Restore", function()
+    ShowSettingsConfirm("Unhide all hidden characters and return them to the tracking table?", "Unhide All", function()
         if EL.RestoreHiddenCharacters then EL:RestoreHiddenCharacters() end
     end)
 end
@@ -702,6 +702,24 @@ local function MakeSettingsCheck(parent, text, onClick)
     cb:SetScript("OnClick", onClick)
     cb.text = cb.Text
     return cb
+end
+
+local function SetSettingsTooltip(widget, title, lines)
+    if not widget then return end
+    widget:SetScript("OnEnter", function(self)
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(title or "EmberLedger", 1.00, 0.82, 0.24)
+        if lines then
+            for _, line in ipairs(lines) do
+                GameTooltip:AddLine(line, 0.86, 0.86, 0.78, true)
+            end
+        end
+        GameTooltip:Show()
+    end)
+    widget:SetScript("OnLeave", function()
+        if GameTooltip then GameTooltip:Hide() end
+    end)
 end
 
 local function MakeSettingsSlider(parent, labelText, minValue, maxValue, step, valueFormatter, onValueChanged)
@@ -878,13 +896,14 @@ function EL:CreateSettingsPanel(parent)
     local contentX = 168
     local contentW = 476
 
-    f.generalSection = MakeSettingsSection(f, "General", contentX, -42, contentW, 144)
+    f.generalSection = MakeSettingsSection(f, "General Controls", contentX, -42, contentW, 144)
     f.showLauncher = MakeSettingsCheck(f.generalSection, "Show launcher", function() EL:ToggleSectionSetting("launcher") end)
     f.showLauncher:SetPoint("TOPLEFT", 12, -36)
     f.toggleCharactersSection = MakeSettingsCheck(f.generalSection, "Show tracking window", function() EL:ToggleSectionSetting("characters") end)
     f.toggleCharactersSection:SetPoint("TOPLEFT", 12, -62)
     f.toggleSessionSection = MakeSettingsCheck(f.generalSection, "Show session window", function() EL:ToggleSectionSetting("session") end)
     f.toggleSessionSection:SetPoint("TOPLEFT", 238, -36)
+    SetSettingsTooltip(f.toggleSessionSection, "Show session window", {"Toggles only the standalone Session window.", "Launcher session lines are controlled separately on the Launcher page."})
     f.lockWindows = MakeSettingsCheck(f.generalSection, "Lock windows", function() EL:ToggleLockWindows() end)
     f.lockWindows:SetPoint("TOPLEFT", 238, -62)
     f.toggleAttentionOnly = MakeSettingsCheck(f.generalSection, "Attention Only view", function() EL:ToggleDisplaySetting("attentionOnly") end)
@@ -893,6 +912,9 @@ function EL:CreateSettingsPanel(parent)
     f.toggleCompactMode:SetPoint("TOPLEFT", 238, -88)
     f.togglePinnedFirst = MakeSettingsCheck(f.generalSection, "Show pinned first", function() EL:ToggleDisplaySetting("showPinnedFirst") end)
     f.togglePinnedFirst:SetPoint("TOPLEFT", 12, -114)
+    f.toggleCurrentCharacterHighlight = MakeSettingsCheck(f.generalSection, "Highlight current character", function() EL:ToggleDisplaySetting("highlightCurrentCharacter") end)
+    f.toggleCurrentCharacterHighlight:SetPoint("TOPLEFT", 238, -114)
+    SetSettingsTooltip(f.toggleCurrentCharacterHighlight, "Highlight current character", {"Adds a subtle row highlight to the character you are currently playing.", "This does not change sorting or tracking behavior."})
 
     f.appearanceSection = MakeSettingsSection(f, "Appearance", contentX, -142, contentW, 150)
     f.launcherOpacitySlider = MakeSettingsSlider(f.appearanceSection, "Launcher opacity", 20, 100, 5, function(v) return string.format("%d%%", v) end, function(v)
@@ -918,13 +940,13 @@ function EL:CreateSettingsPanel(parent)
     end)
     f.sessionScaleSlider:SetPoint("TOPLEFT", 12, -72)
 
-    f.thresholdSection = MakeSettingsSection(f, "Profession Threshold", contentX, -498, contentW, 92)
+    f.thresholdSection = MakeSettingsSection(f, "Concentration Threshold", contentX, -498, contentW, 92)
     f.thresholdSlider = MakeSettingsSlider(f.thresholdSection, "Concentration ready threshold", 0, 1000, 10, function(v) return tostring(math.floor(v + 0.5)) end, function(v)
         EL:SetAbsoluteSetting("concThreshold", math.floor(v + 0.5))
     end)
     f.thresholdSlider:SetPoint("TOPLEFT", 12, -38)
 
-    f.trackingColumnsSection = MakeSettingsSection(f, "Tracking Columns", contentX, -598, contentW, 124)
+    f.trackingColumnsSection = MakeSettingsSection(f, "Tracking Table", contentX, -598, contentW, 124)
     local trackingColumnLeftX = 12
     local trackingColumnRightX = 250
     f.toggleProf1Column = MakeSettingsCheck(f.trackingColumnsSection, "Show Prof 1 column", function() EL:ToggleTrackingColumn("prof1") end)
@@ -946,10 +968,13 @@ function EL:CreateSettingsPanel(parent)
     f.toggleMulch:SetPoint("TOPLEFT", 178, -34)
     f.toggleSession = MakeSettingsCheck(f.launcherSection, "Session rate", function() EL:ToggleDisplaySetting("showLauncherSession") end)
     f.toggleSession:SetPoint("TOPLEFT", 294, -34)
+    SetSettingsTooltip(f.toggleSession, "Launcher session rate", {"Controls the gold-per-hour line on the launcher only.", "This does not show or hide the standalone Session window."})
     f.toggleTotal = MakeSettingsCheck(f.launcherSection, "Session total", function() EL:ToggleDisplaySetting("showLauncherSessionTotal") end)
     f.toggleTotal:SetPoint("TOPLEFT", 12, -56)
+    SetSettingsTooltip(f.toggleTotal, "Launcher session total", {"Controls the session total line on the launcher only.", "This does not show or hide the standalone Session window."})
     f.toggleTime = MakeSettingsCheck(f.launcherSection, "Session time", function() EL:ToggleDisplaySetting("showLauncherSessionTime") end)
     f.toggleTime:SetPoint("TOPLEFT", 178, -56)
+    SetSettingsTooltip(f.toggleTime, "Launcher session time", {"Controls the session timer line on the launcher only.", "This does not show or hide the standalone Session window."})
 
     f.sessionOptions = MakeSettingsSection(f, "Session Tracking", contentX, -698, contentW, 132)
     f.filterHerbs = MakeSettingsCheck(f.sessionOptions, "Herbs", function() EL:ToggleSessionFilterSetting("trackHerbs") end)
@@ -977,14 +1002,16 @@ function EL:CreateSettingsPanel(parent)
     f.actionSection = MakeSettingsSection(f, "Action Bar", contentX, -42, contentW, 74)
     f.toggleActionBar = MakeSettingsCheck(f.actionSection, "Show action bar", function() EL:ToggleSectionSetting("actions") end)
     f.toggleActionBar:SetPoint("TOPLEFT", 10, -34)
+    SetSettingsTooltip(f.toggleActionBar, "Show action bar", {"Toggles the compact EmberLedger action bar.", "Individual buttons can still be enabled or disabled below."})
 
-    f.actionButtonsSection = MakeSettingsSection(f, "Action Bar Buttons", contentX, -128, contentW, 232)
+    f.actionButtonsSection = MakeSettingsSection(f, "Button Visibility", contentX, -128, contentW, 232)
     f.actionGeneralLabel = f.actionButtonsSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     f.actionGeneralLabel:SetPoint("TOPLEFT", 12, -32)
     f.actionGeneralLabel:SetText("General")
     f.actionGeneralLabel:SetTextColor(1.00, 0.82, 0.24)
     f.actionMulchButton = MakeSettingsCheck(f.actionButtonsSection, "Imbued Mulch", function() EL:ToggleActionBarButton("mulch", "Imbued Mulch") end)
     f.actionMulchButton:SetPoint("TOPLEFT", 12, -54)
+    SetSettingsTooltip(f.actionMulchButton, "Action bar button visibility", {"Controls whether this button is allowed to appear.", "The button may still hide when the item or spell is unavailable."})
     f.actionGreenThumbButton = MakeSettingsCheck(f.actionButtonsSection, "Green Thumb", function() EL:ToggleActionBarButton("greenThumb", "Green Thumb") end)
     f.actionGreenThumbButton:SetPoint("TOPLEFT", 178, -54)
     f.actionOverloadHerbButton = MakeSettingsCheck(f.actionButtonsSection, "Overload Herb", function() EL:ToggleActionBarButton("overloadHerb", "Overload Herb") end)
@@ -1009,20 +1036,74 @@ function EL:CreateSettingsPanel(parent)
     f.actionPrimalSeedButton = MakeSettingsCheck(f.actionButtonsSection, "Primal Resilient Seed", function() EL:ToggleActionBarButton("primalSeed", "Primal Resilient Seed") end)
     f.actionPrimalSeedButton:SetPoint("TOPLEFT", 178, -184)
 
-    f.maintenanceSection = MakeSettingsSection(f, "Maintenance", contentX, -372, contentW, 128)
+
+
+    -- Keep Options help consistent across all checkboxes. These are text-only tooltips.
+    SetSettingsTooltip(f.showLauncher, "Show launcher", {"Shows or hides the movable EmberLedger launcher button."})
+    SetSettingsTooltip(f.toggleCharactersSection, "Show tracking window", {"Shows or hides the main character tracking window."})
+    SetSettingsTooltip(f.toggleSessionSection, "Show session window", {"Toggles only the standalone Session window.", "Launcher session lines are controlled separately on the Launcher page."})
+    SetSettingsTooltip(f.lockWindows, "Lock windows", {"Prevents EmberLedger windows from being dragged unless Shift is held."})
+    SetSettingsTooltip(f.toggleAttentionOnly, "Attention Only view", {"Shows only characters with concentration or mulch states that need attention."})
+    SetSettingsTooltip(f.toggleCompactMode, "Compact tracking rows", {"Uses tighter tracking rows and hides extra header text in compact mode."})
+    SetSettingsTooltip(f.togglePinnedFirst, "Show pinned first", {"Keeps pinned characters above unpinned characters when sorting the tracking table."})
+    SetSettingsTooltip(f.toggleCurrentCharacterHighlight, "Highlight current character", {"Adds a subtle row highlight to the character you are currently playing.", "This does not change sorting or tracking behavior."})
+
+    SetSettingsTooltip(f.toggleProf1Column, "Show Prof 1 column", {"Shows the first tracked profession column in the main tracking table."})
+    SetSettingsTooltip(f.toggleConc1Column, "Show Conc 1 column", {"Shows the first concentration column in the main tracking table."})
+    SetSettingsTooltip(f.toggleProf2Column, "Allow Prof 2 column", {"Allows the second profession column when tracked data needs it."})
+    SetSettingsTooltip(f.toggleConc2Column, "Allow Conc 2 column", {"Allows the second concentration column when tracked data needs it."})
+    SetSettingsTooltip(f.toggleMulchColumn, "Show Imbued Mulch column", {"Shows or hides the Imbued Mulch readiness column in the tracking table."})
+    SetSettingsTooltip(f.toggleCharacterRealm, "Show character realm", {"Shows the realm name beside character names when available."})
+
+    SetSettingsTooltip(f.toggleConc, "Concentration alert", {"Shows the launcher line for characters at or above the concentration threshold."})
+    SetSettingsTooltip(f.toggleMulch, "Mulch", {"Shows the launcher line for Imbued Mulch readiness."})
+    SetSettingsTooltip(f.toggleSession, "Launcher session rate", {"Controls the gold-per-hour line on the launcher only.", "This does not show or hide the standalone Session window."})
+    SetSettingsTooltip(f.toggleTotal, "Launcher session total", {"Controls the session total line on the launcher only.", "This does not show or hide the standalone Session window."})
+    SetSettingsTooltip(f.toggleTime, "Launcher session time", {"Controls the session timer line on the launcher only.", "This does not show or hide the standalone Session window."})
+
+    SetSettingsTooltip(f.filterHerbs, "Herbs", {"Includes herb loot in session value tracking."})
+    SetSettingsTooltip(f.filterOre, "Ore", {"Includes ore loot in session value tracking."})
+    SetSettingsTooltip(f.filterCloth, "Cloth", {"Includes cloth loot in session value tracking."})
+    SetSettingsTooltip(f.filterLeather, "Leather/skins", {"Includes leather and skinning loot in session value tracking."})
+    SetSettingsTooltip(f.filterEnchanting, "Enchanting", {"Includes enchanting materials in session value tracking."})
+    SetSettingsTooltip(f.filterFish, "Fish", {"Includes fish loot in session value tracking."})
+    SetSettingsTooltip(f.filterOther, "Other materials", {"Includes other recognized materials in session value tracking."})
+
+    SetSettingsTooltip(f.toggleActionBar, "Show action bar", {"Toggles the compact EmberLedger action bar.", "Individual buttons can still be enabled or disabled below."})
+    SetSettingsTooltip(f.actionMulchButton, "Imbued Mulch button", {"Allows the Imbued Mulch button to appear on the action bar when available."})
+    SetSettingsTooltip(f.actionGreenThumbButton, "Green Thumb button", {"Allows the Green Thumb button to appear on the action bar when available."})
+    SetSettingsTooltip(f.actionOverloadHerbButton, "Overload Herb button", {"Allows the Overload Herb button to appear on the action bar when available."})
+    SetSettingsTooltip(f.actionOverloadOreButton, "Overload Ore button", {"Allows the Overload Ore button to appear on the action bar when available."})
+    SetSettingsTooltip(f.actionParcelButton, "Interdimensional Parcel button", {"Allows the Interdimensional Parcel button to appear on the action bar when available."})
+    SetSettingsTooltip(f.actionBankButton, "Warband Bank button", {"Allows the Warband Bank button to appear on the action bar when available."})
+    SetSettingsTooltip(f.actionSeedButton, "Resilient Seed button", {"Allows this seed button to appear on the action bar when available."})
+    SetSettingsTooltip(f.actionGlowingSeedButton, "Glowing Resilient Seed button", {"Allows this seed button to appear on the action bar when available."})
+    SetSettingsTooltip(f.actionWildSeedButton, "Wild Resilient Seed button", {"Allows this seed button to appear on the action bar when available."})
+    SetSettingsTooltip(f.actionPrimalSeedButton, "Primal Resilient Seed button", {"Allows this seed button to appear on the action bar when available."})
+
+    f.maintenanceSection = MakeSettingsSection(f, "Maintenance / Resets", contentX, -372, contentW, 154)
+    f.hiddenStatus = f.maintenanceSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.hiddenStatus:SetPoint("TOPLEFT", 12, -36)
+    f.hiddenStatus:SetWidth(contentW - 24)
+    f.hiddenStatus:SetJustifyH("LEFT")
+    f.hiddenStatus:SetTextColor(0.88, 0.86, 0.78)
     f.resetPos = MakeSettingsButton(f.maintenanceSection, "Reset Windows", 138, function() EL:ConfirmResetWindowPositions() end)
-    f.resetPos:SetPoint("TOPLEFT", 12, -38)
+    f.resetPos:SetPoint("TOPLEFT", 12, -62)
     f.resetSession = MakeSettingsButton(f.maintenanceSection, "Reset Session", 138, function() EL:ConfirmResetSession() end)
     f.resetSession:SetPoint("LEFT", f.resetPos, "RIGHT", 12, 0)
-    f.resetHidden = MakeSettingsButton(f.maintenanceSection, "Reset Hidden", 138, function() EL:ConfirmRestoreHiddenCharacters() end)
-    f.resetHidden:SetPoint("TOPLEFT", 12, -72)
+    f.resetHidden = MakeSettingsButton(f.maintenanceSection, "Unhide All", 138, function() EL:ConfirmRestoreHiddenCharacters() end)
+    f.resetHidden:SetPoint("TOPLEFT", 12, -96)
     f.resetPinned = MakeSettingsButton(f.maintenanceSection, "Reset Pinned", 138, function() EL:ConfirmResetPinnedCharacters() end)
     f.resetPinned:SetPoint("LEFT", f.resetHidden, "RIGHT", 12, 0)
+    SetSettingsTooltip(f.resetPos, "Reset Windows", {"Returns EmberLedger windows to their default screen positions.", "Scale and visibility settings are kept."})
+    SetSettingsTooltip(f.resetSession, "Reset Session", {"Clears current session totals and tracked items."})
+    SetSettingsTooltip(f.resetHidden, "Unhide All", {"Restores every hidden character to the main tracking table."})
+    SetSettingsTooltip(f.resetPinned, "Reset Pinned", {"Removes all pinned character markers without deleting character data."})
 
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.0.0"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.2.1"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
     f.copySummary = MakeSettingsButton(f.footerSection, "Copy Summary", 112, function() EL:ShowCopySessionSummaryDialog() end)
     f.copySummary:SetPoint("TOPRIGHT", -12, -32)
@@ -1142,6 +1223,7 @@ function EL:RefreshSettingsPanel()
     setToggle(f.toggleAttentionOnly, display.attentionOnly == true)
     setToggle(f.toggleCompactMode, display.compactMode == true)
     setToggle(f.togglePinnedFirst, display.showPinnedFirst ~= false)
+    setToggle(f.toggleCurrentCharacterHighlight, display.highlightCurrentCharacter ~= false)
     local panelSettings = self.db.settings.panel or {}
     local sessionSettings = self.db.settings.session or {}
     setToggle(f.toggleCharactersSection, panelSettings.charactersShown ~= false)
@@ -1168,6 +1250,14 @@ function EL:RefreshSettingsPanel()
     if f.pricingSourceValue then
         f.pricingSourceValue:SetText((self.GetActivePricingSourceLabel and self:GetActivePricingSourceLabel()) or "Unknown")
     end
+    local hiddenCount = self.CountHiddenCharacters and self:CountHiddenCharacters() or 0
+    if f.hiddenStatus then
+        f.hiddenStatus:SetText("Hidden characters: " .. tostring(hiddenCount))
+        f.hiddenStatus:SetTextColor(hiddenCount > 0 and 1.00 or 0.72, hiddenCount > 0 and 0.86 or 0.72, hiddenCount > 0 and 0.48 or 0.68)
+    end
+    if f.resetHidden and f.resetHidden.SetAlpha then
+        f.resetHidden:SetAlpha(hiddenCount > 0 and 1.0 or 0.55)
+    end
     local locked = self.db.settings.lockWindows == true
     if f.lockWindows and f.lockWindows.text then
         f.lockWindows.text:SetText(locked and "Lock windows: On" or "Lock windows: Off")
@@ -1175,23 +1265,28 @@ function EL:RefreshSettingsPanel()
     setToggle(f.lockWindows, locked)
 end
 
-function EL:ToggleSettingsPanel()
+
+function EL:ShowSettingsPanel()
     if not self.settingsPanel then self:CreateSettingsPanel(UIParent) end
     self.settingsPanel:SetParent(UIParent)
     self.settingsPanel:SetScale(1)
-    if self.settingsPanel:IsShown() then
+    self.settingsPanel:ClearAllPoints()
+    self.db.settings.options = self.db.settings.options or {}
+    if self.db.settings.options.point then
+        SetFramePointFromDB(self.settingsPanel, self.db.settings.options)
+    else
+        self.settingsPanel:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    end
+    self:RefreshSettingsPanel()
+    self:SelectSettingsPage(self.settingsPanel.currentPage or "General")
+    self.settingsPanel:Show()
+end
+
+function EL:ToggleSettingsPanel()
+    if self.settingsPanel and self.settingsPanel:IsShown() then
         self.settingsPanel:Hide()
     else
-        self.settingsPanel:ClearAllPoints()
-        self.db.settings.options = self.db.settings.options or {}
-        if self.db.settings.options.point then
-            SetFramePointFromDB(self.settingsPanel, self.db.settings.options)
-        else
-            self.settingsPanel:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-        end
-        self:RefreshSettingsPanel()
-        self:SelectSettingsPage(self.settingsPanel.currentPage or "General")
-        self.settingsPanel:Show()
+        if self.ShowSettingsPanel then self:ShowSettingsPanel() end
     end
 end
 
@@ -1272,6 +1367,7 @@ local DISPLAY_TOGGLE_LABELS = {
     attentionOnly = "Attention Only view",
     compactMode = "Compact tracking rows",
     showPinnedFirst = "Pinned first sorting",
+    highlightCurrentCharacter = "Current character highlight",
 }
 
 local SESSION_FILTER_LABELS = {
@@ -1362,6 +1458,9 @@ function EL:ToggleDisplaySetting(key)
     self:NotifyToggle(DISPLAY_TOGGLE_LABELS[key] or key, enabled)
     if (key == "showCharacterRealm" or key == "attentionOnly" or key == "compactMode" or key == "showPinnedFirst") and self.AutoSizeTrackingPanel then
         self:AutoSizeTrackingPanel(key .. "Toggle")
+    end
+    if key == "highlightCurrentCharacter" and self.RefreshPanel then
+        self:RefreshPanel()
     end
     self:RefreshSettingsPanel()
     if self.LayoutPanel then self:LayoutPanel() end
@@ -1462,7 +1561,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.0.0"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.2.1"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -1470,8 +1569,8 @@ function EL:RegisterBlizzardSettings()
     canvas.desc:SetJustifyH("CENTER")
     canvas.desc:SetText("Profession tracking, Imbued Mulch cooldowns, and session analytics for your alt army.")
 
-    canvas.open = MakeSettingsButton(canvas, "Open EmberLedger Options", 260, function()
-        if EL.ToggleSettingsPanel then EL:ToggleSettingsPanel() end
+    canvas.open = MakeSettingsButton(canvas, "Open EmberLedger Settings", 260, function()
+        if EL.ShowSettingsPanel then EL:ShowSettingsPanel() elseif EL.ToggleSettingsPanel then EL:ToggleSettingsPanel() end
     end)
     canvas.open:SetPoint("TOP", canvas.desc, "BOTTOM", 0, -28)
 
@@ -2622,8 +2721,12 @@ function EL:CreatePanel()
     panel.rows = {}
 
     panel.empty = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    panel.empty:SetText("No tracked professions found.")
+    panel.empty:SetText("No tracked characters yet.\nOpen a profession window on each character to begin tracking.")
     panel.empty:SetTextColor(0.68, 0.70, 0.72)
+    panel.empty:SetJustifyH("CENTER")
+    panel.empty:SetJustifyV("TOP")
+    if panel.empty.SetWordWrap then panel.empty:SetWordWrap(true) end
+    if panel.empty.SetSpacing then panel.empty:SetSpacing(4) end
     panel.empty:Hide()
 
     self:CreateActionBar(panel)
@@ -2850,6 +2953,11 @@ function EL:GetRow(i)
         row:SetHeight(GetTrackingRowHeight())
         row.bg = row:CreateTexture(nil, "BACKGROUND")
         row.bg:SetAllPoints()
+        row.currentHighlight = row:CreateTexture(nil, "BORDER")
+        row.currentHighlight:SetPoint("TOPLEFT", row, "TOPLEFT", 3, -2)
+        row.currentHighlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -3, 2)
+        row.currentHighlight:SetColorTexture(1.00, 0.78, 0.24, 0.00)
+        row.currentHighlight:Hide()
         row.pinGlow = row:CreateTexture(nil, "BORDER")
         row.pinGlow:SetPoint("TOPLEFT", row, "TOPLEFT", 3, -2)
         row.pinGlow:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -3, 2)
@@ -2983,10 +3091,17 @@ function EL:RefreshPanel()
     local rows = {}
     local display = self.db and self.db.settings and self.db.settings.display or {}
     local attentionOnly = display.attentionOnly == true
+    local visibleRowCount = 0
+    local hiddenRowCount = 0
     for _, entry in ipairs(allRows) do
-        if entry and entry.key and not self:IsCharacterHidden(entry.key) then
-            if not attentionOnly or (self.DoesCharacterNeedAttention and self:DoesCharacterNeedAttention(entry.key, threshold, now)) then
-                table.insert(rows, entry)
+        if entry and entry.key then
+            if self:IsCharacterHidden(entry.key) then
+                hiddenRowCount = hiddenRowCount + 1
+            else
+                visibleRowCount = visibleRowCount + 1
+                if not attentionOnly or (self.DoesCharacterNeedAttention and self:DoesCharacterNeedAttention(entry.key, threshold, now)) then
+                    table.insert(rows, entry)
+                end
             end
         end
     end
@@ -2998,6 +3113,9 @@ function EL:RefreshPanel()
     p.content:SetWidth(width)
     local visible = {}
     for _, def in ipairs(cols.columns or {}) do visible[def.key] = true end
+
+    local currentCharKey = self.GetCharacterKey and self:GetCharacterKey() or nil
+    local highlightCurrent = display.highlightCurrentCharacter ~= false
 
     for i, entry in ipairs(rows) do
         local row = self:GetRow(i)
@@ -3056,6 +3174,12 @@ function EL:RefreshPanel()
         local r, g, b = self:GetClassColor(char.class)
         row.name:SetTextColor(r, g, b)
         local isPinned = self:IsCharacterPinned(charKey)
+        local isCurrentCharacter = highlightCurrent and currentCharKey and charKey == currentCharKey
+        row.isCurrentCharacter = isCurrentCharacter and true or false
+        if row.currentHighlight then
+            row.currentHighlight:SetShown(isCurrentCharacter and true or false)
+            if isCurrentCharacter then row.currentHighlight:SetColorTexture(1.00, 0.78, 0.24, IsCompactModeEnabled() and 0.15 or 0.18) end
+        end
         row.name:SetShadowColor(0.00, 0.00, 0.00, 0.85)
         row.name:SetShadowOffset(1, -1)
         if row.pinGlow then
@@ -3104,8 +3228,22 @@ function EL:RefreshPanel()
     end
     if p.empty then
         p.empty:ClearAllPoints()
-        p.empty:SetPoint("TOP", p.header, "BOTTOM", 0, -42)
-        p.empty:SetText((self.db and self.db.settings and self.db.settings.display and self.db.settings.display.attentionOnly == true) and "No characters need attention right now." or "No character profession data yet. Log into a character or open a profession window to start tracking.")
+        p.empty:SetPoint("TOPLEFT", p.header, "BOTTOMLEFT", 12, -34)
+        p.empty:SetPoint("TOPRIGHT", p.header, "BOTTOMRIGHT", -12, -34)
+        p.empty:SetHeight(IsCompactModeEnabled() and 48 or 62)
+        if p.empty.SetWidth then p.empty:SetWidth(math.max(1, (p.header:GetWidth() or width) - 24)) end
+
+        local emptyText
+        if #allRows == 0 then
+            emptyText = "No tracked characters yet.\nOpen a profession window on each character to begin tracking."
+        elseif visibleRowCount == 0 and hiddenRowCount > 0 then
+            emptyText = "All tracked characters are hidden.\nUse EmberLedger Settings to restore hidden characters."
+        elseif attentionOnly then
+            emptyText = "No characters currently need attention.\nTurn off Attention Only view to see all tracked characters."
+        else
+            emptyText = "No visible character data.\nOpen a profession window to refresh tracking."
+        end
+        p.empty:SetText(emptyText)
         p.empty:SetShown(#rows == 0)
     end
     p.content:SetHeight(math.max(40, #rows * (rowH + gap)))
@@ -3488,6 +3626,9 @@ function EL:ShowRowTooltip(row)
     end
 
     GameTooltip:AddLine(" ")
+    if row.isCurrentCharacter then
+        GameTooltip:AddDoubleLine("Current", "Yes", 0.95, 0.82, 0.38, 1, 1, 1)
+    end
     GameTooltip:AddDoubleLine("Pinned", self:IsCharacterPinned(row.charKey) and "Yes" or "No", 0.95, 0.82, 0.38, 1, 1, 1)
     GameTooltip:AddLine((self:IsCharacterPinned(row.charKey) and "Alt-click: unpin this character" or "Alt-click: pin this character"), 0.95, 0.82, 0.38)
     GameTooltip:AddLine("Right-click: hide from the table", 0.7, 0.7, 0.7)
