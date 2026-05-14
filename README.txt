@@ -1,62 +1,120 @@
-EmberLedger v1.3.2
+EmberLedger was vibe coded with the help of AI, so no one should be surprised if parts of it are a little unconventional under the hood. The goal was never to build a perfect academic addon framework. The goal was to make a clean, practical, lightweight profession tracker that solves a real problem for players managing multiple profession characters.
 
-Performance controls release.
+EmberLedger has gone through rigorous testing across many beta and release versions. In testing, it uses very little system resources and shows no noticeable impact on performance during normal gameplay.
 
-EmberLedger is an account-wide World of Warcraft profession utility addon for tracking character professions, profession concentration, Imbued Mulch readiness, pinned characters, session gold/items, and compact action bar utility buttons.
+EmberLedger is a World of Warcraft profession utility addon designed for players who manage multiple profession alts, concentration, Imbued Mulch, and session value across their Warband.
 
+Instead of logging between characters and manually checking professions one by one, EmberLedger gives you a compact overview of the profession information that matters most.
 
-Notable v1.3.2 performance controls:
-- Added a dedicated Performance page in EmberLedger Settings.
-- Enable session tracking can now fully disable most session loot and bag processing.
-- Enable action bar can now hide the utility action bar and skip action bar refresh work.
-- Settings no longer refresh from the routine launcher ticker path.
+Core Features
 
-Notable v1.2.3 behavior fix:
-- Closing the main tracking window now turns off the Show tracking window option.
-- Closing the standalone Session window now turns off the Show session window option.
-- Re-enabling either checkbox from EmberLedger Settings shows the matching window again.
+- Track known professions across your characters
+- Track profession concentration values
+- Support multiple concentration-using professions per character
+- Track Imbued Mulch readiness and remaining time
+- Pin important characters so they stay easy to find
+- Hide characters you do not want shown in the main tracker
+- Track session gold, item value, gold-per-hour, and elapsed session time
+- Use a compact launcher with customizable display lines
+- Use an optional standalone session window
+- Enable or disable individual action bar buttons
+- Customize visible tracking table columns
+- Use Compact Mode to reduce window size
+- Manage everything through an organized Options menu
 
-Notable v1.2.2 performance items:
-- Reduced unnecessary once-per-second refresh work while EmberLedger panels are hidden.
-- The launcher can still update normally when shown.
-- The main tracking panel now refreshes during the ticker only when visible.
-- The standalone Session window now refreshes during the ticker only when visible.
-- The action bar refresh path now runs during the ticker only when the main panel action bar is visible.
-- Preserved event-driven and manual refresh behavior.
-- No tracking, sorting, saved-variable migration, session calculation, launcher, action bar, or Blizzard frame behavior changes were added.
+Profession Tracking
 
-Notable v1.2.1 release cleanup items:
-- Performed a final code inspection after the v1.2.0 hidden-character and Options polish pass.
-- Removed a harmless duplicate Launcher Session Time refresh call in the Options panel refresh routine.
-- Confirmed no Blizzard frame hiding, seed flyout, minimap, import/export, backup, tracking, session, launcher, or action bar behavior changes were added.
-- Preserved v1.2.0 hidden-character management, Options organization, and empty-state behavior.
+EmberLedger keeps profession identity separate from concentration tracking. This lets it remember which professions your characters have while still displaying concentration in a clean and useful way.
 
-Recent post-1.0 polish items:
-- v1.3.2 fixed action bar disable layout sizing and restores the Session window after re-enabling session tracking when it was previously open.
-- v1.3.1 fixed the Performance settings page so it appears in the Options sidebar.
-- v1.3.0 added Performance controls for disabling session tracking and the action bar system.
-- v1.2.3 fixed window close behavior so Settings visibility toggles stay in sync.
-- v1.2.2 reduced hidden-window refresh work to address possible performance complaints.
-- v1.2.0 added hidden-character management polish and light Options organization cleanup.
-- v1.1.0 added clearer empty-state messages and passive first-use guidance.
-- v1.0.8 improved Blizzard AddOns button wording and Options tooltip consistency.
-- v1.0.7 removed the experimental Blizzard Options frame-hiding behavior after testing showed it could affect other Blizzard UI windows.
-- v1.0.6 added concise hover tooltips to all Options menu checkboxes.
-- v1.0.3 fixed an Options tooltip argument error.
-- v1.0.2 added a subtle current-character row highlight and an Options toggle.
-- v1.0.1 added /el help and clarified several important Options tooltips.
+The main tracking window can show:
 
-Slash commands:
-/el or /ember toggles EmberLedger.
-/el help shows the in-game command list.
-/el settings opens EmberLedger Options.
-/el session toggles the standalone Session window.
-/el refresh refreshes tracked profession data.
-/el scale shows the current main window scale.
-/el scale 0.85 sets the main window scale.
-/el threshold 900 sets the concentration alert threshold.
-/el lock or /el unlock locks or unlocks EmberLedger windows.
-/el reset layout resets window positions.
-/el reset session resets current session totals.
-/el restore restores hidden characters.
-/el reset pinned removes all pinned character markers.
+- Character
+- Profession 1
+- Concentration 1
+- Profession 2, when needed
+- Concentration 2, when needed
+- Imbued Mulch readiness
+
+If a character only has one concentration-tracked profession, EmberLedger places it in the first profession/concentration slot instead of leaving awkward empty gaps.
+
+Imbued Mulch Tracking
+
+EmberLedger tracks Imbued Mulch readiness across your characters and shows whether it is ready or how much time remains. This makes it easier to quickly see which characters need attention.
+
+Session Tracking
+
+The session tracker helps you monitor the value of your current gathering or profession session. It can track:
+
+- Session total value
+- Gold per hour
+- Elapsed session time
+- Session item list
+- Individual session item values
+
+The launcher and session window can be customized independently, so hiding the standalone session window does not force session information off the launcher.
+
+Configurable Action Bar
+
+EmberLedger includes a compact profession utility action bar. You can enable or disable individual buttons so the bar only shows what you actually use.
+
+Supported buttons include:
+
+- Imbued Mulch
+- Resilient Seed
+- Glowing Resilient Seed
+- Wild Resilient Seed
+- Primal Resilient Seed
+- Green Thumb
+- Overload Herb
+- Overload Ore
+- Interdimensional Parcel
+- Warband Bank
+
+The action bar respects availability where appropriate. Spell and ability buttons only show when known, item buttons can hide when unavailable, and zone-specific abilities are limited to appropriate zones.
+
+Performance Controls
+
+For users who want an even leaner setup, EmberLedger includes performance-focused options that allow parts of the addon to be disabled rather than merely hidden. Session tracking and the action bar can be turned off completely to reduce background work if those features are not needed.
+
+Customization
+
+The Options menu includes organized sections for:
+
+- General controls
+- Tracking settings
+- Launcher settings
+- Session settings
+- Performance settings
+- Action bar settings
+- Maintenance and reset tools
+
+You can customize the launcher, session window, tracking columns, action bar visibility, individual buttons, hidden characters, pinned characters, and performance behavior.
+
+Design Goals
+
+EmberLedger is intended to be:
+
+- Lightweight
+- Practical
+- Clean and readable
+- Easy to configure
+- Useful for profession alts
+- Focused on fast profession decision-making
+- Safe around combat-sensitive UI behavior
+
+What EmberLedger Does Not Include
+
+EmberLedger does not currently include a minimap button, import/export tools, backup tools, or a seed flyout. Those features may be considered later, but the current release is focused on stable profession tracking, session tracking, Imbued Mulch tracking, performance controls, and configurable utility buttons.
+
+Who This Addon Is For
+
+EmberLedger is for players who run multiple profession characters and want a faster way to answer questions like:
+
+- Which character has concentration ready?
+- Which profession needs attention?
+- Is Imbued Mulch ready?
+- What did I earn this session?
+- Which profession utility buttons do I actually want visible?
+- Which characters should stay pinned at the top?
+
+If you manage several profession alts and want a cleaner way to keep track of them, EmberLedger was built for exactly that.
