@@ -129,7 +129,6 @@ local defaults = {
             collapsed = false,
             pricingSource = "Auctionator",
             topItems = 50,
-            trackTradegoods = true,
             trackHerbs = true,
             trackOre = true,
             trackCloth = true,
@@ -363,7 +362,6 @@ function EL:NormalizeDatabaseSettings()
     normalizeBool(settings.session, "trackEnchanting", true)
     normalizeBool(settings.session, "trackFish", true)
     normalizeBool(settings.session, "trackOtherMaterials", true)
-    settings.session.trackTradegoods = true
 
     settings.panel.charactersCollapsed = false
     settings.session.collapsed = false
@@ -1874,6 +1872,7 @@ EL.frame:SetScript("OnEvent", function(_, event, ...)
             local delay = (event == "PLAYER_ENTERING_WORLD") and 1 or 0.2
             if C_Timer and C_Timer.After then
                 C_Timer.After(delay, function()
+                    if not EL or not EL.db then return end
                     if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
                     if EL.RequestUpdate then EL:RequestUpdate() end
                 end)
