@@ -1,4 +1,4 @@
-local addonName, EL = ...
+local _, EL = ...
 local M = {}
 EL:RegisterModule("session", M)
 
@@ -243,12 +243,15 @@ function M:ProcessChatLoot(msg)
     if not msg then return end
     local itemLink = string.match(msg, "(|c%x+|Hitem:.-|h%[.-%]|h|r)")
     if not itemLink then return end
-    local itemID = C_Item.GetItemInfoInstant(itemLink)
+    -- Use the safe wrapper (consistent with the rest of this file) instead of
+    -- a bare C_Item call, which would error on clients where C_Item is absent.
+    local itemID = GetItemInfoInstantSafe(itemLink)
     if not itemID or not EL:IsSessionTrackedItem(itemID) then return end
     local quantity = tonumber(string.match(msg, "x(%d+)")) or 1
+    -- Credit the chat loot immediately, then queue the same quantity so the
+    -- following bag diff can consume it instead of adding it a second time.
     EL:RecordPendingSessionChatLoot(itemID, quantity)
     EL:AddSessionLootValue(itemID, quantity)
-    EL:RequestUpdate()
 end
 
 function M:PrimeBagBaseline(forceReady)

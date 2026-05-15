@@ -1,3 +1,28 @@
+v1.3.7 Session Tracking Repair and Package Validation
+
+- Restored proven session chat loot crediting behavior after reviewing the v1.3.6 cleanup pass.
+- Chat loot is again credited immediately and queued so the following bag diff can consume the pending amount instead of double-counting it.
+- Fixed version metadata consistency for the 1.3.x cleanup line.
+- Kept the corrected CurseForge package structure with a top-level EmberLedger folder.
+- Updated README title/version only.
+- No new features added.
+
+v1.3.6 Bug Fixes and Code Cleanup
+
+- Fixed ProcessChatLoot using a bare C_Item call instead of the safe wrapper used everywhere else in the file.
+- Attempted to adjust chat loot handling. Superseded by v1.3.7 after review found the change could undercount normal loot.
+- Fixed NormalizeDatabaseSettings being called twice in EnsureDB. The premature call before migrations ran has been removed.
+- Fixed sessionWidthVersion migration blocks reading the already-mutated key; both blocks now compare against the original pre-migration value.
+- Fixed RestoreHiddenCharacters using an unnecessary self-existence guard on a method defined in the same file.
+- Fixed ResolveActionSpell being an unintentional global; it is now correctly scoped as a local.
+- Replaced sequential gsub calls in GetCleanProfessionName with a table-driven loop so future expansion prefixes can be added in one place.
+- GetProfessionAbbreviation now checks the PROFESSION_ABBREVIATIONS lookup table by profession ID before falling back to name-string derivation.
+- ForEachModule now logs module errors to chat when debug mode is enabled instead of silently discarding them.
+- Replaced unused addonName with _ in all three module files (Concentration, Mulch, Session).
+- Removed the unused MULCH_ITEM_ID alias (duplicate of IMBUED_MULCH_ITEM_ID).
+- defaults.version now references EL.DB_VERSION instead of duplicating the literal value.
+- No intended sorting, launcher, action bar, or saved-variable behavior changes.
+
 v1.3.5 Action Bar Options Cleanup
 
 - Removed the redundant Show action bar checkbox from Options > Action Bar.

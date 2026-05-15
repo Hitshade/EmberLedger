@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.3.5"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.3.7"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -12,7 +12,6 @@ EL.IMBUED_MULCH_ITEM_ID = 238388
 EL.TRADEGOODS_CLASS = Enum.ItemClass and Enum.ItemClass.Tradegoods or 7
 EL.CONSUMABLE_CLASS = Enum.ItemClass and Enum.ItemClass.Consumable or 0
 EL.SESSION_DEDUPE_SECONDS = 5
-EL.MULCH_ITEM_ID = EL.IMBUED_MULCH_ITEM_ID
 EL.HERBALISM_ID = 182
 
 EL.UI_CONSTANTS = {
@@ -34,7 +33,7 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 10305
+EL.DB_VERSION = 10307
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -72,7 +71,7 @@ EL.PROFESSION_ABBREVIATIONS = {
 }
 
 local defaults = {
-    version = 10305,
+    version = EL.DB_VERSION,
     characters = {},
     resources = {
         concentration = {},
@@ -412,7 +411,10 @@ function EL:EnsureDB()
     CopyDefaults(defaults, EmberLedgerDB)
     self.db = EmberLedgerDB
     self:RunDatabaseCleanup(previousVersion)
-    self:NormalizeDatabaseSettings()
+    -- NormalizeDatabaseSettings is called once after ALL migrations complete
+    -- (see bottom of EnsureDB). Calling it here before migrations run was
+    -- redundant and could produce inconsistent state when migrations alter
+    -- settings keys that normalization also reads.
 
     -- v0.8.2: internal collapse controls were removed when the character and
     -- session modules became independently toggled/windows. Clear old collapse
@@ -456,8 +458,11 @@ function EL:EnsureDB()
 
     -- v0.9.1: align standalone Session window width with the minimum Profession Tracking window width.
     -- Preserve intentionally wider user values, but pull old default-width saves down to the cleaner compact width.
-    local sessionWidthVersion = tonumber(self.db.sessionWidthVersion) or 0
-    if sessionWidthVersion < 910 then
+    -- v0.17.6/17.7: compact tracking layout; session width tightened further.
+    -- Capture the raw version ONCE so both blocks compare against the pre-migration value,
+    -- not the mutated key written by the first block.
+    local rawSessionWidthVersion = tonumber(self.db.sessionWidthVersion) or 0
+    if rawSessionWidthVersion < 910 then
         self.db.settings = self.db.settings or {}
         self.db.settings.session = self.db.settings.session or {}
         local session = self.db.settings.session
@@ -467,13 +472,10 @@ function EL:EnsureDB()
         self.db.sessionWidthVersion = 910
     end
 
-
-
     -- v0.17.6: compact tracking layout hides the summary ticker and trims bottom padding.
 
     -- v0.17.7: compact tracking layout also hides the subtitle and tightens top padding.
-    local sessionWidthTightVersion = tonumber(self.db.sessionWidthVersion) or 0
-    if sessionWidthTightVersion < 1750 then
+    if rawSessionWidthVersion < 1750 then
         self.db.settings = self.db.settings or {}
         self.db.settings.session = self.db.settings.session or {}
         local session = self.db.settings.session
@@ -542,7 +544,10 @@ end
 function EL:ForEachModule(fn)
     for _, module in pairs(self.modules) do
         if module and module[fn] then
-            pcall(module[fn], module)
+            local ok, err = pcall(module[fn], module)
+            if not ok and self.db and self.db.settings and self.db.settings.debug then
+                self:Print("Module error [" .. tostring(module.name or "?") .. "." .. tostring(fn) .. "]: " .. tostring(err))
+            end
         end
     end
 end
@@ -741,23 +746,22 @@ function EL:GetDashboardProfessionData(charKey, slot)
     return nil, nil
 end
 
+-- Expansion prefixes to strip from profession names so the UI stays
+-- expansion-neutral. Add new expansion names here as they release.
+local EXPANSION_PREFIXES = {
+    "Midnight", "Khaz Algar", "Dragon Isles", "Shadowlands",
+    "Battle for Azeroth", "Legion", "Warlords", "Pandaria",
+    "Cataclysm", "Northrend", "Outland", "Classic",
+}
+
 function EL:GetCleanProfessionName(name)
     name = tostring(name or "")
     if name == "" then return "Profession" end
     local clean = name
     -- Store the full profession name internally, but keep the UI expansion-neutral.
-    clean = clean:gsub("^Midnight%s+", "")
-    clean = clean:gsub("^Khaz Algar%s+", "")
-    clean = clean:gsub("^Dragon Isles%s+", "")
-    clean = clean:gsub("^Shadowlands%s+", "")
-    clean = clean:gsub("^Battle for Azeroth%s+", "")
-    clean = clean:gsub("^Legion%s+", "")
-    clean = clean:gsub("^Warlords%s+", "")
-    clean = clean:gsub("^Pandaria%s+", "")
-    clean = clean:gsub("^Cataclysm%s+", "")
-    clean = clean:gsub("^Northrend%s+", "")
-    clean = clean:gsub("^Outland%s+", "")
-    clean = clean:gsub("^Classic%s+", "")
+    for _, prefix in ipairs(EXPANSION_PREFIXES) do
+        clean = clean:gsub("^" .. prefix .. "%s+", "")
+    end
     clean = clean:gsub("^%s+", ""):gsub("%s+$", "")
     if clean == "" then clean = name end
     return clean
@@ -765,6 +769,15 @@ end
 
 function EL:GetProfessionAbbreviation(data)
     if not data then return "N/A" end
+    -- Prefer the explicit abbreviation table keyed by profession ID so known
+    -- professions always get a consistent short name regardless of locale or
+    -- how the name string is structured.
+    local professionID = tonumber(data.professionID or data.skillLineID or data.skillLine)
+    if professionID and self.PROFESSION_ABBREVIATIONS and self.PROFESSION_ABBREVIATIONS[professionID] then
+        local abbr = self.PROFESSION_ABBREVIATIONS[professionID]
+        return abbr:sub(1, 1):upper() .. abbr:sub(2):lower()
+    end
+    -- Fallback: derive from the first word of the cleaned profession name.
     local clean = self:GetCleanProfessionName(data.professionName)
     local firstWord = clean:match("%a+") or clean
     local abbr = firstWord:sub(1, 4)
@@ -844,7 +857,7 @@ end
 
 function EL:RestoreHiddenCharacters()
     if not (self.db and self.db.settings) then return 0 end
-    local count = self.CountHiddenCharacters and self:CountHiddenCharacters() or 0
+    local count = self:CountHiddenCharacters()
     self.db.settings.hiddenCharacters = {}
     self:RequestUpdate()
     self:Print(count > 0 and ("Hidden characters restored: " .. tostring(count)) or "No hidden characters to restore.")
