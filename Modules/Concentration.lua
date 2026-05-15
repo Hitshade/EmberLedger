@@ -48,9 +48,42 @@ function M:RefreshKnownCurrencies()
     end
 end
 
+function M:RefreshMoxieCurrencies()
+    if not C_CurrencyInfo or not C_CurrencyInfo.GetCurrencyInfo then return end
+    if not EL or not EL.db or not EL.db.resources then return end
+    local charKey, char = EL:GetCurrentCharacter()
+    if not charKey then return end
+
+    EL.db.resources.moxie = type(EL.db.resources.moxie) == "table" and EL.db.resources.moxie or {}
+    EL.db.resources.moxie[charKey] = type(EL.db.resources.moxie[charKey]) == "table" and EL.db.resources.moxie[charKey] or {}
+
+    for _, prof in ipairs(EL:GetProfessionEntriesForCharacter(charKey) or {}) do
+        local currencyID, professionID = EL:GetMoxieCurrencyIDForProfession(prof)
+        if currencyID and professionID then
+            local currency = C_CurrencyInfo.GetCurrencyInfo(currencyID)
+            if currency and type(currency.quantity) == "number" then
+                local entry = EL.db.resources.moxie[charKey][professionID] or {}
+                entry.charKey = charKey
+                entry.charName = char and char.name or prof.charName
+                entry.realm = char and char.realm or prof.realm
+                entry.class = char and char.class or prof.class
+                entry.professionID = professionID
+                entry.professionName = prof.professionName or "Profession"
+                entry.currencyID = currencyID
+                entry.currencyName = currency.name
+                entry.quantity = currency.quantity or 0
+                entry.maxQuantity = currency.maxQuantity
+                entry.lastUpdate = time()
+                EL.db.resources.moxie[charKey][professionID] = entry
+            end
+        end
+    end
+end
+
 function M:Refresh()
     self:RefreshKnownCurrencies()
     self:RecordFromTradeSkill()
+    self:RefreshMoxieCurrencies()
 end
 
 function M:OnLoad()
@@ -62,12 +95,14 @@ function M:OnEvent(event, ...)
         C_Timer.After(0.2, function()
             if not EL or not EL.db then return end
             self:RecordFromTradeSkill()
+            self:RefreshMoxieCurrencies()
             EL:RequestUpdate()
         end)
     elseif event == "CURRENCY_DISPLAY_UPDATE" then
         C_Timer.After(0.1, function()
             if not EL or not EL.db then return end
             self:RefreshKnownCurrencies()
+            self:RefreshMoxieCurrencies()
             EL:RequestUpdate()
         end)
     elseif event == "PLAYER_ENTERING_WORLD" then

@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.5.5"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.9.3"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -14,13 +14,27 @@ EL.CONSUMABLE_CLASS = Enum.ItemClass and Enum.ItemClass.Consumable or 0
 EL.SESSION_DEDUPE_SECONDS = 5
 EL.HERBALISM_ID = 182
 
+EL.MOXIE_CURRENCY_BY_PROFESSION_ID = {
+    [171] = 3256, -- Alchemy
+    [164] = 3257, -- Blacksmithing
+    [333] = 3258, -- Enchanting
+    [202] = 3259, -- Engineering
+    [182] = 3260, -- Herbalism
+    [773] = 3261, -- Inscription
+    [755] = 3262, -- Jewelcrafting
+    [165] = 3263, -- Leatherworking
+    [186] = 3264, -- Mining
+    [393] = 3265, -- Skinning
+    [197] = 3266, -- Tailoring
+}
+
 EL.UI_CONSTANTS = {
     PANEL_MIN_W = 352,
     TRACKING_DYNAMIC_MIN_W = 230,
     TRACKING_COMPACT_MIN_W = 210,
     PANEL_MIN_H = 120,
     SESSION_MIN_W = 320,
-    SESSION_EXPANDED_H = 166,
+    SESSION_EXPANDED_H = 182,
     SESSION_COLLAPSED_H = 36,
     ACTION_BAR_H = 36,
     SESSION_VISIBLE_ITEM_ROWS = 4,
@@ -33,7 +47,7 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 10505
+EL.DB_VERSION = 10903
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -77,6 +91,7 @@ local defaults = {
         concentration = {},
         mulch = {},
         professions = {},
+        moxie = {},
     },
     settings = {
         sort = {
@@ -135,9 +150,15 @@ local defaults = {
             trackEnchanting = true,
             trackFish = true,
             trackOtherMaterials = true,
+            trackRawGoldGains = true,
+            trackGoldSpent = false,
+            sessionHistoryEnabled = true,
+            historyRetentionDays = 90,
+            historyDisplayDays = 30,
         },
         alerts = {
             concentrationThreshold = 360,
+            moxieThreshold = 600,
         },
         display = {
             panelOpacity = 0.55,
@@ -154,6 +175,7 @@ local defaults = {
             showConcentration1Column = true,
             showProfession2Column = true,
             showConcentration2Column = true,
+            showMoxieColumn = false,
             showMulchColumn = true,
             showForecastColumn = false,
             showCharacterRealm = true,
@@ -169,6 +191,7 @@ local defaults = {
         },
         hiddenCharacters = {},
         favoriteCharacters = {},
+        sessionHistory = {},
         options = {
             point = "CENTER",
             relativePoint = "CENTER",
@@ -212,6 +235,8 @@ local function RemoveLegacySavedVariableFields(db)
 
     -- totalItems is no longer displayed and was a frequent source of legacy noise.
     -- Keep item/value data, but allow the aggregate count to be rebuilt later if needed.
+    db.sessionHistory = type(db.sessionHistory) == "table" and db.sessionHistory or {}
+
     if type(db.session) == "table" then
         db.session.totalItems = nil
         db.session.legacyProjected = nil
@@ -268,6 +293,7 @@ function EL:NormalizeDatabaseSettings()
     self.db.resources.concentration = type(self.db.resources.concentration) == "table" and self.db.resources.concentration or {}
     self.db.resources.mulch = type(self.db.resources.mulch) == "table" and self.db.resources.mulch or {}
     self.db.resources.professions = type(self.db.resources.professions) == "table" and self.db.resources.professions or {}
+    self.db.resources.moxie = type(self.db.resources.moxie) == "table" and self.db.resources.moxie or {}
 
     settings.display = settings.display or {}
     settings.alerts = settings.alerts or {}
@@ -311,6 +337,7 @@ function EL:NormalizeDatabaseSettings()
     if settings.display.showConcentration1Column == nil then settings.display.showConcentration1Column = settings.display.showConcentrationColumn ~= false end
     if settings.display.showProfession2Column == nil then settings.display.showProfession2Column = true end
     if settings.display.showConcentration2Column == nil then settings.display.showConcentration2Column = true end
+    if settings.display.showMoxieColumn == nil then settings.display.showMoxieColumn = false end
     if settings.display.showMulchColumn == nil then settings.display.showMulchColumn = true end
     if settings.display.showForecastColumn == nil then settings.display.showForecastColumn = false end
     if settings.display.showCharacterRealm == nil then settings.display.showCharacterRealm = true end
@@ -326,6 +353,7 @@ function EL:NormalizeDatabaseSettings()
     settings.display.showConcentration1Column = settings.display.showConcentration1Column ~= false
     settings.display.showProfession2Column = settings.display.showProfession2Column ~= false
     settings.display.showConcentration2Column = settings.display.showConcentration2Column ~= false
+    settings.display.showMoxieColumn = settings.display.showMoxieColumn == true
     settings.display.showMulchColumn = settings.display.showMulchColumn ~= false
     settings.display.showForecastColumn = settings.display.showForecastColumn == true
     settings.display.showCharacterRealm = settings.display.showCharacterRealm ~= false
@@ -335,12 +363,13 @@ function EL:NormalizeDatabaseSettings()
     settings.display.showFavoritesFirst = settings.display.showPinnedFirst
     settings.display.showProfessionColumn = settings.display.showProfession1Column
     settings.display.showConcentrationColumn = settings.display.showConcentration1Column
-    if settings.display.showProfession1Column == false and settings.display.showConcentration1Column == false and settings.display.showProfession2Column == false and settings.display.showConcentration2Column == false and settings.display.showMulchColumn == false and settings.display.showForecastColumn == false then
+    if settings.display.showProfession1Column == false and settings.display.showConcentration1Column == false and settings.display.showProfession2Column == false and settings.display.showConcentration2Column == false and settings.display.showMoxieColumn == false and settings.display.showMulchColumn == false and settings.display.showForecastColumn == false then
         settings.display.showProfession1Column = true
         settings.display.showProfessionColumn = true
     end
     CleanupSavedCharacterFlags(self.db)
     settings.alerts.concentrationThreshold = math.floor(ClampNumber(settings.alerts.concentrationThreshold, 0, self.CONCENTRATION_MAX_DEFAULT, 360))
+    settings.alerts.moxieThreshold = math.floor(ClampNumber(settings.alerts.moxieThreshold, 0, 1000, 600))
 
     local ui = self.UI_CONSTANTS or {}
     local minScale = ui.PANEL_MIN_SCALE or 0.6
@@ -364,8 +393,9 @@ function EL:NormalizeDatabaseSettings()
     normalizeBool(settings.session, "trackEnchanting", true)
     normalizeBool(settings.session, "trackFish", true)
     normalizeBool(settings.session, "trackOtherMaterials", true)
+    normalizeBool(settings.session, "sessionHistoryEnabled", true)
+    settings.session.historyRetentionDays = 90
 
-    settings.panel.charactersCollapsed = false
     settings.session.collapsed = false
     settings.panel.sessionCollapsed = nil
 end
@@ -590,6 +620,28 @@ function EL:GetClassColor(classFile)
     return 0.92, 0.92, 0.92
 end
 
+function EL:ResolveSessionHistoryClass(entry)
+    if type(entry) ~= "table" then return nil end
+    if entry.class and entry.class ~= "" then return entry.class end
+    local characters = self.db and self.db.characters
+    if type(characters) ~= "table" then return nil end
+    local entryName = tostring(entry.character or "")
+    local entryRealm = tostring(entry.realm or "")
+    for key, char in pairs(characters) do
+        if type(char) == "table" then
+            local name = tostring(char.name or "")
+            local realm = tostring(char.realm or "")
+            if name == entryName and (entryRealm == "" or realm == entryRealm) then
+                return char.class
+            end
+            if tostring(key or "") == entryName .. "-" .. entryRealm then
+                return char.class
+            end
+        end
+    end
+    return nil
+end
+
 function EL:CharacterHasProfession(skillLineID)
     local professions = { GetProfessions() }
     for _, profIndex in ipairs(professions) do
@@ -747,6 +799,78 @@ function EL:GetDashboardProfessionData(charKey, slot)
         return slotData.prof, slotData.conc
     end
     return nil, nil
+end
+
+function EL:GetMoxieCurrencyIDForProfession(professionData)
+    if not professionData then return nil end
+    local professionID = tonumber(professionData.professionID or professionData.skillLineID or professionData.skillLine)
+    if professionID and self.MOXIE_CURRENCY_BY_PROFESSION_ID then
+        return self.MOXIE_CURRENCY_BY_PROFESSION_ID[professionID], professionID
+    end
+    return nil, professionID
+end
+
+function EL:GetMoxieEntryForProfession(charKey, professionData)
+    if not charKey or type(professionData) ~= "table" then return nil end
+    local _, professionID = self:GetMoxieCurrencyIDForProfession(professionData)
+    if not professionID then return nil end
+    local characterMoxie = self.db and self.db.resources and self.db.resources.moxie and self.db.resources.moxie[charKey]
+    if type(characterMoxie) ~= "table" then return nil end
+    return characterMoxie[professionID] or characterMoxie[tostring(professionID)]
+end
+
+function EL:GetMoxieEntriesForCharacter(charKey)
+    local list = {}
+    if not charKey then return list end
+    for _, prof in ipairs(self:GetProfessionEntriesForCharacter(charKey) or {}) do
+        local entry = self:GetMoxieEntryForProfession(charKey, prof)
+        if entry and type(entry.quantity) == "number" then
+            list[#list + 1] = entry
+        end
+    end
+    return list
+end
+
+function EL:GetMoxieDisplayText(charKey)
+    local values = {}
+    for _, prof in ipairs(self:GetProfessionEntriesForCharacter(charKey) or {}) do
+        local currencyID = self:GetMoxieCurrencyIDForProfession(prof)
+        if currencyID then
+            local entry = self:GetMoxieEntryForProfession(charKey, prof)
+            if entry and type(entry.quantity) == "number" then
+                values[#values + 1] = tostring(entry.quantity)
+            end
+        end
+    end
+    if #values == 0 then return "N/A" end
+    return table.concat(values, " • ")
+end
+
+
+function EL:GetMoxieThreshold()
+    local threshold = self.db and self.db.settings and self.db.settings.alerts and tonumber(self.db.settings.alerts.moxieThreshold)
+    return math.max(0, math.min(1000, math.floor((threshold or 600) + 0.5)))
+end
+
+function EL:HasMoxieAtThreshold(charKey)
+    local threshold = self:GetMoxieThreshold()
+    for _, entry in ipairs(self:GetMoxieEntriesForCharacter(charKey) or {}) do
+        if type(entry.quantity) == "number" and entry.quantity >= threshold then
+            return true
+        end
+    end
+    return false
+end
+
+function EL:GetMoxieSortValue(charKey)
+    local total, found = 0, false
+    for _, entry in ipairs(self:GetMoxieEntriesForCharacter(charKey) or {}) do
+        if type(entry.quantity) == "number" then
+            total = total + entry.quantity
+            found = true
+        end
+    end
+    return found and total or nil
 end
 
 -- Expansion prefixes to strip from profession names so the UI stays
@@ -935,6 +1059,9 @@ function EL:ResetCharacterData(charKey)
         if self.db.resources.professions then
             self.db.resources.professions[charKey] = nil
         end
+        if self.db.resources.moxie then
+            self.db.resources.moxie[charKey] = nil
+        end
     end
 
     if self.db.settings and self.db.settings.hiddenCharacters then
@@ -1083,6 +1210,8 @@ function EL:GetDashboardSortValue(entry, key, now)
         local threshold = self.db and self.db.settings and self.db.settings.alerts and tonumber(self.db.settings.alerts.concentrationThreshold) or 360
         if q >= threshold then return 0 end
         return math.ceil((threshold - q) / self.CONCENTRATION_RATE_PER_HOUR * 3600)
+    elseif key == "moxie" then
+        return self:GetMoxieSortValue(charKey)
     elseif key == "mulch" then
         return self:GetMulchSortValue(charKey, now)
     end
@@ -1484,13 +1613,16 @@ function EL:CopperToSilver(copper)
 end
 
 function EL:FormatMoneyText(silver)
-    silver = math.max(0, math.floor(tonumber(silver) or 0))
+    silver = math.floor(tonumber(silver) or 0)
+    local negative = silver < 0
+    silver = math.abs(silver)
     local gold = math.floor(silver / 100)
     local sil = silver % 100
+    local prefix = negative and "-" or ""
     if gold >= 1000 then
-        return string.format("%.1fk", gold / 1000)
+        return string.format("%s%.1fk", prefix, gold / 1000)
     end
-    return string.format("%dg %02ds", gold, sil)
+    return string.format("%s%dg %02ds", prefix, gold, sil)
 end
 
 function EL:IsAddOnLoaded(name)
@@ -1565,6 +1697,9 @@ function EL:GetSessionDB()
     self.db.session = self.db.session or {}
     local s = self.db.session
     s.totalSilver = tonumber(s.totalSilver) or 0
+    s.rawGoldGainedSilver = tonumber(s.rawGoldGainedSilver) or 0
+    s.goldSpentSilver = tonumber(s.goldSpentSilver) or 0
+    s.lastMoneyCopper = tonumber(s.lastMoneyCopper) or (GetMoney and GetMoney()) or 0
     s.items = type(s.items) == "table" and s.items or {}
     s.recent = type(s.recent) == "table" and s.recent or {}
     s.pendingChatLoot = type(s.pendingChatLoot) == "table" and s.pendingChatLoot or {}
@@ -1573,6 +1708,8 @@ function EL:GetSessionDB()
     if s.isPaused == nil then s.isPaused = false end
     s.priorDuration = tonumber(s.priorDuration) or 0
     s.sessionStartUptime = tonumber(s.sessionStartUptime) or GetTime()
+    s.sessionStartTime = tonumber(s.sessionStartTime) or time()
+    s.sessionID = s.sessionID
     return s
 end
 
@@ -1583,6 +1720,9 @@ function EL:StartFreshSessionOnLogin()
 
     self.db.session = {
         totalSilver = 0,
+        rawGoldGainedSilver = 0,
+        goldSpentSilver = 0,
+        lastMoneyCopper = (GetMoney and GetMoney()) or 0,
         items = {},
         recent = {},
         pendingChatLoot = {},
@@ -1591,6 +1731,9 @@ function EL:StartFreshSessionOnLogin()
         isPaused = false,
         priorDuration = 0,
         sessionStartUptime = GetTime(),
+        sessionStartTime = time(),
+        sessionID = nil,
+        historySaved = false,
         bagBaselineReady = false,
         baselinePrimingUntil = GetTime() + 5,
     }
@@ -1605,6 +1748,58 @@ function EL:GetSessionElapsedSeconds()
     local prior = tonumber(s.priorDuration) or 0
     if s.isPaused then return math.max(1, prior) end
     return math.max(1, prior + math.max(0, math.floor(GetTime() - (tonumber(s.sessionStartUptime) or GetTime()))))
+end
+
+function EL:IsRawGoldGainTrackingEnabled()
+    local session = self.db and self.db.settings and self.db.settings.session or {}
+    return session.trackRawGoldGains ~= false
+end
+
+function EL:IsGoldSpentTrackingEnabled()
+    local session = self.db and self.db.settings and self.db.settings.session or {}
+    return session.trackGoldSpent == true
+end
+
+function EL:SyncSessionMoneyBaseline()
+    local s = self:GetSessionDB()
+    s.lastMoneyCopper = (GetMoney and GetMoney()) or tonumber(s.lastMoneyCopper) or 0
+end
+
+function EL:AddSessionMoneyDelta(copperDelta)
+    if self.IsSessionTrackingEnabled and not self:IsSessionTrackingEnabled() then return end
+    local s = self:GetSessionDB()
+    if s.isPaused then return end
+    copperDelta = tonumber(copperDelta) or 0
+    if copperDelta == 0 then return end
+
+    local silverDelta = self.CopperToSilver and self:CopperToSilver(math.abs(copperDelta)) or math.floor((math.abs(copperDelta) + 50) / 100)
+    if silverDelta <= 0 then return end
+
+    if copperDelta > 0 then
+        if not self:IsRawGoldGainTrackingEnabled() then return end
+        s.rawGoldGainedSilver = (tonumber(s.rawGoldGainedSilver) or 0) + silverDelta
+        s.totalSilver = (tonumber(s.totalSilver) or 0) + silverDelta
+        table.insert(s.recent, 1, {
+            type = "money",
+            name = "Raw gold gained",
+            count = 1,
+            silver = silverDelta,
+            moneyText = self:FormatMoneyText(silverDelta),
+        })
+    else
+        if not self:IsGoldSpentTrackingEnabled() then return end
+        s.goldSpentSilver = (tonumber(s.goldSpentSilver) or 0) + silverDelta
+        s.totalSilver = (tonumber(s.totalSilver) or 0) - silverDelta
+        table.insert(s.recent, 1, {
+            type = "money",
+            name = "Gold spent",
+            count = 1,
+            silver = -silverDelta,
+            moneyText = self:FormatMoneyText(-silverDelta),
+        })
+    end
+    while #s.recent > 100 do table.remove(s.recent) end
+    self:RequestUpdate()
 end
 
 function EL:GetSessionGoldPerHour()
@@ -1634,8 +1829,12 @@ function EL:ToggleSessionPause()
 end
 
 function EL:ResetSession()
+    if self.SaveCurrentSessionHistory then self:SaveCurrentSessionHistory("reset") end
     self.db.session = {
         totalSilver = 0,
+        rawGoldGainedSilver = 0,
+        goldSpentSilver = 0,
+        lastMoneyCopper = (GetMoney and GetMoney()) or 0,
         items = {},
         recent = {},
         pendingChatLoot = {},
@@ -1644,6 +1843,9 @@ function EL:ResetSession()
         isPaused = false,
         priorDuration = 0,
         sessionStartUptime = GetTime(),
+        sessionStartTime = time(),
+        sessionID = nil,
+        historySaved = false,
         bagBaselineReady = false,
         baselinePrimingUntil = GetTime() + 2,
     }
@@ -1689,6 +1891,153 @@ function EL:GetSessionLootLog(limit)
         end
     end
     return out
+end
+
+
+function EL:IsSessionHistoryEnabled()
+    local session = self.db and self.db.settings and self.db.settings.session or {}
+    return session.sessionHistoryEnabled ~= false
+end
+
+function EL:SetSessionHistoryEnabled(enabled)
+    self.db.settings.session = self.db.settings.session or {}
+    self.db.settings.session.sessionHistoryEnabled = enabled == true
+    if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+    if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
+    self:Print("Session history: " .. (enabled and "Enabled" or "Disabled") .. ".")
+end
+
+function EL:ToggleSessionHistoryEnabled()
+    self:SetSessionHistoryEnabled(not self:IsSessionHistoryEnabled())
+end
+
+function EL:GetSessionHistoryRetentionDays()
+    return 90
+end
+
+function EL:SetSessionHistoryRetentionDays(days)
+    self.db.settings.session = self.db.settings.session or {}
+    self.db.settings.session.historyRetentionDays = 90
+    if self.PruneSessionHistory then self:PruneSessionHistory() end
+    if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+    if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
+end
+
+function EL:CycleSessionHistoryRetentionDays()
+    self:SetSessionHistoryRetentionDays(90)
+end
+
+function EL:GetSessionHistoryDisplayDays()
+    local session = self.db and self.db.settings and self.db.settings.session or {}
+    local days = tonumber(session.historyDisplayDays) or 30
+    if days ~= 7 and days ~= 30 and days ~= 60 and days ~= 90 then days = 30 end
+    return days
+end
+
+function EL:SetSessionHistoryDisplayDays(days)
+    self.db.settings.session = self.db.settings.session or {}
+    days = tonumber(days) or 30
+    if days ~= 7 and days ~= 30 and days ~= 60 and days ~= 90 then days = 30 end
+    self.db.settings.session.historyDisplayDays = days
+    if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
+    self:Print("Session history display: " .. tostring(days) .. " days.")
+end
+
+function EL:CycleSessionHistoryDisplayDays()
+    local current = self:GetSessionHistoryDisplayDays()
+    local nextValue = 30
+    if current == 7 then nextValue = 30 elseif current == 30 then nextValue = 60 elseif current == 60 then nextValue = 90 else nextValue = 7 end
+    self:SetSessionHistoryDisplayDays(nextValue)
+end
+
+function EL:PruneSessionHistory()
+    if not self.db then return end
+    self.db.sessionHistory = type(self.db.sessionHistory) == "table" and self.db.sessionHistory or {}
+    local retention = self:GetSessionHistoryRetentionDays()
+    local cutoff = time() - (retention * 86400)
+    local kept = {}
+    for _, entry in ipairs(self.db.sessionHistory) do
+        if type(entry) == "table" and (tonumber(entry.timestamp) or 0) >= cutoff then
+            kept[#kept + 1] = entry
+        end
+    end
+    table.sort(kept, function(a, b) return (tonumber(a.timestamp) or 0) > (tonumber(b.timestamp) or 0) end)
+    self.db.sessionHistory = kept
+end
+
+function EL:GetSessionHistoryList()
+    if not self.db then return {} end
+    self:PruneSessionHistory()
+    local displayDays = self.GetSessionHistoryDisplayDays and self:GetSessionHistoryDisplayDays() or self:GetSessionHistoryRetentionDays()
+    local cutoff = time() - ((tonumber(displayDays) or 30) * 86400)
+    local visible = {}
+    for _, entry in ipairs(self.db.sessionHistory or {}) do
+        if type(entry) == "table" and (tonumber(entry.timestamp) or 0) >= cutoff then
+            visible[#visible + 1] = entry
+        end
+    end
+    return visible
+end
+
+function EL:GetSessionHistoryID(s)
+    s = s or self:GetSessionDB()
+    local char = self.current and self.current.key or (UnitName and UnitName("player")) or "Unknown"
+    local start = tonumber(s.sessionStartTime) or time()
+    return tostring(char) .. ":" .. tostring(start)
+end
+
+function EL:SaveCurrentSessionHistory(reason)
+    if not self.db then return false end
+    if not self:IsSessionHistoryEnabled() then return false end
+    local retention = self:GetSessionHistoryRetentionDays()
+    local s = self:GetSessionDB()
+    local elapsed = self:GetSessionElapsedSeconds()
+    local total = tonumber(s.totalSilver) or 0
+    local itemValue = total - (tonumber(s.rawGoldGainedSilver) or 0) + (tonumber(s.goldSpentSilver) or 0)
+    local meaningful = elapsed >= 60 or total ~= 0 or (tonumber(s.rawGoldGainedSilver) or 0) ~= 0 or (tonumber(s.goldSpentSilver) or 0) ~= 0 or itemValue ~= 0
+    if not meaningful then return false end
+
+    local _, current = self:GetCurrentCharacter()
+    current = current or {}
+    local id = s.sessionID or self:GetSessionHistoryID(s)
+    s.sessionID = id
+    local entry = {
+        id = id,
+        timestamp = time(),
+        startedAt = tonumber(s.sessionStartTime) or time(),
+        character = current and current.name or (UnitName and UnitName("player")) or "Unknown",
+        realm = current and current.realm or (GetRealmName and GetRealmName()) or "Unknown",
+        class = (current and current.class) or (select(2, UnitClass("player"))),
+        duration = elapsed,
+        itemValueSilver = itemValue,
+        rawGoldGainedSilver = tonumber(s.rawGoldGainedSilver) or 0,
+        goldSpentSilver = tonumber(s.goldSpentSilver) or 0,
+        totalSilver = total,
+        goldPerHourSilver = self:GetSessionGoldPerHour(),
+        reason = tostring(reason or "save"),
+    }
+    self.db.sessionHistory = type(self.db.sessionHistory) == "table" and self.db.sessionHistory or {}
+    local replaced = false
+    for i, old in ipairs(self.db.sessionHistory) do
+        if type(old) == "table" and old.id == id then
+            self.db.sessionHistory[i] = entry
+            replaced = true
+            break
+        end
+    end
+    if not replaced then table.insert(self.db.sessionHistory, 1, entry) end
+    s.historySaved = true
+    self:PruneSessionHistory()
+    if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
+    return true
+end
+
+
+function EL:ResetSessionHistory()
+    if not self.db then return end
+    self.db.sessionHistory = {}
+    if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
+    self:Print("Session history cleared.")
 end
 
 function EL:BuildSessionSummaryText()
@@ -1900,6 +2249,8 @@ SlashCmdList.EMBERLEDGER = function(msg)
         if EL.ToggleMainPanel then EL:ToggleMainPanel() end
     elseif msg == "session" then
         if EL.ToggleSessionWindow then EL:ToggleSessionWindow() end
+    elseif msg == "history" or msg == "session history" then
+        if EL.ToggleSessionHistoryWindow then EL:ToggleSessionHistoryWindow() end
     elseif msg == "settings" or msg == "options" then
         if EL.ToggleSettingsPanel then EL:ToggleSettingsPanel() end
     elseif msg:match("^threshold%s+%d+$") then
@@ -1930,6 +2281,8 @@ EL.frame:SetScript("OnEvent", function(_, event, ...)
         EL:RequestUpdate()
     elseif event == "PLAYER_REGEN_ENABLED" then
         if EL.FlushCombatDeferredWork then EL:FlushCombatDeferredWork() end
+    elseif event == "PLAYER_LOGOUT" then
+        if EL.SaveCurrentSessionHistory then EL:SaveCurrentSessionHistory("logout") end
     else
         if event == "PLAYER_ENTERING_WORLD" or event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_DATA_SOURCE_CHANGED" or event == "SKILL_LINES_CHANGED" then
             local delay = (event == "PLAYER_ENTERING_WORLD") and 1 or 0.2
@@ -1962,7 +2315,9 @@ EL.frame:RegisterEvent("TRADE_SKILL_ITEM_CRAFTED_RESULT")
 EL.frame:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
 EL.frame:RegisterEvent("BAG_UPDATE_DELAYED")
 EL.frame:RegisterEvent("CHAT_MSG_LOOT")
+EL.frame:RegisterEvent("PLAYER_MONEY")
 EL.frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+EL.frame:RegisterEvent("PLAYER_LOGOUT")
 EL.frame:RegisterEvent("SPELLS_CHANGED")
 EL.frame:RegisterEvent("ZONE_CHANGED")
 EL.frame:RegisterEvent("ZONE_CHANGED_INDOORS")

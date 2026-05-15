@@ -1,3 +1,104 @@
+EmberLedger v1.9.3
+
+- Increased the compact-mode Moxie column width so two profession values display fully without cramped truncation.
+- Kept the non-compact Moxie improvements from v1.9.2 and aligned compact width behavior with normal mode.
+
+EmberLedger v1.9.2
+
+- Increased the non-compact Moxie column width so two profession values display without truncation.
+- Kept compact-mode Moxie sizing unchanged because compact display already fit correctly.
+
+EmberLedger v1.9.1
+
+- Reduced action bar cooldown number size by hiding the default large cooldown text and using EmberLedger's smaller cooldown label.
+- Changed the Moxie column separator from slash to centered dot spacing for clearer profession separation.
+- Added a Main Window Moxie spend threshold slider, default 600.
+- Highlighted Moxie column text green when any tracked profession Moxie value meets or exceeds the configured threshold.
+
+EmberLedger v1.9.0
+
+- Added optional profession-specific Artisan Moxie tracking.
+- Added a Main Window option to show or hide the Moxie column, default off.
+- Added Moxie display after Conc 2 and before Next/Mulch in the main window.
+- Added Moxie tooltip details for tracked professions when known.
+- Moxie values update per character after logging into that character or receiving currency updates.
+
+EmberLedger v1.8.1
+
+Session window title and button layout polish.
+- Restored the standalone Session window title to EmberLedger Session.
+- Moved Pause, History, and Reset out of the Session header and into a bottom button row.
+- Slightly increased the Session panel height so the item list and bottom controls do not crowd each other.
+- Kept session tracking, history, launcher behavior, and visual styling unchanged.
+
+EmberLedger v1.8.0
+
+Visual unification pass.
+- Applied the newer dark purple and gold visual style more consistently across EmberLedger windows.
+- Refined main window, launcher, Session window, Session History, and Options styling for a more unified look.
+- Preserved existing color meanings and window scale as much as possible.
+- Kept tracking, session history, raw gold safeguards, and launcher behavior unchanged.
+
+EmberLedger v1.7.6
+- Improved Session History window visual presentation to better match the v1.5+ EmberLedger polish style.
+- Enlarged the Session History window and centered the title for a stronger header treatment.
+- Refined the history table frame, row spacing, row hover highlight, and column readability.
+- Improved the Sessions Total section with larger icon-style labels and clearer spacing.
+- Preserved fixed 90-day retention and display-only range selection.
+
+EmberLedger v1.7.5
+- Removed the extra History button from the Session options page.
+- Added Clear History under Maintenance / Resets to delete saved account-wide session history data.
+- Improved Session History class color fallback for character names.
+- Enlarged Session History summary icons for clearer visual polish.
+
+EmberLedger v1.7.3
+- Session History retention now controls saved-data cleanup only.
+- Added separate display range selector for 7, 30, 60, or 90 days.
+- Added 7-day retention option to reduce saved-variable size for users who want a shorter history.
+- Session History character names now use class coloring where class data is available.
+- Added compact visual markers/icons to Session History totals for sessions, duration, item value, raw gold, spent gold, and net total.
+- Preserved existing raw gold tracking safeguards for mail, bank, Warband bank, auction house, and trade windows.
+
+EmberLedger v1.7.2
+
+- Improved raw gold session accuracy.
+- Raw gold gains and gold spent tracking now ignore money changes while bank, Warband bank, mailbox, auction house, or trade windows are open.
+- Prevents stored, transferred, auction, or mailed gold from inflating farming session totals.
+- Kept direct gameplay money tracking outside those transaction windows.
+
+EmberLedger v1.7.1
+- Added a dedicated Session History enable toggle.
+- Changed history retention to a dropdown-style selector for 30, 60, or 90 days.
+- Improved Session History column alignment.
+- Added a Sessions Total summary panel with duration, item value, raw gold, spent gold, and net total.
+- Added a History button to the standalone Session window and shortened the title to EL Session.
+
+EmberLedger v1.7.0
+- Added lightweight account-wide Session History.
+- Session summaries now auto-save on logout/reload and save when resetting the current session.
+- Added retention options for Off, 30, 60, and 90 days.
+- Added a simple Session History window with date, character, duration, total, and gold-per-hour.
+- Stored summary records only, with no item-by-item history or graphs.
+
+v1.6.2 Collapse State Cleanup
+- Removed layout-time resets that could forcibly clear the saved character collapse state.
+- Preserved current main window, session, launcher, and raw gold tracking behavior.
+
+v1.6.2 Session Rate Color Polish
+
+- Restored the Session rate value to the muted gray text style.
+- Negative coloring now applies only to the main Session total value.
+- Preserved v1.6.0 raw gold gain and gold spent tracking behavior.
+
+v1.6.0 Raw Gold Session Tracking
+- Added optional raw gold gain tracking for direct wallet increases.
+- Added optional gold spent tracking for direct wallet decreases.
+- Session total now reflects net value when gold tracking is enabled.
+- Negative session totals and rates display in red in the Session window.
+- Raw gold gains are enabled by default; gold spent tracking is disabled by default.
+- Bank, Warband bank, and mailbox item-transfer protections remain in place so stored or mailed items are not counted as session loot.
+
 v1.5.5 Session Transfer Tracking Fix
 - Paused positive session item tracking while bank, Warband bank, or mailbox windows are open.
 - Kept bag baselines synchronized during storage/mail transfers so moved items are not counted later.

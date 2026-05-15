@@ -27,6 +27,16 @@ function EL:IsSessionInventoryTransferOpen()
         or IsShownFrame(_G.MailFrame)
 end
 
+function EL:IsSessionMoneyTransferOpen()
+    -- Money changes from storage and transaction windows are usually transfers,
+    -- auction/mail payouts, trades, or purchases rather than direct gameplay
+    -- session income. Ignore them for raw-gold session tracking.
+    return self:IsSessionInventoryTransferOpen()
+        or IsShownFrame(_G.AuctionHouseFrame)
+        or IsShownFrame(_G.AuctionFrame)
+        or IsShownFrame(_G.TradeFrame)
+end
+
 local function GetItemInfoInstantSafe(itemLinkOrID)
     if not itemLinkOrID or not C_Item or not C_Item.GetItemInfoInstant then return nil end
     local itemID, itemType, itemSubType, itemEquipLoc, icon, classID, subClassID = C_Item.GetItemInfoInstant(itemLinkOrID)
@@ -361,10 +371,23 @@ function M:OnEvent(event, ...)
             if not EL or not EL.db then return end
             self:ProcessBagDiff()
         end)
+    elseif event == "PLAYER_MONEY" then
+        local s = EL:GetSessionDB()
+        local currentMoney = (GetMoney and GetMoney()) or tonumber(s.lastMoneyCopper) or 0
+        local previousMoney = tonumber(s.lastMoneyCopper) or currentMoney
+        s.lastMoneyCopper = currentMoney
+        if EL.IsSessionMoneyTransferOpen and EL:IsSessionMoneyTransferOpen() then
+            return
+        end
+        local delta = currentMoney - previousMoney
+        if delta ~= 0 and EL.AddSessionMoneyDelta then
+            EL:AddSessionMoneyDelta(delta)
+        end
     elseif event == "PLAYER_ENTERING_WORLD" then
         C_Timer.After(1, function()
             if not EL or not EL.db then return end
             EL:AutoStartSessionOnLogin()
+            if EL.SyncSessionMoneyBaseline then EL:SyncSessionMoneyBaseline() end
             self:Refresh()
             EL:RequestUpdate()
             if EL.Debug then EL:Debug("Session reset and bag baseline priming started.") end
