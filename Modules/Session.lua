@@ -10,6 +10,23 @@ local EXCLUDED_NAME_PATTERNS = {
     "vial",
 }
 
+
+local function IsShownFrame(frame)
+    return frame and frame.IsShown and frame:IsShown()
+end
+
+function EL:IsSessionInventoryTransferOpen()
+    -- Bank, Warband bank, and mailbox item transfers should not be treated
+    -- as newly gathered session loot. Keep this as a light UI-state guard so
+    -- bag snapshots can still stay current while storage windows are open.
+    return IsShownFrame(_G.BankFrame)
+        or IsShownFrame(_G.BankPanel)
+        or IsShownFrame(_G.AccountBankPanel)
+        or IsShownFrame(_G.AccountBankFrame)
+        or IsShownFrame(_G.WarbandBankFrame)
+        or IsShownFrame(_G.MailFrame)
+end
+
 local function GetItemInfoInstantSafe(itemLinkOrID)
     if not itemLinkOrID or not C_Item or not C_Item.GetItemInfoInstant then return nil end
     local itemID, itemType, itemSubType, itemEquipLoc, icon, classID, subClassID = C_Item.GetItemInfoInstant(itemLinkOrID)
@@ -241,6 +258,7 @@ end
 function M:ProcessChatLoot(msg)
     if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then return end
     if not msg then return end
+    if EL.IsSessionInventoryTransferOpen and EL:IsSessionInventoryTransferOpen() then return end
     local itemLink = string.match(msg, "(|c%x+|Hitem:.-|h%[.-%]|h|r)")
     if not itemLink then return end
     -- Use the safe wrapper (consistent with the rest of this file) instead of
@@ -270,6 +288,16 @@ function M:ProcessBagDiff()
     local s = EL:GetSessionDB()
     if s.isPaused then return end
     local current = EL:CountSessionItemsInBags()
+
+    -- Bank, Warband bank, and mailbox transfers can add tracked materials to
+    -- bags without being gameplay loot. Refresh the baseline while these UIs
+    -- are open so closing them does not create delayed false gains.
+    if EL.IsSessionInventoryTransferOpen and EL:IsSessionInventoryTransferOpen() then
+        s.lastBagCounts = current
+        s.bagBaselineReady = true
+        s.baselinePrimingUntil = nil
+        return
+    end
 
     -- On login/reload WoW often fires bag updates as bag data populates.
     -- During this short priming window, keep refreshing the baseline and never

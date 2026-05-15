@@ -1,3 +1,9 @@
+v1.5.5 Session Transfer Tracking Fix
+- Paused positive session item tracking while bank, Warband bank, or mailbox windows are open.
+- Kept bag baselines synchronized during storage/mail transfers so moved items are not counted later.
+- Prevented mailed or stored materials from inflating session totals.
+- Kept session timer, launcher, and Session window behavior unchanged.
+
 v1.5.4 Branding Cleanup
 - Replaced public-facing author references with Hitshade.
 - Updated addon metadata/author branding where applicable.

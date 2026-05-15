@@ -1,8 +1,8 @@
 ## Interface: 120007, 120005, 120000
 ## Title: EmberLedger
 ## Notes: Account-wide alt resource dashboard for concentration, Imbued Mulch, and profession session value tracking, and future resource timers.
-## Author: Hitshade / ChatGPT
-## Version: 1.5.4
+## Author: Hitshade
+## Version: 1.5.5
 ## SavedVariables: EmberLedgerDB
 ## DefaultState: Enabled
 
