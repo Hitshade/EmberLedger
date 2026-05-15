@@ -18,6 +18,7 @@ function M:RecordFromTradeSkill()
     if not currency or type(currency.quantity) ~= "number" then return end
 
     local charKey, char = EL:GetCurrentCharacter()
+    if not charKey or type(char) ~= "table" then return end
     local key = EL:MakeResourceKey(charKey, skillLineID)
     EL.db.resources.concentration[key] = EL.db.resources.concentration[key] or {}
     local data = EL.db.resources.concentration[key]
@@ -35,7 +36,9 @@ end
 
 function M:RefreshKnownCurrencies()
     if not C_CurrencyInfo or not C_CurrencyInfo.GetCurrencyInfo then return end
+    if not EL or not EL.db or not EL.db.resources then return end
     local charKey = EL:GetCharacterKey()
+    if not charKey then return end
     for _, data in pairs(EL.db.resources.concentration or {}) do
         if data.charKey == charKey and data.currencyID then
             local currency = C_CurrencyInfo.GetCurrencyInfo(data.currencyID)
@@ -103,12 +106,6 @@ function M:OnEvent(event, ...)
             if not EL or not EL.db then return end
             self:RefreshKnownCurrencies()
             self:RefreshMoxieCurrencies()
-            EL:RequestUpdate()
-        end)
-    elseif event == "PLAYER_ENTERING_WORLD" then
-        C_Timer.After(1, function()
-            if not EL or not EL.db then return end
-            self:Refresh()
             EL:RequestUpdate()
         end)
     end
