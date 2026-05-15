@@ -25,14 +25,14 @@ local PIN_GLOW_R, PIN_GLOW_G, PIN_GLOW_B = 1.00, 0.72, 0.18
 local PIN_GLOW_ALPHA = 0.060
 local PIN_ACCENT_ALPHA = 0.20
 local PIN_HOVER_ALPHA = 0.040
-local BORDER_R, BORDER_G, BORDER_B = 0.42, 0.36, 0.28
-local BORDER_ALPHA_STRONG = 0.58
-local BORDER_ALPHA_SOFT = 0.38
-local HEADER_LINE_ALPHA_TOP = 0.09
-local HEADER_LINE_ALPHA_BOTTOM = 0.18
-local ROW_STRIPE_ALPHA = 0.40
-local ROW_STRIPE_ALPHA_COMPACT = 0.36
-local ROW_SEPARATOR_ALPHA = 0.10
+local BORDER_R, BORDER_G, BORDER_B = 0.56, 0.46, 0.28
+local BORDER_ALPHA_STRONG = 0.72
+local BORDER_ALPHA_SOFT = 0.46
+local HEADER_LINE_ALPHA_TOP = 0.16
+local HEADER_LINE_ALPHA_BOTTOM = 0.30
+local ROW_STRIPE_ALPHA = 0.32
+local ROW_STRIPE_ALPHA_COMPACT = 0.28
+local ROW_SEPARATOR_ALPHA = 0.14
 
 
 local function IsCompactModeEnabled()
@@ -65,7 +65,7 @@ end
 local function ApplyTrackingTextStyle(row)
     if not row then return end
     local fontObject = IsCompactModeEnabled() and GameFontHighlightSmall or GameFontHighlight
-    for _, fs in ipairs({row.name, row.prof1, row.conc1, row.prof2, row.conc2, row.mulch}) do
+    for _, fs in ipairs({row.name, row.prof1, row.conc1, row.prof2, row.conc2, row.forecast, row.mulch}) do
         if fs and fs.SetFontObject then fs:SetFontObject(fontObject) end
     end
 end
@@ -135,7 +135,22 @@ local function AddInnerBorder(frame)
     frame.innerBorder = frame:CreateTexture(nil, "BORDER")
     frame.innerBorder:SetPoint("TOPLEFT", 4, -4)
     frame.innerBorder:SetPoint("BOTTOMRIGHT", -4, 4)
-    frame.innerBorder:SetColorTexture(0.75, 0.66, 0.48, 0.045)
+    frame.innerBorder:SetColorTexture(0.95, 0.78, 0.36, 0.060)
+end
+
+local function AddHeaderAccent(frame)
+    if not frame or frame._emberHeaderAccent then return end
+    frame._emberHeaderAccent = true
+    frame.accentTop = frame:CreateTexture(nil, "BORDER")
+    frame.accentTop:SetHeight(1)
+    frame.accentTop:SetPoint("TOPLEFT", 3, -2)
+    frame.accentTop:SetPoint("TOPRIGHT", -3, -2)
+    frame.accentTop:SetColorTexture(1.00, 0.78, 0.28, 0.22)
+    frame.accentBottom = frame:CreateTexture(nil, "BORDER")
+    frame.accentBottom:SetHeight(1)
+    frame.accentBottom:SetPoint("BOTTOMLEFT", 3, 2)
+    frame.accentBottom:SetPoint("BOTTOMRIGHT", -3, 2)
+    frame.accentBottom:SetColorTexture(0.00, 0.00, 0.00, 0.42)
 end
 
 local function StyleScrollBar(scrollFrame)
@@ -319,6 +334,7 @@ local HEADER_LABELS = {
     conc1 = "Conc 1",
     prof2 = "P2",
     conc2 = "Conc 2",
+    forecast = "Next",
     mulch = "Mulch",
 }
 
@@ -328,6 +344,7 @@ local TRACKING_COLUMN_DEFS = {
     { key = "conc1", label = "Conc 1", width = 86, minWidth = 86, compactWidth = 68, compactMinWidth = 68, justify = "RIGHT", sortKey = "conc1", setting = "showConcentration1Column", toggleLabel = "Conc 1 column" },
     { key = "prof2", label = "P2", width = 34, minWidth = 30, compactWidth = 28, compactMinWidth = 26, justify = "CENTER", sortKey = "prof2", setting = "showProfession2Column", toggleLabel = "Prof 2 column", secondary = true },
     { key = "conc2", label = "Conc 2", width = 86, minWidth = 86, compactWidth = 68, compactMinWidth = 68, justify = "RIGHT", sortKey = "conc2", setting = "showConcentration2Column", toggleLabel = "Conc 2 column", secondary = true },
+    { key = "forecast", label = "Next", width = 84, minWidth = 72, compactWidth = 72, compactMinWidth = 64, justify = "RIGHT", sortKey = "forecast", setting = "showForecastColumn", toggleLabel = "Next column" },
     { key = "mulch", label = "Mulch", width = 68, minWidth = 64, compactWidth = 60, compactMinWidth = 58, justify = "RIGHT", sortKey = "mulch", setting = "showMulchColumn", toggleLabel = "Mulch column" },
 }
 
@@ -386,6 +403,7 @@ function EL:GetTrackingColumnSettings()
     if display.showProfession2Column == nil then display.showProfession2Column = true end
     if display.showConcentration2Column == nil then display.showConcentration2Column = true end
     if display.showMulchColumn == nil then display.showMulchColumn = true end
+    if display.showForecastColumn == nil then display.showForecastColumn = false end
     if display.showCharacterRealm == nil then display.showCharacterRealm = true end
 
     display.showProfession1Column = display.showProfession1Column ~= false
@@ -393,13 +411,14 @@ function EL:GetTrackingColumnSettings()
     display.showProfession2Column = display.showProfession2Column ~= false
     display.showConcentration2Column = display.showConcentration2Column ~= false
     display.showMulchColumn = display.showMulchColumn ~= false
+    display.showForecastColumn = display.showForecastColumn == true
     display.showCharacterRealm = display.showCharacterRealm ~= false
 
     -- Keep legacy keys in sync for older saved variables and older code paths.
     display.showProfessionColumn = display.showProfession1Column
     display.showConcentrationColumn = display.showConcentration1Column
 
-    if display.showProfession1Column == false and display.showConcentration1Column == false and display.showProfession2Column == false and display.showConcentration2Column == false and display.showMulchColumn == false then
+    if display.showProfession1Column == false and display.showConcentration1Column == false and display.showProfession2Column == false and display.showConcentration2Column == false and display.showMulchColumn == false and display.showForecastColumn == false then
         display.showProfession1Column = true
         display.showProfessionColumn = true
     end
@@ -498,6 +517,7 @@ local function GetColumnLayout(width)
     layout.conc1X, layout.conc1W = layout.conc1X or 0, layout.conc1W or 1
     layout.prof2X, layout.prof2W = layout.prof2X or 0, layout.prof2W or 1
     layout.conc2X, layout.conc2W = layout.conc2X or 0, layout.conc2W or 1
+    layout.forecastX, layout.forecastW = layout.forecastX or 0, layout.forecastW or 1
     layout.mulchX, layout.mulchW = layout.mulchX or 0, layout.mulchW or 1
     return layout
 end
@@ -613,6 +633,13 @@ local function StyleBlizzardButton(button)
     if button.SetNormalFontObject then button:SetNormalFontObject(GameFontNormalSmall) end
     if button.SetHighlightFontObject then button:SetHighlightFontObject(GameFontHighlightSmall) end
     if button.SetDisabledFontObject then button:SetDisabledFontObject(GameFontDisableSmall) end
+    local fs = button.GetFontString and button:GetFontString()
+    if fs then
+        fs:ClearAllPoints()
+        fs:SetPoint("CENTER", button, "CENTER", 0, 1)
+        fs:SetJustifyH("CENTER")
+        if fs.SetWordWrap then fs:SetWordWrap(false) end
+    end
 end
 
 local function AddSoftDivider(parent, x, yTop, yBottom)
@@ -948,7 +975,7 @@ function EL:CreateSettingsPanel(parent)
     end)
     f.thresholdSlider:SetPoint("TOPLEFT", 12, -38)
 
-    f.trackingColumnsSection = MakeSettingsSection(f, "Main Window Table", contentX, -598, contentW, 124)
+    f.trackingColumnsSection = MakeSettingsSection(f, "Main Window Table", contentX, -598, contentW, 150)
     local trackingColumnLeftX = 12
     local trackingColumnRightX = 250
     f.toggleProf1Column = MakeSettingsCheck(f.trackingColumnsSection, "Show Prof 1 column", function() EL:ToggleTrackingColumn("prof1") end)
@@ -961,8 +988,10 @@ function EL:CreateSettingsPanel(parent)
     f.toggleConc2Column:SetPoint("TOPLEFT", trackingColumnRightX, -60)
     f.toggleMulchColumn = MakeSettingsCheck(f.trackingColumnsSection, "Show Imbued Mulch column", function() EL:ToggleTrackingColumn("mulch") end)
     f.toggleMulchColumn:SetPoint("TOPLEFT", trackingColumnLeftX, -86)
+    f.toggleForecastColumn = MakeSettingsCheck(f.trackingColumnsSection, "Show Next column", function() EL:ToggleTrackingColumn("forecast") end)
+    f.toggleForecastColumn:SetPoint("TOPLEFT", trackingColumnRightX, -86)
     f.toggleCharacterRealm = MakeSettingsCheck(f.trackingColumnsSection, "Show character realm", function() EL:ToggleDisplaySetting("showCharacterRealm") end)
-    f.toggleCharacterRealm:SetPoint("TOPLEFT", trackingColumnRightX, -86)
+    f.toggleCharacterRealm:SetPoint("TOPLEFT", trackingColumnLeftX, -112)
     f.launcherSection = MakeSettingsSection(f, "Launcher Display", contentX, -598, contentW, 88)
     f.toggleConc = MakeSettingsCheck(f.launcherSection, "Concentration alert", function() EL:ToggleDisplaySetting("showLauncherConc") end)
     f.toggleConc:SetPoint("TOPLEFT", 12, -34)
@@ -1053,6 +1082,7 @@ function EL:CreateSettingsPanel(parent)
     SetSettingsTooltip(f.toggleProf2Column, "Allow Prof 2 column", {"Allows the second profession column when tracked data needs it."})
     SetSettingsTooltip(f.toggleConc2Column, "Allow Conc 2 column", {"Allows the second concentration column when tracked data needs it."})
     SetSettingsTooltip(f.toggleMulchColumn, "Show Imbued Mulch column", {"Shows or hides the Imbued Mulch readiness column in the main window table."})
+    SetSettingsTooltip(f.toggleForecastColumn, "Show Next column", {"Shows an optional concentration forecast in the main window table.", "Uses the configured concentration threshold and fixed concentration regeneration rate.", "Examples: Ready, Full, 7h 48m, or N/A."})
     SetSettingsTooltip(f.toggleCharacterRealm, "Show character realm", {"Shows the realm name beside character names when available."})
 
     SetSettingsTooltip(f.toggleConc, "Concentration alert", {"Shows the launcher line for characters at or above the concentration threshold."})
@@ -1110,7 +1140,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.3.7"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.5.1"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -1227,6 +1257,7 @@ function EL:RefreshSettingsPanel()
     setToggle(f.toggleProf2Column, trackingDisplay.showProfession2Column ~= false)
     setToggle(f.toggleConc2Column, trackingDisplay.showConcentration2Column ~= false)
     setToggle(f.toggleMulchColumn, trackingDisplay.showMulchColumn ~= false)
+    setToggle(f.toggleForecastColumn, trackingDisplay.showForecastColumn == true)
     setToggle(f.toggleCharacterRealm, display.showCharacterRealm ~= false)
     setToggle(f.toggleAttentionOnly, display.attentionOnly == true)
     setToggle(f.toggleCompactMode, display.compactMode == true)
@@ -1421,6 +1452,7 @@ local TRACKING_COLUMN_TOGGLE_LABELS = {
     prof2 = "Prof 2 column",
     conc2 = "Conc 2 column",
     mulch = "Mulch column",
+    forecast = "Next column",
 }
 
 local TRACKING_COLUMN_SETTING_KEYS = {
@@ -1431,6 +1463,7 @@ local TRACKING_COLUMN_SETTING_KEYS = {
     prof2 = "showProfession2Column",
     conc2 = "showConcentration2Column",
     mulch = "showMulchColumn",
+    forecast = "showForecastColumn",
 }
 
 function EL:ToggleTrackingColumn(key)
@@ -1584,7 +1617,7 @@ function EL:ToggleSectionSetting(section)
             if self.db.settings.button.shown ~= false then self.button:Show() else self.button:Hide() end
         end
     elseif section == "characters" then
-        local shouldShow = not (self.db.settings.panel.windowOpen == true and self.panel and self.panel:IsShown())
+        local shouldShow = not (self.db.settings.panel.charactersShown ~= false)
         if not shouldShow and self.SaveExpandedPanelHeight then
             self:SaveExpandedPanelHeight()
         end
@@ -1634,7 +1667,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.3.7"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.5.1"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -1695,7 +1728,7 @@ function EL:CreateMainButton()
     button:SetMovable(true)
     button:EnableMouse(true)
     button:RegisterForDrag("LeftButton")
-    AddBackdrop(button, GetLauncherOpacity(), 0.50)
+    AddBackdrop(button, GetLauncherOpacity(), BORDER_ALPHA_STRONG)
     AddInnerBorder(button)
     if button.SetBackdropColor then button:SetBackdropColor(0.018, 0.020, 0.026, GetLauncherOpacity()) end
     if button.SetBackdropBorderColor then button:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, BORDER_ALPHA_STRONG) end
@@ -2323,7 +2356,9 @@ function EL:CreateSessionPanel(parent)
     session.header:SetPoint("TOPLEFT", 4, -4)
     session.header:SetPoint("TOPRIGHT", -4, -4)
     AddBackdrop(session.header, 0.24, 0.18)
-    if session.header.SetBackdropColor then session.header:SetBackdropColor(0.020, 0.022, 0.028, 0.58) end
+    if session.header.SetBackdropColor then session.header:SetBackdropColor(0.020, 0.022, 0.028, 0.70) end
+    if session.header.SetBackdropBorderColor then session.header:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, 0.38) end
+    AddHeaderAccent(session.header)
 
     -- The standalone Session window no longer needs an internal collapse
     -- control. Visibility is handled by the window close button and Options.
@@ -2687,7 +2722,9 @@ function EL:CreatePanel()
     panel:SetScript("OnHide", function()
         if EL.db and EL.db.settings and EL.db.settings.panel then
             EL.db.settings.panel.windowOpen = false
-            EL.db.settings.panel.charactersShown = false
+            if not EL._suppressPanelWindowHideSetting then
+                EL.db.settings.panel.charactersShown = false
+            end
         end
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
     end)
@@ -2711,8 +2748,10 @@ function EL:CreatePanel()
     panel.topBar:SetHeight(30)
     panel.topBar:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -8)
     panel.topBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -8)
-    AddBackdrop(panel.topBar, 0.24, 0.18)
-    if panel.topBar.SetBackdropColor then panel.topBar:SetBackdropColor(0.020, 0.022, 0.028, 0.58) end
+    AddBackdrop(panel.topBar, 0.30, 0.26)
+    if panel.topBar.SetBackdropColor then panel.topBar:SetBackdropColor(0.020, 0.022, 0.028, 0.70) end
+    if panel.topBar.SetBackdropBorderColor then panel.topBar:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, 0.38) end
+    AddHeaderAccent(panel.topBar)
 
     panel.title = panel.topBar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     panel.title:SetPoint("LEFT", panel.topBar, "LEFT", 10, 0)
@@ -2783,8 +2822,9 @@ function EL:CreatePanel()
     panel.header = CreateFrame("Frame", nil, panel, "BackdropTemplate")
     panel.header:SetHeight(32)
     if panel.header.SetClipsChildren then panel.header:SetClipsChildren(true) end
-    AddBackdrop(panel.header, 0.38, 0.20)
-    if panel.header.SetBackdropColor then panel.header:SetBackdropColor(0.018, 0.022, 0.030, 0.54) end
+    AddBackdrop(panel.header, 0.42, 0.30)
+    if panel.header.SetBackdropColor then panel.header:SetBackdropColor(0.018, 0.022, 0.030, 0.66) end
+    if panel.header.SetBackdropBorderColor then panel.header:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, 0.34) end
     panel.header.topLine = panel.header:CreateTexture(nil, "BORDER")
     panel.header.topLine:SetHeight(1)
     panel.header.topLine:SetPoint("TOPLEFT", 2, -1)
@@ -2801,21 +2841,27 @@ function EL:CreatePanel()
     panel.header.conc1 = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     panel.header.prof2 = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     panel.header.conc2 = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    panel.header.forecast = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     panel.header.mulch = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     panel.header.name:SetText("Character")
     panel.header.prof1:SetText("P1")
     panel.header.conc1:SetText("Conc 1")
     panel.header.prof2:SetText("P2")
     panel.header.conc2:SetText("Conc 2")
+    panel.header.forecast:SetText("Next")
     panel.header.mulch:SetText("Mulch")
-    for _, fs in pairs({panel.header.name, panel.header.prof1, panel.header.conc1, panel.header.prof2, panel.header.conc2, panel.header.mulch}) do
-        fs:SetTextColor(0.78, 0.84, 0.92)
+    for _, fs in pairs({panel.header.name, panel.header.prof1, panel.header.conc1, panel.header.prof2, panel.header.conc2, panel.header.forecast, panel.header.mulch}) do
+        fs:SetTextColor(0.88, 0.84, 0.74)
+        fs:SetJustifyH("CENTER")
+        if fs.SetShadowColor then fs:SetShadowColor(0, 0, 0, 0.80) end
+        if fs.SetShadowOffset then fs:SetShadowOffset(1, -1) end
     end
     panel.header.nameButton = CreateHeaderButton(panel.header, panel.header.name, "character")
     panel.header.prof1Button = CreateHeaderButton(panel.header, panel.header.prof1, "prof1")
     panel.header.conc1Button = CreateHeaderButton(panel.header, panel.header.conc1, "conc1")
     panel.header.prof2Button = CreateHeaderButton(panel.header, panel.header.prof2, "prof2")
     panel.header.conc2Button = CreateHeaderButton(panel.header, panel.header.conc2, "conc2")
+    panel.header.forecastButton = CreateHeaderButton(panel.header, panel.header.forecast, "forecast")
     panel.header.mulchButton = CreateHeaderButton(panel.header, panel.header.mulch, "mulch")
 
     panel.scroll = CreateFrame("ScrollFrame", "EmberLedgerScrollFrame", panel, "UIPanelScrollFrameTemplate")
@@ -2864,6 +2910,7 @@ function EL:UpdateSortHeaders()
         conc1 = p.header.conc1,
         prof2 = p.header.prof2,
         conc2 = p.header.conc2,
+        forecast = p.header.forecast,
         mulch = p.header.mulch,
     }
     if not self:IsTrackingColumnVisible(active) then
@@ -2880,7 +2927,7 @@ function EL:UpdateSortHeaders()
             fs:SetTextColor(0.92, 0.78, 0.50)
             if btn and btn.bg then btn.bg:SetColorTexture(0.78, 0.66, 0.46, 0.10) end
         else
-            fs:SetTextColor(0.78, 0.84, 0.92)
+            fs:SetTextColor(0.88, 0.84, 0.74)
             if btn and btn.bg then btn.bg:SetColorTexture(1, 0.72, 0.22, 0) end
         end
     end
@@ -2993,15 +3040,15 @@ function EL:LayoutPanel()
         local visible = {}
         for _, def in ipairs(cols.columns or {}) do visible[def.key] = true end
 
-        local headerMap = { character = p.header.name, prof1 = p.header.prof1, conc1 = p.header.conc1, prof2 = p.header.prof2, conc2 = p.header.conc2, mulch = p.header.mulch }
-        local buttonMap = { character = p.header.nameButton, prof1 = p.header.prof1Button, conc1 = p.header.conc1Button, prof2 = p.header.prof2Button, conc2 = p.header.conc2Button, mulch = p.header.mulchButton }
+        local headerMap = { character = p.header.name, prof1 = p.header.prof1, conc1 = p.header.conc1, prof2 = p.header.prof2, conc2 = p.header.conc2, forecast = p.header.forecast, mulch = p.header.mulch }
+        local buttonMap = { character = p.header.nameButton, prof1 = p.header.prof1Button, conc1 = p.header.conc1Button, prof2 = p.header.prof2Button, conc2 = p.header.conc2Button, forecast = p.header.forecastButton, mulch = p.header.mulchButton }
         for _, def in ipairs(TRACKING_COLUMN_DEFS) do
             local fs = headerMap[def.key]
             local btn = buttonMap[def.key]
             if fs then
                 fs:SetShown(visible[def.key] and true or false)
                 if visible[def.key] then
-                    AnchorColumnText(fs, p.header, cols[def.key .. "X"], cols[def.key .. "W"], def.key == "character" and "LEFT" or "CENTER")
+                    AnchorColumnText(fs, p.header, cols[def.key .. "X"], cols[def.key .. "W"], "CENTER")
                 end
             end
             if btn then
@@ -3085,15 +3132,17 @@ function EL:GetRow(i)
         row.prof1 = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         row.prof1:SetJustifyH("CENTER")
         row.conc1 = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        row.conc1:SetJustifyH("RIGHT")
+        row.conc1:SetJustifyH("CENTER")
         row.prof2Icon = row:CreateTexture(nil, "OVERLAY")
         row.prof2Icon:Hide()
         row.prof2 = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         row.prof2:SetJustifyH("CENTER")
         row.conc2 = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        row.conc2:SetJustifyH("RIGHT")
+        row.conc2:SetJustifyH("CENTER")
+        row.forecast = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        row.forecast:SetJustifyH("CENTER")
         row.mulch = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        row.mulch:SetJustifyH("RIGHT")
+        row.mulch:SetJustifyH("CENTER")
         row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         row:SetScript("OnClick", function(self, button)
             if button == "LeftButton" and self.charKey and IsAltKeyDown and IsAltKeyDown() then
@@ -3249,6 +3298,15 @@ function EL:RefreshPanel()
             local q = self:GetEstimatedConcentration(concData2, now) or 0
             concValue2 = tostring(q) .. "/" .. tostring(concData2.maxQuantity or self.CONCENTRATION_MAX_DEFAULT)
         end
+        local forecastValue = "N/A"
+        local forecastData = self:GetBestConcentrationForCharacter(charKey, now)
+        local readyConcentrationCount = self.GetReadyConcentrationCountForCharacter and self:GetReadyConcentrationCountForCharacter(charKey, threshold, now) or 0
+        if forecastData and self.GetConcentrationForecastText then
+            forecastValue = self:GetConcentrationForecastText(forecastData, threshold, now)
+            if readyConcentrationCount > 1 and forecastValue == "Ready" then
+                forecastValue = tostring(readyConcentrationCount) .. "x Ready"
+            end
+        end
         local mulchValue = "N/A"
         if self:HasImbuedMulchAccess(mulchData) then
             local remain = math.max(0, (tonumber(mulchData.readyAt) or 0) - now)
@@ -3258,19 +3316,22 @@ function EL:RefreshPanel()
         row:SetWidth(width)
         row:SetPoint("TOPLEFT", p.content, "TOPLEFT", 0, -((i - 1) * (rowH + gap)))
         AnchorColumnText(row.name, row, cols.nameX, cols.nameW, "LEFT")
-        AnchorColumnText(row.conc1, row, cols.conc1X, cols.conc1W, "RIGHT")
-        AnchorColumnText(row.conc2, row, cols.conc2X, cols.conc2W, "RIGHT")
-        AnchorColumnText(row.mulch, row, cols.mulchX, math.max(1, cols.mulchW), "RIGHT")
+        AnchorColumnText(row.conc1, row, cols.conc1X, cols.conc1W, "CENTER")
+        AnchorColumnText(row.conc2, row, cols.conc2X, cols.conc2W, "CENTER")
+        AnchorColumnText(row.forecast, row, cols.forecastX, math.max(1, cols.forecastW), "CENTER")
+        AnchorColumnText(row.mulch, row, cols.mulchX, math.max(1, cols.mulchW), "CENTER")
         AnchorProfessionCell(row, row.prof1, row.prof1Icon, cols.prof1X, cols.prof1W, visible.prof1, profData1 and self:GetProfessionIconTexture(profData1))
         AnchorProfessionCell(row, row.prof2, row.prof2Icon, cols.prof2X, cols.prof2W, visible.prof2, profData2 and self:GetProfessionIconTexture(profData2))
         row.prof1:SetShown(visible.prof1 and not row.prof1._emberHasProfessionIcon)
         row.conc1:SetShown(visible.conc1 and true or false)
         row.prof2:SetShown(visible.prof2 and not row.prof2._emberHasProfessionIcon)
         row.conc2:SetShown(visible.conc2 and true or false)
+        row.forecast:SetShown(visible.forecast and true or false)
         row.mulch:SetShown(visible.mulch and true or false)
 
         row.charKey = charKey
         row.concData = concData1
+        row.forecastData = forecastData
         row.concEntries = concEntries
         row.profEntries = profEntries
         row.mulchData = mulchData
@@ -3282,7 +3343,7 @@ function EL:RefreshPanel()
         row.isCurrentCharacter = isCurrentCharacter and true or false
         if row.currentHighlight then
             row.currentHighlight:SetShown(isCurrentCharacter and true or false)
-            if isCurrentCharacter then row.currentHighlight:SetColorTexture(1.00, 0.78, 0.24, IsCompactModeEnabled() and 0.15 or 0.18) end
+            if isCurrentCharacter then row.currentHighlight:SetColorTexture(1.00, 0.78, 0.24, IsCompactModeEnabled() and 0.09 or 0.11) end
         end
         row.name:SetShadowColor(0.00, 0.00, 0.00, 0.85)
         row.name:SetShadowOffset(1, -1)
@@ -3315,6 +3376,12 @@ function EL:RefreshPanel()
             row.conc2:SetTextColor(0.7, 0.7, 0.7)
         end
         if row.full then row.full:Hide() end
+        row.forecast:SetText(forecastValue)
+        if forecastValue == "Ready" or forecastValue:match("^%d+x Ready$") then
+            row.forecast:SetTextColor(0.35, 1.00, 0.45)
+        else
+            row.forecast:SetTextColor(0.70, 0.70, 0.70)
+        end
         row.mulch:SetText(mulchValue)
         if self:HasImbuedMulchAccess(mulchData) then
             local remain = math.max(0, (tonumber(mulchData.readyAt) or 0) - now)
@@ -3324,7 +3391,7 @@ function EL:RefreshPanel()
             row.mulch:SetTextColor(0.7, 0.7, 0.7)
         end
         local stripe = (i % 2 == 0) and 0.030 or 0
-        row.bg:SetColorTexture(0.15 + stripe, 0.15 + stripe, 0.165 + stripe, IsCompactModeEnabled() and ROW_STRIPE_ALPHA_COMPACT or ROW_STRIPE_ALPHA)
+        row.bg:SetColorTexture(0.10 + stripe, 0.10 + stripe, 0.115 + stripe, IsCompactModeEnabled() and ROW_STRIPE_ALPHA_COMPACT or ROW_STRIPE_ALPHA)
         row:Show()
     end
     for i = #rows + 1, #p.rows do
@@ -3363,6 +3430,7 @@ function EL:UpdateButton()
     local mulchReady = self:GetMulchReadyCount()
     local nextMulch = self:GetNextMulchSummary()
     ApplyFrameOpacity(b, GetLauncherOpacity())
+
     if b.title then
         b.title:SetText("EmberLedger")
         b.title:SetTextColor(1.00, 0.82, 0.24)
@@ -3371,10 +3439,28 @@ function EL:UpdateButton()
         b.title:SetShadowOffset(1, -1)
     end
 
+    local topParts = {}
+    if display.showLauncherConc ~= false then
+        topParts[#topParts + 1] = "Conc " .. tostring(concReady or 0)
+    end
+    if display.showLauncherMulch ~= false then
+        if mulchReady and mulchReady > 0 then
+            topParts[#topParts + 1] = "Mulch " .. tostring(mulchReady)
+        elseif nextMulch and nextMulch.remaining then
+            topParts[#topParts + 1] = "Mulch " .. self:FormatCountdown(nextMulch.remaining)
+        else
+            topParts[#topParts + 1] = "Mulch N/A"
+        end
+    end
+
     if b.line1 then
-        if display.showLauncherConc ~= false and concReady > 0 then
-            b.line1:SetText("Conc Ready: " .. tostring(concReady))
-            b.line1:SetTextColor(1.00, 0.82, 0.24)
+        if #topParts > 0 then
+            b.line1:SetText(table.concat(topParts, "  |  "))
+            if (concReady and concReady > 0) or (mulchReady and mulchReady > 0) then
+                b.line1:SetTextColor(0.35, 1.00, 0.35)
+            else
+                b.line1:SetTextColor(0.86, 0.84, 0.76)
+            end
             b.line1:Show()
         else
             b.line1:SetText("")
@@ -3382,70 +3468,45 @@ function EL:UpdateButton()
         end
     end
 
+    local sessionEnabled = not self.IsSessionTrackingEnabled or self:IsSessionTrackingEnabled()
+    local bottomParts = {}
+    if sessionEnabled and display.showLauncherSession ~= false then
+        bottomParts[#bottomParts + 1] = self:FormatMoneyText(self:GetSessionGoldPerHour()) .. "/hr"
+    end
+    if sessionEnabled and display.showLauncherSessionTime ~= false then
+        bottomParts[#bottomParts + 1] = FormatSessionTime(self:GetSessionElapsedSeconds())
+    end
+    if sessionEnabled and display.showLauncherSessionTotal ~= false and display.showLauncherSessionTime == false then
+        local sdb = self.GetSessionDB and self:GetSessionDB() or {}
+        bottomParts[#bottomParts + 1] = self:FormatMoneyText(sdb.totalSilver or 0) .. " total"
+    end
+
     if b.line2 then
-        if display.showLauncherMulch == false then
+        if #bottomParts > 0 then
+            b.line2:SetText(table.concat(bottomParts, "  |  "))
+            b.line2:SetTextColor(0.78, 0.78, 0.72)
+            b.line2:Show()
+        else
             b.line2:SetText("")
             b.line2:Hide()
-        elseif nextMulch then
-            if mulchReady > 0 then
-                b.line2:SetText("Mulch Ready: " .. tostring(mulchReady))
-                b.line2:SetTextColor(0.35, 1.00, 0.35)
-            else
-                b.line2:SetText("Mulch " .. self:FormatCountdown(nextMulch.remaining))
-                b.line2:SetTextColor(self:GetMulchCountdownColor(nextMulch.remaining))
-            end
-            b.line2:Show()
-        else
-            b.line2:SetText("Mulch N/A")
-            b.line2:SetTextColor(0.52, 0.60, 0.68)
-            b.line2:Show()
         end
     end
 
-    local sessionEnabled = not self.IsSessionTrackingEnabled or self:IsSessionTrackingEnabled()
-    local showSessionGold = sessionEnabled and display.showLauncherSession ~= false
-    local showSessionTotal = sessionEnabled and display.showLauncherSessionTotal ~= false
-    local showSessionTime = sessionEnabled and display.showLauncherSessionTime ~= false
-    local sdb = sessionEnabled and self.GetSessionDB and self:GetSessionDB() or {}
-    if b.line3 then
-        if showSessionGold then
-            b.line3:SetText(self:FormatMoneyText(self:GetSessionGoldPerHour()) .. "/hr")
-            b.line3:SetTextColor(0.86, 0.84, 0.76)
-            b.line3:Show()
-        else
-            b.line3:SetText("")
-            b.line3:Hide()
-        end
-    end
-    if b.line4 then
-        if showSessionTotal then
-            b.line4:SetText("Total: " .. self:FormatMoneyText(sdb.totalSilver or 0))
-            b.line4:SetTextColor(0.86, 0.84, 0.76)
-            b.line4:Show()
-        else
-            b.line4:SetText("")
-            b.line4:Hide()
-        end
-    end
-    if b.line5 then
-        if showSessionTime then
-            b.line5:SetText("Time: " .. FormatSessionTime(self:GetSessionElapsedSeconds()))
-            b.line5:SetTextColor(0.78, 0.78, 0.72)
-            b.line5:Show()
-        else
-            b.line5:SetText("")
-            b.line5:Hide()
+    for _, line in ipairs({ b.line3, b.line4, b.line5 }) do
+        if line then
+            line:SetText("")
+            line:Hide()
         end
     end
 
-    local orderedLines = { b.line1, b.line2, b.line3, b.line4, b.line5 }
+    local orderedLines = { b.line1, b.line2 }
     local previous = b.title
     local shownLineCount = 0
     for _, line in ipairs(orderedLines) do
         if line then
             line:ClearAllPoints()
             if line:IsShown() then
-                local yGap = shownLineCount == 0 and -6 or -2
+                local yGap = shownLineCount == 0 and -6 or -3
                 line:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, yGap)
                 line:SetPoint("TOPRIGHT", previous, "BOTTOMRIGHT", 0, yGap)
                 previous = line
@@ -3454,9 +3515,9 @@ function EL:UpdateButton()
         end
     end
 
-    local textW = math.max(GetTextWidth(b.title), GetTextWidth(b.line1), GetTextWidth(b.line2), b.line3 and GetTextWidth(b.line3) or 0, b.line4 and GetTextWidth(b.line4) or 0, b.line5 and GetTextWidth(b.line5) or 0)
+    local textW = math.max(GetTextWidth(b.title), GetTextWidth(b.line1), GetTextWidth(b.line2))
     local targetW = math.ceil(math.max(142, textW + 28))
-    local targetH = math.max(48, 31 + (shownLineCount * 13))
+    local targetH = math.max(50, 28 + (shownLineCount * 14))
     if math.abs((b:GetWidth() or 0) - targetW) > 2 or math.abs((b:GetHeight() or 0) - targetH) > 2 then
         b:SetSize(targetW, targetH)
     end
@@ -3507,11 +3568,34 @@ function EL:ToggleAllWindows()
     local mainShown = self.panel and self.panel:IsShown()
     local sessionShown = self.sessionWindow and self.sessionWindow:IsShown()
     if mainShown or sessionShown then
-        if self.panel then self.panel:Hide() end
-        if self.sessionWindow then self.sessionWindow:Hide() end
-    else
-        if self.ShowPanelFromSavedState then self:ShowPanelFromSavedState() end
-        if self.ShowSessionWindowFromSavedState then self:ShowSessionWindowFromSavedState() end
+        if mainShown and self.panel then
+            self._suppressPanelWindowHideSetting = true
+            self.panel:Hide()
+            self._suppressPanelWindowHideSetting = false
+            if self.db and self.db.settings and self.db.settings.panel then
+                self.db.settings.panel.charactersShown = true
+                self.db.settings.panel.windowOpen = true
+            end
+        end
+        if sessionShown and self.sessionWindow then
+            self._suppressSessionWindowHideSetting = true
+            self.sessionWindow:Hide()
+            self._suppressSessionWindowHideSetting = false
+            if self.db and self.db.settings and self.db.settings.session then
+                self.db.settings.session.shown = true
+                self.db.settings.session.windowOpen = true
+            end
+        end
+        if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+        return
+    end
+    if self.db and self.db.settings then
+        if self.db.settings.panel and self.db.settings.panel.charactersShown ~= false and self.ShowPanelFromSavedState then
+            self:ShowPanelFromSavedState()
+        end
+        if self.db.settings.session and self.db.settings.session.shown ~= false and self.ShowSessionWindowFromSavedState then
+            self:ShowSessionWindowFromSavedState()
+        end
     end
 end
 
@@ -3565,82 +3649,11 @@ end
 function EL:ShowButtonTooltip(owner)
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
     GameTooltip:SetText("EmberLedger", 1, 0.82, 0.24)
-
-    local threshold = self.db and self.db.settings and self.db.settings.alerts and self.db.settings.alerts.concentrationThreshold or 360
-    local attention, totalAttention = self:GetNeedsAttentionEntries(8)
+    GameTooltip:AddLine("Quick launcher and window toggle.", 0.86, 0.86, 0.78, true)
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Needs Attention", 1.00, 0.82, 0.24)
-    if attention and #attention > 0 then
-        for _, entry in ipairs(attention) do
-            if entry.type == "mulch" then
-                GameTooltip:AddDoubleLine(entry.displayName or "Unknown", "Imbued Mulch Ready", 0.35, 1.00, 0.35, 0.35, 1.00, 0.35)
-            else
-                local label = string.format("%s - %s", entry.displayName or "Unknown", entry.abbrev or "Prof")
-                local value = string.format("%d/%d", tonumber(entry.quantity) or 0, tonumber(entry.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT)
-                GameTooltip:AddDoubleLine(label, value, 1.00, 0.82, 0.24, 1, 1, 1)
-            end
-        end
-        if totalAttention and totalAttention > #attention then
-            GameTooltip:AddLine(string.format("...and %d more", totalAttention - #attention), 0.72, 0.72, 0.72)
-        end
-    else
-        GameTooltip:AddLine("Nothing currently ready.", 0.72, 0.72, 0.72)
-    end
-
-    local concEntries, totalConc = self:GetConcentrationReadyEntries(threshold, 8)
-    GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Concentration Ready", 0.62, 0.78, 0.92)
-    if concEntries and #concEntries > 0 then
-        for _, entry in ipairs(concEntries) do
-            local label = string.format("%s - %s", entry.displayName or "Unknown", entry.abbrev or "Prof")
-            local value = string.format("%d/%d", tonumber(entry.quantity) or 0, tonumber(entry.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT)
-            GameTooltip:AddDoubleLine(label, value, 0.62, 0.78, 0.92, 1, 1, 1)
-        end
-        if totalConc and totalConc > #concEntries then
-            GameTooltip:AddLine(string.format("...and %d more", totalConc - #concEntries), 0.72, 0.72, 0.72)
-        end
-    else
-        GameTooltip:AddLine("None above threshold.", 0.72, 0.72, 0.72)
-    end
-
-    local mulchEntries, totalMulch = self:GetMulchReadyEntries(8)
-    GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Imbued Mulch Ready", 0.35, 1.00, 0.35)
-    if mulchEntries and #mulchEntries > 0 then
-        for _, entry in ipairs(mulchEntries) do
-            GameTooltip:AddLine(entry.displayName or "Unknown", 0.35, 1.00, 0.35)
-        end
-        if totalMulch and totalMulch > #mulchEntries then
-            GameTooltip:AddLine(string.format("...and %d more", totalMulch - #mulchEntries), 0.72, 0.72, 0.72)
-        end
-    else
-        GameTooltip:AddLine("None ready.", 0.72, 0.72, 0.72)
-    end
-
-    local nextMulch = self:GetNextMulchSummary()
-    if nextMulch then
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddDoubleLine("Next Imbued Mulch", nextMulch.displayName .. " - " .. self:FormatCountdown(nextMulch.remaining), 0.95, 0.62, 0.26, 1, 1, 1)
-    end
-
-    local total, hiddenCount = 0, 0
-    for key in pairs(self.db.characters or {}) do
-        total = total + 1
-        if self:IsCharacterHidden(key) then hiddenCount = hiddenCount + 1 end
-    end
-
-    local s = self:GetSessionDB()
-    GameTooltip:AddLine(" ")
-    GameTooltip:AddDoubleLine("Tracked characters", tostring(total), 0.8, 0.8, 0.8, 1, 1, 1)
-    GameTooltip:AddDoubleLine("Hidden characters", tostring(hiddenCount), 0.8, 0.8, 0.8, 1, 1, 1)
-    GameTooltip:AddLine(" ")
-    GameTooltip:AddDoubleLine("Session value", self:FormatMoneyText(s.totalSilver or 0), 0.95, 0.62, 0.26, 1, 1, 1)
-    GameTooltip:AddDoubleLine("Gold/hour", self:FormatMoneyText(self:GetSessionGoldPerHour()) .. "/hr", 0.95, 0.62, 0.26, 1, 1, 1)
-    GameTooltip:AddDoubleLine("Session status", s.isPaused and "Paused" or "Running", 0.95, 0.62, 0.26, 1, 1, 1)
-    GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Left-click: open dashboard", 0.7, 0.7, 0.7)
-    GameTooltip:AddLine("Right-click: lock/unlock launcher", 0.7, 0.7, 0.7)
-    GameTooltip:AddLine("Shift-drag: move while locked", 0.7, 0.7, 0.7)
+    GameTooltip:AddLine("Left-click: show or hide EmberLedger windows", 0.72, 0.72, 0.72)
+    GameTooltip:AddLine("Right-click: lock or unlock launcher", 0.72, 0.72, 0.72)
+    GameTooltip:AddLine("Shift-drag: move while locked", 0.72, 0.72, 0.72)
     GameTooltip:Show()
 end
 
@@ -3665,18 +3678,17 @@ function EL:ShowRowTooltip(row)
     local char = self.db and self.db.characters and self.db.characters[row.charKey or ""]
     local displayName = self:GetCharacterDisplayName(char, row.charKey or "Character")
     local r, g, b = self:GetClassColor(char and char.class)
+    local threshold = self.db and self.db.settings and self.db.settings.alerts and self.db.settings.alerts.concentrationThreshold or 360
+    local now = time()
+
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
     GameTooltip:SetText(displayName, r, g, b)
 
     GameTooltip:AddDoubleLine("Realm", (char and char.realm) or "Unknown", 0.82, 0.80, 0.72, 1, 1, 1)
-    GameTooltip:AddDoubleLine("Class", (char and char.class) or "Unknown", 0.82, 0.80, 0.72, 1, 1, 1)
     GameTooltip:AddDoubleLine("Last seen", FormatTooltipAgo(char and char.lastSeen), 0.82, 0.80, 0.72, 1, 1, 1)
-    if char and char.lastSeen then
-        GameTooltip:AddDoubleLine("Last seen at", FormatTooltipDate(char.lastSeen), 0.62, 0.62, 0.62, 0.85, 0.85, 0.85)
-    end
 
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Known Professions", 0.62, 0.78, 0.92)
+    GameTooltip:AddLine("Professions", 0.62, 0.78, 0.92)
     if row.profEntries and #row.profEntries > 0 then
         for i, prof in ipairs(row.profEntries) do
             local profName = self:GetCleanProfessionName(prof.professionName)
@@ -3684,58 +3696,56 @@ function EL:ShowRowTooltip(row)
             local conc = self:GetConcentrationEntryForProfession(row.charKey, prof)
             GameTooltip:AddDoubleLine(string.format("%d. %s", i, profName), abbrev, 0.62, 0.78, 0.92, 1, 1, 1)
             if conc then
-                local quantity = tonumber(self:GetEstimatedConcentration(conc)) or 0
+                local quantity = tonumber(self:GetEstimatedConcentration(conc, now)) or 0
                 local maxQuantity = tonumber(conc.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
-                local pct = maxQuantity > 0 and math.floor((quantity / maxQuantity) * 100 + 0.5) or 0
-                local fullIn = self:GetConcentrationFullIn(conc) or "Unknown"
-                local lastUpdate = tonumber(conc.lastUpdate) or 0
-                GameTooltip:AddDoubleLine("   Concentration", string.format("%d/%d (%d%%)", quantity, maxQuantity, pct), 0.72, 0.72, 0.72, 1, 1, 1)
-                GameTooltip:AddDoubleLine("   Full in", fullIn, 0.72, 0.72, 0.72, 1, 1, 1)
-                if lastUpdate > 0 then
-                    GameTooltip:AddDoubleLine("   Concentration updated", FormatTooltipAgo(lastUpdate), 0.62, 0.62, 0.62, 0.85, 0.85, 0.85)
+                GameTooltip:AddDoubleLine("   Concentration", string.format("%d/%d", quantity, maxQuantity), 0.72, 0.72, 0.72, 1, 1, 1)
+                if quantity >= maxQuantity then
+                    GameTooltip:AddDoubleLine("   Full", "Now", 0.72, 0.72, 0.72, 1, 1, 1)
+                elseif quantity >= threshold then
+                    GameTooltip:AddDoubleLine("   Ready", "Now", 0.35, 1.00, 0.45, 0.35, 1.00, 0.45)
+                    GameTooltip:AddDoubleLine("   Full in", self:GetConcentrationFullIn(conc, now) or "Unknown", 0.72, 0.72, 0.72, 1, 1, 1)
+                else
+                    local rate = tonumber(self.CONCENTRATION_RATE_PER_HOUR) or 10
+                    local readySeconds = math.ceil(math.max(0, threshold - quantity) / rate * 3600)
+                    GameTooltip:AddDoubleLine("   Ready at", FormatTooltipDate(now + readySeconds), 0.72, 0.72, 0.72, 1, 1, 1)
+                    GameTooltip:AddDoubleLine("   Full in", self:GetConcentrationFullIn(conc, now) or "Unknown", 0.72, 0.72, 0.72, 1, 1, 1)
                 end
             else
-                GameTooltip:AddLine("   Concentration: not tracked for this profession", 0.70, 0.70, 0.70)
+                GameTooltip:AddLine("   Concentration: not tracked", 0.70, 0.70, 0.70)
             end
         end
     elseif row.concEntries and #row.concEntries > 0 then
         for i, data in ipairs(row.concEntries) do
             local profName = self:GetCleanProfessionName(data.professionName)
             local abbrev = self:GetProfessionAbbreviation(data)
-            local quantity = tonumber(self:GetEstimatedConcentration(data)) or 0
+            local quantity = tonumber(self:GetEstimatedConcentration(data, now)) or 0
             local maxQuantity = tonumber(data.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
-            local pct = maxQuantity > 0 and math.floor((quantity / maxQuantity) * 100 + 0.5) or 0
             GameTooltip:AddDoubleLine(string.format("%d. %s", i, profName), abbrev, 0.62, 0.78, 0.92, 1, 1, 1)
-            GameTooltip:AddDoubleLine("   Concentration", string.format("%d/%d (%d%%)", quantity, maxQuantity, pct), 0.72, 0.72, 0.72, 1, 1, 1)
+            GameTooltip:AddDoubleLine("   Concentration", string.format("%d/%d", quantity, maxQuantity), 0.72, 0.72, 0.72, 1, 1, 1)
         end
     else
-        GameTooltip:AddLine("No profession identity tracked yet.", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("No professions tracked yet.", 0.7, 0.7, 0.7)
     end
 
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine("Imbued Mulch", 0.95, 0.62, 0.26)
     if self:HasImbuedMulchAccess(row.mulchData) then
         local readyAt = tonumber(row.mulchData.readyAt) or 0
-        local remain = math.max(0, readyAt - time())
-        local readyText = remain <= 0 and "Ready" or self:FormatCountdown(remain)
-        GameTooltip:AddDoubleLine("State", readyText, 0.95, 0.62, 0.26, 1, 1, 1)
-        GameTooltip:AddDoubleLine("Ready at", remain <= 0 and "Now" or FormatTooltipDate(readyAt), 0.95, 0.62, 0.26, 1, 1, 1)
-        GameTooltip:AddDoubleLine("Item", row.mulchData.itemName or "Imbued Mulch", 0.95, 0.62, 0.26, 1, 1, 1)
-        GameTooltip:AddDoubleLine("In bags", tostring(row.mulchData.itemCount or 0), 0.95, 0.62, 0.26, 1, 1, 1)
-        if row.mulchData.lastUpdate then
-            GameTooltip:AddDoubleLine("Updated", FormatTooltipAgo(row.mulchData.lastUpdate), 0.62, 0.62, 0.62, 0.85, 0.85, 0.85)
-        end
+        local remain = math.max(0, readyAt - now)
+        GameTooltip:AddDoubleLine("Ready at", remain <= 0 and "Now" or FormatTooltipDate(readyAt), 0.72, 0.72, 0.72, 1, 1, 1)
+        GameTooltip:AddDoubleLine("In bags", tostring(row.mulchData.itemCount or 0), 0.72, 0.72, 0.72, 1, 1, 1)
     else
-        GameTooltip:AddLine("No Imbued Mulch data tracked for this character.", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("No Imbued Mulch data tracked.", 0.7, 0.7, 0.7)
     end
 
     GameTooltip:AddLine(" ")
     if row.isCurrentCharacter then
-        GameTooltip:AddDoubleLine("Current", "Yes", 0.95, 0.82, 0.38, 1, 1, 1)
+        GameTooltip:AddLine("Current character", 0.95, 0.82, 0.38)
     end
-    GameTooltip:AddDoubleLine("Pinned", self:IsCharacterPinned(row.charKey) and "Yes" or "No", 0.95, 0.82, 0.38, 1, 1, 1)
-    GameTooltip:AddLine((self:IsCharacterPinned(row.charKey) and "Alt-click: unpin this character" or "Alt-click: pin this character"), 0.95, 0.82, 0.38)
-    GameTooltip:AddLine("Right-click: hide from the table", 0.7, 0.7, 0.7)
-    GameTooltip:AddLine("Shift-right-click: reset this character's data", 0.95, 0.62, 0.26)
+    if self:IsCharacterPinned(row.charKey) then
+        GameTooltip:AddLine("Pinned", 0.95, 0.82, 0.38)
+    end
+    GameTooltip:AddLine((self:IsCharacterPinned(row.charKey) and "Alt-click: unpin" or "Alt-click: pin") .. " | Right-click: hide", 0.7, 0.7, 0.7)
+    GameTooltip:AddLine("Shift-right-click: reset this character", 0.95, 0.62, 0.26)
     GameTooltip:Show()
 end

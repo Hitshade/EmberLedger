@@ -1,3 +1,92 @@
+v1.5.1 Launcher Visual Polish
+- Refined the launcher into a smaller dashboard-style display.
+- Reduced title prominence and removed redundant launcher labels.
+- Combined concentration and mulch status onto one compact line.
+- Combined session rate and elapsed time onto one compact line.
+- Preserved launcher size, behavior, and options.
+
+v1.5.0 Visual Polish Pass
+- Refined main, launcher, and Session window borders for a cleaner framed look.
+- Strengthened title/header bar styling with subtle accent lines.
+- Centered table headers and numeric/status table values for easier scanning.
+- Softened the current-character row highlight so it is less visually heavy.
+- Adjusted row striping and dividers for a cleaner table presentation.
+- Improved button text centering across EmberLedger controls.
+- Preserved existing launcher, session, tracking, sorting, and action bar behavior.
+
+v1.4.11 Main Window Toggle Hotfix
+- Fixed the Main Window option toggle after the launcher temporarily hides windows.
+- The Show main window checkbox now uses the saved visibility setting instead of actual frame visibility when deciding the next state.
+- Preserved launcher temporary hide/show behavior and X-button close behavior.
+
+v1.4.10 Launcher Window Restore Hotfix
+- Fixed launcher click behavior so hiding windows from the launcher does not turn off the saved main or Session window visibility settings.
+- Launcher left-click can now hide visible EmberLedger windows and restore them again on the next click.
+- Preserved X-button behavior so manually closing a window still turns off its matching visibility option.
+
+EmberLedger v1.4.9
+- Simplified the launcher tooltip to a short usage tip.
+- Removed detailed attention, concentration, mulch, character count, and session summaries from the launcher tooltip.
+- Kept the launcher click hints for showing or hiding EmberLedger windows, locking the launcher, and moving it while locked.
+- Preserved launcher display lines and window toggle behavior.
+
+EmberLedger v1.4.8
+- Added clearer Next column ready handling for characters with two ready concentration professions.
+- Next now shows 2x Ready only when more than one concentration-tracked profession is ready.
+- Kept normal Ready and countdown behavior unchanged for single-profession and not-ready characters.
+- Preserved tooltip readability changes from the recent polish pass.
+
+EmberLedger v1.4.7
+- Changed Mulch tooltip labels Ready at and In bags to muted gray for improved hierarchy.
+- Kept the Imbued Mulch tooltip section header orange.
+- Removed the redundant Class line from row tooltips because the character name already uses class coloring.
+
+EmberLedger v1.4.6
+
+Tooltip readability polish.
+- Restored Ready at wording for exact tooltip timing.
+- Reduced main row tooltip clutter by removing redundant status/update fields.
+- Kept useful profession, concentration, mulch, pin, and action hint details.
+- Preserved Next column behavior from v1.4.4 and v1.4.5.
+
+v1.4.5 Tooltip Time Hotfix
+- Replaced the Imbued Mulch tooltip's exact local ready timestamp with a countdown-based Ready in value.
+- This keeps the tooltip aligned with the main window countdown and avoids local time display mismatches.
+- Preserved the Next column behavior from v1.4.4.
+
+v1.4.4 Next Column Text Polish
+- Updated the Next column so only the Ready state uses green text.
+- Changed all non-ready Next values to the same muted gray-white style used by inactive table values.
+- Preserved the simplified Next column display and default-off setting.
+
+v1.4.3 Next Column Color Hotfix
+- Updated the Next column so only the Ready state uses green text.
+- Changed Full, countdown timers, and N/A to plain white text.
+- Updated the Next column tooltip example text to match the simplified display.
+- Preserved the default-off Next column setting and existing sorting behavior.
+
+v1.4.2 Next Column Readability Update
+- Renamed the Forecast column to Next.
+- Simplified Next column output to Full, Ready, or the estimated threshold time.
+- Removed color-coded Next text for improved readability.
+- Reduced Next column width to better fit compact table layouts.
+- Updated Options wording to match the new Next column naming.
+
+v1.4.1 Forecast Column Hotfix
+- Fixed an error that occurred when the Forecast column was disabled by default.
+- Added safe fallback layout values for the Forecast column.
+- Restored main and Session window display behavior after the v1.4.0 Forecast column addition.
+- No new features were added.
+
+v1.4.0 Concentration Forecast Column
+
+- Added an optional Forecast column to the main window table.
+- Forecast is off by default and can be enabled from Options > Main Window > Main Window Table.
+- Forecast uses the configured concentration threshold and fixed concentration regeneration rate to show ready and full timing.
+- Added Forecast column sorting support.
+- Preserved existing Conc 1, Conc 2, Imbued Mulch, launcher, session, and action bar behavior.
+- Updated README title/version only.
+
 v1.3.7 Session Tracking Repair and Package Validation
 
 - Restored proven session chat loot crediting behavior after reviewing the v1.3.6 cleanup pass.

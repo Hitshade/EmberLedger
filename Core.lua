@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.3.7"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.5.1"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -33,7 +33,7 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 10307
+EL.DB_VERSION = 10501
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -155,6 +155,7 @@ local defaults = {
             showProfession2Column = true,
             showConcentration2Column = true,
             showMulchColumn = true,
+            showForecastColumn = false,
             showCharacterRealm = true,
             attentionOnly = false,
             compactMode = false,
@@ -311,6 +312,7 @@ function EL:NormalizeDatabaseSettings()
     if settings.display.showProfession2Column == nil then settings.display.showProfession2Column = true end
     if settings.display.showConcentration2Column == nil then settings.display.showConcentration2Column = true end
     if settings.display.showMulchColumn == nil then settings.display.showMulchColumn = true end
+    if settings.display.showForecastColumn == nil then settings.display.showForecastColumn = false end
     if settings.display.showCharacterRealm == nil then settings.display.showCharacterRealm = true end
     if settings.display.attentionOnly == nil then settings.display.attentionOnly = false end
     if settings.display.compactMode == nil then settings.display.compactMode = false end
@@ -325,6 +327,7 @@ function EL:NormalizeDatabaseSettings()
     settings.display.showProfession2Column = settings.display.showProfession2Column ~= false
     settings.display.showConcentration2Column = settings.display.showConcentration2Column ~= false
     settings.display.showMulchColumn = settings.display.showMulchColumn ~= false
+    settings.display.showForecastColumn = settings.display.showForecastColumn == true
     settings.display.showCharacterRealm = settings.display.showCharacterRealm ~= false
     settings.display.attentionOnly = settings.display.attentionOnly == true
     settings.display.compactMode = settings.display.compactMode == true
@@ -332,7 +335,7 @@ function EL:NormalizeDatabaseSettings()
     settings.display.showFavoritesFirst = settings.display.showPinnedFirst
     settings.display.showProfessionColumn = settings.display.showProfession1Column
     settings.display.showConcentrationColumn = settings.display.showConcentration1Column
-    if settings.display.showProfession1Column == false and settings.display.showConcentration1Column == false and settings.display.showProfession2Column == false and settings.display.showConcentration2Column == false and settings.display.showMulchColumn == false then
+    if settings.display.showProfession1Column == false and settings.display.showConcentration1Column == false and settings.display.showProfession2Column == false and settings.display.showConcentration2Column == false and settings.display.showMulchColumn == false and settings.display.showForecastColumn == false then
         settings.display.showProfession1Column = true
         settings.display.showProfessionColumn = true
     end
@@ -1072,6 +1075,14 @@ function EL:GetDashboardSortValue(entry, key, now)
         local q = self:GetEstimatedConcentration(conc, now) or 0
         if q >= maxQ then return 0 end
         return math.ceil((maxQ - q) / self.CONCENTRATION_RATE_PER_HOUR * 3600)
+    elseif key == "forecast" then
+        local conc = self:GetBestConcentrationForCharacter(charKey, now)
+        if not conc then return nil end
+        local maxQ = tonumber(conc.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
+        local q = self:GetEstimatedConcentration(conc, now) or 0
+        local threshold = self.db and self.db.settings and self.db.settings.alerts and tonumber(self.db.settings.alerts.concentrationThreshold) or 360
+        if q >= threshold then return 0 end
+        return math.ceil((threshold - q) / self.CONCENTRATION_RATE_PER_HOUR * 3600)
     elseif key == "mulch" then
         return self:GetMulchSortValue(charKey, now)
     end
@@ -1202,6 +1213,24 @@ function EL:GetBestConcentrationForCharacter(charKey, now)
         end
     end
     return best
+end
+
+function EL:GetReadyConcentrationCountForCharacter(charKey, threshold, now)
+    if not charKey then return 0 end
+    threshold = tonumber(threshold) or (self.db and self.db.settings and self.db.settings.alerts and tonumber(self.db.settings.alerts.concentrationThreshold)) or 360
+    now = now or time()
+
+    local count = 0
+    for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
+        if data and data.charKey == charKey then
+            local qty = self:GetEstimatedConcentration(data, now) or 0
+            if qty >= threshold then
+                count = count + 1
+            end
+        end
+    end
+
+    return count
 end
 
 function EL:GetHighestConcentrationSummary()
@@ -1406,6 +1435,27 @@ function EL:GetEstimatedConcentration(data, now)
     if q >= maxQ then return maxQ end
     local gained = math.floor(math.max(0, now - last) * (self.CONCENTRATION_RATE_PER_HOUR / 3600))
     return math.min(maxQ, q + gained)
+end
+
+
+function EL:GetConcentrationForecastText(data, threshold, now)
+    if not data then return "N/A" end
+    now = now or time()
+    threshold = tonumber(threshold) or (self.db and self.db.settings and self.db.settings.alerts and tonumber(self.db.settings.alerts.concentrationThreshold)) or 360
+    local maxQ = tonumber(data.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
+    local q = self:GetEstimatedConcentration(data, now) or 0
+    local rate = tonumber(self.CONCENTRATION_RATE_PER_HOUR) or 10
+
+    if q >= maxQ then
+        return "Full"
+    end
+
+    if q >= threshold then
+        return "Ready"
+    end
+
+    local readySeconds = math.ceil((threshold - q) / rate * 3600)
+    return self:FormatDuration(readySeconds)
 end
 
 function EL:GetConcentrationFullIn(data, now)
