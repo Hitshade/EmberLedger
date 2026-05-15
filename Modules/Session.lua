@@ -134,6 +134,7 @@ end
 function EL:CountSessionItemsInBags()
     local counts = {}
     if self.IsSessionTrackingEnabled and not self:IsSessionTrackingEnabled() then return counts end
+    if not C_Container or not C_Container.GetContainerNumSlots or not C_Container.GetContainerItemInfo then return counts end
     local maxBag = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
     for bag = 0, maxBag do
         local slots = C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bag) or 0
@@ -240,8 +241,8 @@ end
 function M:ProcessChatLoot(msg)
     if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then return end
     if not msg then return end
-    local ok, itemLink = pcall(string.match, msg, "(|c%x+|Hitem:.-|h%[.-%]|h|r)")
-    if not ok or not itemLink then return end
+    local itemLink = string.match(msg, "(|c%x+|Hitem:.-|h%[.-%]|h|r)")
+    if not itemLink then return end
     local itemID = C_Item.GetItemInfoInstant(itemLink)
     if not itemID or not EL:IsSessionTrackedItem(itemID) then return end
     local quantity = tonumber(string.match(msg, "x(%d+)")) or 1
@@ -325,9 +326,22 @@ function M:OnEvent(event, ...)
     if event == "CHAT_MSG_LOOT" then
         self:ProcessChatLoot(...)
     elseif event == "BAG_UPDATE_DELAYED" then
-        C_Timer.After(0.2, function() self:ProcessBagDiff() end)
+        C_Timer.After(0.2, function()
+            if not EL or not EL.db then return end
+            self:ProcessBagDiff()
+        end)
     elseif event == "PLAYER_ENTERING_WORLD" then
-        C_Timer.After(1, function() EL:AutoStartSessionOnLogin(); self:Refresh(); EL:RequestUpdate(); if EL.Debug then EL:Debug("Session reset and bag baseline priming started.") end end)
-        C_Timer.After(5.5, function() self:PrimeBagBaseline(true); EL:RequestUpdate() end)
+        C_Timer.After(1, function()
+            if not EL or not EL.db then return end
+            EL:AutoStartSessionOnLogin()
+            self:Refresh()
+            EL:RequestUpdate()
+            if EL.Debug then EL:Debug("Session reset and bag baseline priming started.") end
+        end)
+        C_Timer.After(5.5, function()
+            if not EL or not EL.db then return end
+            self:PrimeBagBaseline(true)
+            EL:RequestUpdate()
+        end)
     end
 end

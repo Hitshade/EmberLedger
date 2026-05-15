@@ -60,16 +60,19 @@ end
 function M:OnEvent(event, ...)
     if event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_DATA_SOURCE_CHANGED" or event == "TRADE_SKILL_ITEM_CRAFTED_RESULT" then
         C_Timer.After(0.2, function()
+            if not EL or not EL.db then return end
             self:RecordFromTradeSkill()
             EL:RequestUpdate()
         end)
     elseif event == "CURRENCY_DISPLAY_UPDATE" then
         C_Timer.After(0.1, function()
+            if not EL or not EL.db then return end
             self:RefreshKnownCurrencies()
             EL:RequestUpdate()
         end)
     elseif event == "PLAYER_ENTERING_WORLD" then
         C_Timer.After(1, function()
+            if not EL or not EL.db then return end
             self:Refresh()
             EL:RequestUpdate()
         end)
