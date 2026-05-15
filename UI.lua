@@ -1140,7 +1140,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.5.1"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.5.4"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -1667,7 +1667,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.5.1"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.5.4"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -2852,7 +2852,7 @@ function EL:CreatePanel()
     panel.header.mulch:SetText("Mulch")
     for _, fs in pairs({panel.header.name, panel.header.prof1, panel.header.conc1, panel.header.prof2, panel.header.conc2, panel.header.forecast, panel.header.mulch}) do
         fs:SetTextColor(0.88, 0.84, 0.74)
-        fs:SetJustifyH("CENTER")
+        fs:SetJustifyH(fs == panel.header.name and "LEFT" or "CENTER")
         if fs.SetShadowColor then fs:SetShadowColor(0, 0, 0, 0.80) end
         if fs.SetShadowOffset then fs:SetShadowOffset(1, -1) end
     end
@@ -3048,7 +3048,11 @@ function EL:LayoutPanel()
             if fs then
                 fs:SetShown(visible[def.key] and true or false)
                 if visible[def.key] then
-                    AnchorColumnText(fs, p.header, cols[def.key .. "X"], cols[def.key .. "W"], "CENTER")
+                    if def.key == "character" then
+                        AnchorColumnText(fs, p.header, (cols[def.key .. "X"] or 0) + 8, math.max(1, (cols[def.key .. "W"] or 1) - 8), "LEFT")
+                    else
+                        AnchorColumnText(fs, p.header, cols[def.key .. "X"], cols[def.key .. "W"], "CENTER")
+                    end
                 end
             end
             if btn then
@@ -3105,10 +3109,34 @@ function EL:GetRow(i)
         row.bg = row:CreateTexture(nil, "BACKGROUND")
         row.bg:SetAllPoints()
         row.currentHighlight = row:CreateTexture(nil, "BORDER")
-        row.currentHighlight:SetPoint("TOPLEFT", row, "TOPLEFT", 3, -2)
-        row.currentHighlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -3, 2)
+        row.currentHighlight:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+        row.currentHighlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
         row.currentHighlight:SetColorTexture(1.00, 0.78, 0.24, 0.00)
         row.currentHighlight:Hide()
+        row.currentHighlightTop = row:CreateTexture(nil, "ARTWORK")
+        row.currentHighlightTop:SetHeight(1)
+        row.currentHighlightTop:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+        row.currentHighlightTop:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
+        row.currentHighlightTop:SetColorTexture(1.00, 0.84, 0.32, 0.00)
+        row.currentHighlightTop:Hide()
+        row.currentHighlightBottom = row:CreateTexture(nil, "ARTWORK")
+        row.currentHighlightBottom:SetHeight(1)
+        row.currentHighlightBottom:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+        row.currentHighlightBottom:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+        row.currentHighlightBottom:SetColorTexture(1.00, 0.84, 0.32, 0.00)
+        row.currentHighlightBottom:Hide()
+        row.currentHighlightLeft = row:CreateTexture(nil, "ARTWORK")
+        row.currentHighlightLeft:SetWidth(2)
+        row.currentHighlightLeft:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+        row.currentHighlightLeft:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+        row.currentHighlightLeft:SetColorTexture(1.00, 0.84, 0.32, 0.00)
+        row.currentHighlightLeft:Hide()
+        row.currentHighlightRight = row:CreateTexture(nil, "ARTWORK")
+        row.currentHighlightRight:SetWidth(2)
+        row.currentHighlightRight:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
+        row.currentHighlightRight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+        row.currentHighlightRight:SetColorTexture(1.00, 0.84, 0.32, 0.00)
+        row.currentHighlightRight:Hide()
         row.pinGlow = row:CreateTexture(nil, "BORDER")
         row.pinGlow:SetPoint("TOPLEFT", row, "TOPLEFT", 3, -2)
         row.pinGlow:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -3, 2)
@@ -3176,8 +3204,8 @@ function EL:GetRow(i)
             GameTooltip:Hide()
         end)
         row.hover = row:CreateTexture(nil, "HIGHLIGHT")
-        row.hover:SetPoint("TOPLEFT", row, "TOPLEFT", 3, -2)
-        row.hover:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -3, 2)
+        row.hover:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+        row.hover:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
         row.hover:SetColorTexture(1.00, 0.82, 0.24, PIN_HOVER_ALPHA)
         row.hover:Hide()
         p.rows[i] = row
@@ -3343,7 +3371,15 @@ function EL:RefreshPanel()
         row.isCurrentCharacter = isCurrentCharacter and true or false
         if row.currentHighlight then
             row.currentHighlight:SetShown(isCurrentCharacter and true or false)
-            if isCurrentCharacter then row.currentHighlight:SetColorTexture(1.00, 0.78, 0.24, IsCompactModeEnabled() and 0.09 or 0.11) end
+            if isCurrentCharacter then
+                row.currentHighlight:SetColorTexture(1.00, 0.78, 0.24, IsCompactModeEnabled() and 0.13 or 0.16)
+            end
+        end
+        for _, line in ipairs({ row.currentHighlightTop, row.currentHighlightBottom, row.currentHighlightLeft, row.currentHighlightRight }) do
+            if line then
+                line:SetShown(isCurrentCharacter and true or false)
+                if isCurrentCharacter then line:SetColorTexture(1.00, 0.84, 0.32, 0.42) end
+            end
         end
         row.name:SetShadowColor(0.00, 0.00, 0.00, 0.85)
         row.name:SetShadowOffset(1, -1)

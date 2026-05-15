@@ -1,3 +1,19 @@
+v1.5.4 Branding Cleanup
+- Replaced public-facing author references with Hitshade.
+- Updated addon metadata/author branding where applicable.
+- Preserved existing addon behavior and documentation structure.
+
+v1.5.3 Current Character Highlight Polish
+- Adjusted the current-character highlight to frame the full table row area instead of sitting narrowly inside the row.
+- Expanded the active-row border and fill to better match the darker row background boundaries.
+- Kept the Character header left-aligned from the previous polish pass.
+- Preserved existing tracking, sorting, launcher, and session behavior.
+
+v1.5.2 Table Highlight Polish
+- Left-aligned the Character table header for a cleaner visual match with character names.
+- Improved the current-character row highlight so it is more visible and fits cleanly inside row boundaries.
+- Preserved existing sorting, tracking, launcher, and session behavior.
+
 v1.5.1 Launcher Visual Polish
 - Refined the launcher into a smaller dashboard-style display.
 - Reduced title prominence and removed redundant launcher labels.
