@@ -81,7 +81,7 @@ function M:OnLoad()
 end
 
 function M:OnEvent(event, ...)
-    if event == "PLAYER_ENTERING_WORLD" or event == "BAG_UPDATE_DELAYED" or event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_ITEM_CRAFTED_RESULT" then
+    if event == "BAG_UPDATE_DELAYED" or event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_ITEM_CRAFTED_RESULT" then
         C_Timer.After(0.5, function()
             if not EL or not EL.db then return end
             self:Refresh()

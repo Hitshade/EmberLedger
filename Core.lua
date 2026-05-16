@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.9.3"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.10.2"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -47,7 +47,7 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 10903
+EL.DB_VERSION = 11000
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -114,7 +114,6 @@ local defaults = {
             height = 360,
             scale = 1,
             charactersCollapsed = false,
-            sessionCollapsed = false,
             charactersShown = true,
             actionButtons = {
                 mulch = true,
@@ -140,7 +139,6 @@ local defaults = {
             width = 352,
             height = 180,
             scale = 1,
-            collapsed = false,
             pricingSource = "Auctionator",
             topItems = 50,
             trackHerbs = true,
@@ -153,8 +151,9 @@ local defaults = {
             trackRawGoldGains = true,
             trackGoldSpent = false,
             sessionHistoryEnabled = true,
-            historyRetentionDays = 90,
+            historyRetentionDays = 30,
             historyDisplayDays = 30,
+            historyDisplayMode = "30",
         },
         alerts = {
             concentrationThreshold = 360,
@@ -181,6 +180,7 @@ local defaults = {
             showCharacterRealm = true,
             attentionOnly = false,
             compactMode = false,
+            showCurrentCharacterFirst = false,
             showPinnedFirst = true,
             highlightCurrentCharacter = true,
             showFavoritesFirst = true, -- legacy saved key retained for compatibility
@@ -188,6 +188,10 @@ local defaults = {
         performance = {
             sessionTracking = true,
             actionBar = true,
+        },
+        minimap = {
+            hide = false,
+            minimapPos = 220,
         },
         hiddenCharacters = {},
         favoriteCharacters = {},
@@ -226,10 +230,10 @@ local function RemoveLegacySavedVariableFields(db)
         end
         if type(db.settings.panel) == "table" then
             db.settings.panel.detached = nil
-            if type(db.settings.session) == "table" and db.settings.session.collapsed == nil then
-                db.settings.session.collapsed = db.settings.panel.sessionCollapsed and true or false
-            end
             db.settings.panel.sessionCollapsed = nil
+        end
+        if type(db.settings.session) == "table" then
+            db.settings.session.collapsed = nil
         end
     end
 
@@ -300,6 +304,7 @@ function EL:NormalizeDatabaseSettings()
     settings.panel = settings.panel or {}
     settings.session = settings.session or {}
     settings.button = settings.button or {}
+    settings.minimap = type(settings.minimap) == "table" and settings.minimap or {}
     settings.hiddenCharacters = settings.hiddenCharacters or {}
     settings.favoriteCharacters = settings.favoriteCharacters or {}
     settings.options = type(settings.options) == "table" and settings.options or {}
@@ -343,6 +348,7 @@ function EL:NormalizeDatabaseSettings()
     if settings.display.showCharacterRealm == nil then settings.display.showCharacterRealm = true end
     if settings.display.attentionOnly == nil then settings.display.attentionOnly = false end
     if settings.display.compactMode == nil then settings.display.compactMode = false end
+    if settings.display.showCurrentCharacterFirst == nil then settings.display.showCurrentCharacterFirst = false end
     if settings.display.showPinnedFirst == nil then
         settings.display.showPinnedFirst = settings.display.showFavoritesFirst
         if settings.display.showPinnedFirst == nil then settings.display.showPinnedFirst = true end
@@ -359,6 +365,7 @@ function EL:NormalizeDatabaseSettings()
     settings.display.showCharacterRealm = settings.display.showCharacterRealm ~= false
     settings.display.attentionOnly = settings.display.attentionOnly == true
     settings.display.compactMode = settings.display.compactMode == true
+    settings.display.showCurrentCharacterFirst = settings.display.showCurrentCharacterFirst == true
     settings.display.showPinnedFirst = settings.display.showPinnedFirst ~= false
     settings.display.showFavoritesFirst = settings.display.showPinnedFirst
     settings.display.showProfessionColumn = settings.display.showProfession1Column
@@ -377,6 +384,9 @@ function EL:NormalizeDatabaseSettings()
     settings.panel.scale = ClampNumber(settings.panel.scale, minScale, maxScale, 1)
     settings.session.scale = ClampNumber(settings.session.scale, minScale, maxScale, 1)
 
+    settings.minimap.hide = settings.minimap.hide == true
+    settings.minimap.minimapPos = ClampNumber(settings.minimap.minimapPos, 0, 360, 220)
+
     settings.panel.width = math.floor(ClampNumber(settings.panel.width, ui.TRACKING_DYNAMIC_MIN_W or ui.PANEL_MIN_W or 352, ui.PANEL_MAX_W or 900, 352))
     settings.panel.height = math.floor(ClampNumber(settings.panel.height, ui.PANEL_MIN_H or 120, ui.PANEL_MAX_H or 720, 360))
     settings.session.width = math.floor(ClampNumber(settings.session.width, ui.SESSION_MIN_W or 320, ui.PANEL_MAX_W or 900, ui.SESSION_MIN_W or 320))
@@ -394,9 +404,13 @@ function EL:NormalizeDatabaseSettings()
     normalizeBool(settings.session, "trackFish", true)
     normalizeBool(settings.session, "trackOtherMaterials", true)
     normalizeBool(settings.session, "sessionHistoryEnabled", true)
-    settings.session.historyRetentionDays = 90
+    settings.session.historyRetentionDays = 30
+    if settings.session.historyDisplayMode ~= "week" and settings.session.historyDisplayMode ~= "30" then
+        settings.session.historyDisplayMode = (tonumber(settings.session.historyDisplayDays) == 7) and "week" or "30"
+    end
+    settings.session.historyDisplayDays = settings.session.historyDisplayMode == "week" and 7 or 30
 
-    settings.session.collapsed = false
+    settings.session.collapsed = nil
     settings.panel.sessionCollapsed = nil
 end
 
@@ -458,7 +472,7 @@ function EL:EnsureDB()
         self.db.settings.panel = self.db.settings.panel or {}
         self.db.settings.session = self.db.settings.session or {}
         self.db.settings.panel.charactersCollapsed = false
-        self.db.settings.session.collapsed = false
+        self.db.settings.session.collapsed = nil
         self.db.uiRefactorVersion = 820
     end
 
@@ -555,6 +569,7 @@ function EL:GetCurrentCharacter()
     c.displayName = name .. "-" .. realm
     c.class = classFile or c.class
     c.lastSeen = time()
+    self.currentCharKey = key
     return key, c
 end
 
@@ -731,13 +746,14 @@ function EL:GetProfessionEntriesForCharacter(charKey)
     return self:GetConcentrationEntriesForCharacter(charKey)
 end
 
-function EL:GetConcentrationEntryForProfession(charKey, professionData)
+function EL:GetConcentrationEntryForProfession(charKey, professionData, concentrationEntries)
     if not charKey or type(professionData) ~= "table" then return nil end
     local targetID = tonumber(professionData.professionID or professionData.skillLineID or professionData.skillLine)
     local targetName = self:GetCleanProfessionName(professionData.professionName):lower()
     local fallback
+    local source = concentrationEntries or (self.db and self.db.resources and self.db.resources.concentration) or {}
 
-    for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
+    for _, data in pairs(source) do
         if data and data.charKey == charKey then
             local dataID = tonumber(data.professionID or data.skillLineID or data.skillLine)
             if targetID and dataID and targetID == dataID then
@@ -753,13 +769,13 @@ function EL:GetConcentrationEntryForProfession(charKey, professionData)
     return fallback
 end
 
-function EL:GetDashboardProfessionSlots(charKey)
+function EL:GetDashboardProfessionSlots(charKey, professionEntries, concentrationEntries)
     local slots = {}
-    local professions = self:GetProfessionEntriesForCharacter(charKey)
+    local professions = professionEntries or self:GetProfessionEntriesForCharacter(charKey)
     local matchedConc = {}
 
     for _, profData in ipairs(professions or {}) do
-        local concData = self:GetConcentrationEntryForProfession(charKey, profData)
+        local concData = self:GetConcentrationEntryForProfession(charKey, profData, concentrationEntries)
         if concData then matchedConc[concData] = true end
         table.insert(slots, { prof = profData, conc = concData })
     end
@@ -767,7 +783,7 @@ function EL:GetDashboardProfessionSlots(charKey)
     -- If profession identity is incomplete but concentration exists, keep the old
     -- concentration-only fallback so older character records still display.
     if #slots == 0 then
-        for _, concData in ipairs(self:GetConcentrationEntriesForCharacter(charKey) or {}) do
+        for _, concData in ipairs(concentrationEntries or self:GetConcentrationEntriesForCharacter(charKey) or {}) do
             table.insert(slots, { prof = concData, conc = concData })
         end
     end
@@ -819,10 +835,10 @@ function EL:GetMoxieEntryForProfession(charKey, professionData)
     return characterMoxie[professionID] or characterMoxie[tostring(professionID)]
 end
 
-function EL:GetMoxieEntriesForCharacter(charKey)
+function EL:GetMoxieEntriesForCharacter(charKey, professionEntries)
     local list = {}
     if not charKey then return list end
-    for _, prof in ipairs(self:GetProfessionEntriesForCharacter(charKey) or {}) do
+    for _, prof in ipairs(professionEntries or self:GetProfessionEntriesForCharacter(charKey) or {}) do
         local entry = self:GetMoxieEntryForProfession(charKey, prof)
         if entry and type(entry.quantity) == "number" then
             list[#list + 1] = entry
@@ -831,9 +847,9 @@ function EL:GetMoxieEntriesForCharacter(charKey)
     return list
 end
 
-function EL:GetMoxieDisplayText(charKey)
+function EL:GetMoxieDisplayText(charKey, professionEntries)
     local values = {}
-    for _, prof in ipairs(self:GetProfessionEntriesForCharacter(charKey) or {}) do
+    for _, prof in ipairs(professionEntries or self:GetProfessionEntriesForCharacter(charKey) or {}) do
         local currencyID = self:GetMoxieCurrencyIDForProfession(prof)
         if currencyID then
             local entry = self:GetMoxieEntryForProfession(charKey, prof)
@@ -852,9 +868,9 @@ function EL:GetMoxieThreshold()
     return math.max(0, math.min(1000, math.floor((threshold or 600) + 0.5)))
 end
 
-function EL:HasMoxieAtThreshold(charKey)
+function EL:HasMoxieAtThreshold(charKey, moxieEntries)
     local threshold = self:GetMoxieThreshold()
-    for _, entry in ipairs(self:GetMoxieEntriesForCharacter(charKey) or {}) do
+    for _, entry in ipairs(moxieEntries or self:GetMoxieEntriesForCharacter(charKey) or {}) do
         if type(entry.quantity) == "number" and entry.quantity >= threshold then
             return true
         end
@@ -862,9 +878,9 @@ function EL:HasMoxieAtThreshold(charKey)
     return false
 end
 
-function EL:GetMoxieSortValue(charKey)
+function EL:GetMoxieSortValue(charKey, moxieEntries)
     local total, found = 0, false
-    for _, entry in ipairs(self:GetMoxieEntriesForCharacter(charKey) or {}) do
+    for _, entry in ipairs(moxieEntries or self:GetMoxieEntriesForCharacter(charKey) or {}) do
         if type(entry.quantity) == "number" then
             total = total + entry.quantity
             found = true
@@ -880,10 +896,13 @@ local EXPANSION_PREFIXES = {
     "Battle for Azeroth", "Legion", "Warlords", "Pandaria",
     "Cataclysm", "Northrend", "Outland", "Classic",
 }
+local cleanProfessionNameCache = {}
 
 function EL:GetCleanProfessionName(name)
     name = tostring(name or "")
     if name == "" then return "Profession" end
+    local cached = cleanProfessionNameCache[name]
+    if cached then return cached end
     local clean = name
     -- Store the full profession name internally, but keep the UI expansion-neutral.
     for _, prefix in ipairs(EXPANSION_PREFIXES) do
@@ -891,6 +910,7 @@ function EL:GetCleanProfessionName(name)
     end
     clean = clean:gsub("^%s+", ""):gsub("%s+$", "")
     if clean == "" then clean = name end
+    cleanProfessionNameCache[name] = clean
     return clean
 end
 
@@ -1176,7 +1196,7 @@ function EL:GetMulchSortValue(charKey, now)
     return math.max(0, (tonumber(data.readyAt) or 0) - (now or time()))
 end
 
-function EL:GetDashboardSortValue(entry, key, now)
+function EL:GetDashboardSortValue(entry, key, now, cache)
     if not entry then return nil end
     now = now or time()
     local charKey, char = entry.key, entry.char
@@ -1184,26 +1204,30 @@ function EL:GetDashboardSortValue(entry, key, now)
     if key == "character" then
         return tostring(self:GetCharacterDisplayName(char, charKey)):lower()
     elseif key == "prof" or key == "prof1" then
-        local prof = self:GetDashboardProfessionData(charKey, 1)
+        local slot = cache and cache.slots and cache.slots[1]
+        local prof = slot and slot.prof or self:GetDashboardProfessionData(charKey, 1)
         return prof and self:GetProfessionAbbreviation(prof):lower() or nil
     elseif key == "conc" or key == "conc1" then
-        local _, conc = self:GetDashboardProfessionData(charKey, 1)
+        local slot = cache and cache.slots and cache.slots[1]
+        local conc = slot and slot.conc or select(2, self:GetDashboardProfessionData(charKey, 1))
         return conc and (self:GetEstimatedConcentration(conc, now) or 0) or nil
     elseif key == "prof2" then
-        local prof = self:GetDashboardProfessionData(charKey, 2)
+        local slot = cache and cache.slots and cache.slots[2]
+        local prof = slot and slot.prof or self:GetDashboardProfessionData(charKey, 2)
         return prof and self:GetProfessionAbbreviation(prof):lower() or nil
     elseif key == "conc2" then
-        local _, conc = self:GetDashboardProfessionData(charKey, 2)
+        local slot = cache and cache.slots and cache.slots[2]
+        local conc = slot and slot.conc or select(2, self:GetDashboardProfessionData(charKey, 2))
         return conc and (self:GetEstimatedConcentration(conc, now) or 0) or nil
     elseif key == "full" then
-        local conc = self:GetBestConcentrationForCharacter(charKey, now)
+        local conc = cache and cache.bestConc or self:GetBestConcentrationForCharacter(charKey, now)
         if not conc then return nil end
         local maxQ = tonumber(conc.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
         local q = self:GetEstimatedConcentration(conc, now) or 0
         if q >= maxQ then return 0 end
         return math.ceil((maxQ - q) / self.CONCENTRATION_RATE_PER_HOUR * 3600)
     elseif key == "forecast" then
-        local conc = self:GetBestConcentrationForCharacter(charKey, now)
+        local conc = cache and cache.bestConc or self:GetBestConcentrationForCharacter(charKey, now)
         if not conc then return nil end
         local maxQ = tonumber(conc.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
         local q = self:GetEstimatedConcentration(conc, now) or 0
@@ -1211,14 +1235,14 @@ function EL:GetDashboardSortValue(entry, key, now)
         if q >= threshold then return 0 end
         return math.ceil((threshold - q) / self.CONCENTRATION_RATE_PER_HOUR * 3600)
     elseif key == "moxie" then
-        return self:GetMoxieSortValue(charKey)
+        return self:GetMoxieSortValue(charKey, cache and cache.moxieEntries)
     elseif key == "mulch" then
         return self:GetMulchSortValue(charKey, now)
     end
     return tostring(self:GetCharacterDisplayName(char, charKey)):lower()
 end
 
-function EL:SortDashboardRows(rows)
+function EL:SortDashboardRows(rows, dashboardLookups)
     if type(rows) ~= "table" then return end
 
     local sort = self:GetSortSettings()
@@ -1233,6 +1257,37 @@ function EL:SortDashboardRows(rows)
     local ascending = sort.ascending ~= false
     local now = time()
     local clean = {}
+    local sortCache = {}
+    local concentrationLookup = dashboardLookups and dashboardLookups.concentrationLookup
+    local professionLookup = dashboardLookups and dashboardLookups.professionLookup
+
+    local function getSortCache(charKey)
+        if not charKey then return nil end
+        local cached = sortCache[charKey]
+        if cached then return cached end
+        local concLookup = concentrationLookup and concentrationLookup[charKey]
+        local concEntries = concLookup and concLookup.entries or self:GetConcentrationEntriesForCharacter(charKey)
+        local profEntries = professionLookup and professionLookup[charKey] or self:GetProfessionEntriesForCharacter(charKey)
+        if (not profEntries or #profEntries == 0) and concEntries then
+            profEntries = concEntries
+        end
+        local slots = self:GetDashboardProfessionSlots(charKey, profEntries, concEntries)
+        local moxieEntries = self:GetMoxieEntriesForCharacter(charKey, profEntries)
+        local bestConc = concLookup and concLookup.best or nil
+        if not bestConc then
+            local bestQty
+            for _, conc in ipairs(concEntries or {}) do
+                local qty = self:GetEstimatedConcentration(conc, now) or 0
+                if not bestConc or qty > (bestQty or -1) then
+                    bestConc = conc
+                    bestQty = qty
+                end
+            end
+        end
+        cached = { concEntries = concEntries, profEntries = profEntries, slots = slots, moxieEntries = moxieEntries, bestConc = bestConc }
+        sortCache[charKey] = cached
+        return cached
+    end
 
     local function isBadNumber(v)
         return type(v) == "number" and v ~= v
@@ -1250,7 +1305,7 @@ function EL:SortDashboardRows(rows)
 
     for i, entry in ipairs(rows) do
         if type(entry) == "table" and entry.key then
-            local rawValue = self:GetDashboardSortValue(entry, key, now)
+            local rawValue = self:GetDashboardSortValue(entry, key, now, getSortCache(entry.key))
             local valueType, value = normalizeSortValue(rawValue)
             table.insert(clean, {
                 row = entry,
@@ -1260,7 +1315,20 @@ function EL:SortDashboardRows(rows)
                 name = tostring(self:GetCharacterDisplayName(entry.char, entry.key)):lower(),
                 key = tostring(entry.key or ""),
                 pinned = self:IsCharacterPinned(entry.key),
+                current = false,
             })
+        end
+    end
+
+    local display = self.db and self.db.settings and self.db.settings.display or {}
+    local showCurrentCharacterFirst = display.showCurrentCharacterFirst == true
+    local currentCharKey = nil
+    if showCurrentCharacterFirst then
+        currentCharKey = self.currentCharKey or (self.GetCharacterKey and self:GetCharacterKey())
+    end
+    if showCurrentCharacterFirst and currentCharKey then
+        for _, wrapped in ipairs(clean) do
+            wrapped.current = wrapped.key == tostring(currentCharKey)
         end
     end
 
@@ -1270,7 +1338,11 @@ function EL:SortDashboardRows(rows)
         if not a then return false end
         if not b then return true end
 
-        local showPinnedFirst = self.db and self.db.settings and self.db.settings.display and self.db.settings.display.showPinnedFirst ~= false
+        if showCurrentCharacterFirst and a.current ~= b.current then
+            return a.current == true
+        end
+
+        local showPinnedFirst = display.showPinnedFirst ~= false
         if showPinnedFirst and a.pinned ~= b.pinned then
             return a.pinned == true
         end
@@ -1612,6 +1684,19 @@ function EL:CopperToSilver(copper)
     return math.floor((copper + 50) / 100)
 end
 
+local MONEY_GOLD_ICON = "|TInterface\\MoneyFrame\\UI-GoldIcon:10:10:1:0|t"
+local MONEY_SILVER_ICON = "|TInterface\\MoneyFrame\\UI-SilverIcon:10:10:1:0|t"
+
+local function FormatNumberWithCommas(value)
+    local formatted = tostring(math.floor(tonumber(value) or 0))
+    while true do
+        local nextValue, changed = formatted:gsub("^(%-?%d+)(%d%d%d)", "%1,%2")
+        formatted = nextValue
+        if changed == 0 then break end
+    end
+    return formatted
+end
+
 function EL:FormatMoneyText(silver)
     silver = math.floor(tonumber(silver) or 0)
     local negative = silver < 0
@@ -1619,10 +1704,34 @@ function EL:FormatMoneyText(silver)
     local gold = math.floor(silver / 100)
     local sil = silver % 100
     local prefix = negative and "-" or ""
-    if gold >= 1000 then
-        return string.format("%s%.1fk", prefix, gold / 1000)
+    if sil == 0 then
+        return string.format("%s%s %s", prefix, FormatNumberWithCommas(gold), MONEY_GOLD_ICON)
     end
-    return string.format("%s%dg %02ds", prefix, gold, sil)
+    if gold == 0 and negative then
+        -- Avoid showing "-0 [gold]" for sub-1g negative amounts.
+        return string.format("-%02d %s", sil, MONEY_SILVER_ICON)
+    end
+    return string.format("%s%s %s %02d %s", prefix, FormatNumberWithCommas(gold), MONEY_GOLD_ICON, sil, MONEY_SILVER_ICON)
+end
+
+function EL:FormatMoneyRateText(silver)
+    silver = math.floor(tonumber(silver) or 0)
+    local negative = silver < 0
+    silver = math.abs(silver)
+    local gold = silver / 100
+    local prefix = negative and "-" or ""
+
+    if gold >= 1000000 then
+        return string.format("%s%.1fm", prefix, gold / 1000000):gsub("%.0m$", "m")
+    elseif gold >= 1000 then
+        return string.format("%s%.1fk", prefix, gold / 1000):gsub("%.0k$", "k")
+    elseif gold >= 100 then
+        return string.format("%s%d", prefix, math.floor(gold + 0.5))
+    elseif gold >= 10 then
+        return string.format("%s%.1f", prefix, gold):gsub("%.0$", "")
+    else
+        return string.format("%s%.2f", prefix, gold):gsub("0$", ""):gsub("%.$", "")
+    end
 end
 
 function EL:IsAddOnLoaded(name)
@@ -1912,42 +2021,83 @@ function EL:ToggleSessionHistoryEnabled()
 end
 
 function EL:GetSessionHistoryRetentionDays()
-    return 90
+    -- Retention is intentionally fixed at 30 days to keep SavedVariables small.
+    -- Longer-term summaries may be added later through compact aggregates.
+    return 30
 end
 
 function EL:SetSessionHistoryRetentionDays(days)
+    -- Deprecated compatibility shim. Older builds exposed retention choices,
+    -- but current EmberLedger keeps retention fixed at 30 days.
     self.db.settings.session = self.db.settings.session or {}
-    self.db.settings.session.historyRetentionDays = 90
+    self.db.settings.session.historyRetentionDays = 30
     if self.PruneSessionHistory then self:PruneSessionHistory() end
-    if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
-    if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
 end
 
 function EL:CycleSessionHistoryRetentionDays()
-    self:SetSessionHistoryRetentionDays(90)
+    -- Deprecated compatibility shim for old bindings or slash usage.
+    self:SetSessionHistoryRetentionDays(30)
+end
+
+function EL:GetSessionHistoryDisplayMode()
+    local session = self.db and self.db.settings and self.db.settings.session or {}
+    local mode = tostring(session.historyDisplayMode or "")
+    if mode == "week" or mode == "30" then return mode end
+
+    -- Compatibility: older builds stored a numeric display window. Treat the old
+    -- 7-day view as the new WoW-native current-week view.
+    local days = tonumber(session.historyDisplayDays) or 30
+    if days == 7 then return "week" end
+    return "30"
 end
 
 function EL:GetSessionHistoryDisplayDays()
-    local session = self.db and self.db.settings and self.db.settings.session or {}
-    local days = tonumber(session.historyDisplayDays) or 30
-    if days ~= 7 and days ~= 30 and days ~= 60 and days ~= 90 then days = 30 end
-    return days
+    -- Compatibility accessor for older UI/call sites. The current-week mode is
+    -- not a rolling 7-day window, but 7 remains its nearest legacy equivalent.
+    return self:GetSessionHistoryDisplayMode() == "week" and 7 or 30
+end
+
+function EL:GetWeeklyResetStartTime(now)
+    now = tonumber(now) or time()
+
+    -- Prefer Blizzard's region-aware weekly reset timer when available.
+    if C_DateAndTime and C_DateAndTime.GetSecondsUntilWeeklyReset then
+        local ok, secondsUntilReset = pcall(C_DateAndTime.GetSecondsUntilWeeklyReset)
+        secondsUntilReset = tonumber(secondsUntilReset)
+        if ok and secondsUntilReset and secondsUntilReset > 0 and secondsUntilReset <= ((7 * 86400) + 7200) then
+            return (now + secondsUntilReset) - (7 * 86400)
+        end
+    end
+
+    -- Safe fallback: local Tuesday 8:00 AM. This is only used if Blizzard's
+    -- reset timer API is unavailable, and keeps the view predictable.
+    local t = date("*t", now)
+    local daysSinceTuesday = (tonumber(t.wday) or 3) - 3
+    if daysSinceTuesday < 0 then daysSinceTuesday = daysSinceTuesday + 7 end
+    local todayMidnight = time({ year = t.year, month = t.month, day = t.day, hour = 0, min = 0, sec = 0, isdst = t.isdst })
+    local resetTime = todayMidnight - (daysSinceTuesday * 86400) + (8 * 3600)
+    if now < resetTime then resetTime = resetTime - (7 * 86400) end
+    return resetTime
+end
+
+function EL:SetSessionHistoryDisplayMode(mode)
+    self.db.settings.session = self.db.settings.session or {}
+    mode = tostring(mode or "30")
+    if mode ~= "week" and mode ~= "30" then mode = "30" end
+    self.db.settings.session.historyDisplayMode = mode
+    self.db.settings.session.historyDisplayDays = (mode == "week") and 7 or 30
+    if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
+    self:Print("Session history display: " .. (mode == "week" and "This Week" or "30 days") .. ".")
 end
 
 function EL:SetSessionHistoryDisplayDays(days)
-    self.db.settings.session = self.db.settings.session or {}
     days = tonumber(days) or 30
-    if days ~= 7 and days ~= 30 and days ~= 60 and days ~= 90 then days = 30 end
-    self.db.settings.session.historyDisplayDays = days
-    if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
-    self:Print("Session history display: " .. tostring(days) .. " days.")
+    self:SetSessionHistoryDisplayMode(days == 7 and "week" or "30")
 end
 
 function EL:CycleSessionHistoryDisplayDays()
-    local current = self:GetSessionHistoryDisplayDays()
-    local nextValue = 30
-    if current == 7 then nextValue = 30 elseif current == 30 then nextValue = 60 elseif current == 60 then nextValue = 90 else nextValue = 7 end
-    self:SetSessionHistoryDisplayDays(nextValue)
+    local current = self:GetSessionHistoryDisplayMode()
+    self:SetSessionHistoryDisplayMode(current == "week" and "30" or "week")
 end
 
 function EL:PruneSessionHistory()
@@ -1968,8 +2118,9 @@ end
 function EL:GetSessionHistoryList()
     if not self.db then return {} end
     self:PruneSessionHistory()
-    local displayDays = self.GetSessionHistoryDisplayDays and self:GetSessionHistoryDisplayDays() or self:GetSessionHistoryRetentionDays()
-    local cutoff = time() - ((tonumber(displayDays) or 30) * 86400)
+    local mode = self.GetSessionHistoryDisplayMode and self:GetSessionHistoryDisplayMode() or "30"
+    local now = time()
+    local cutoff = (mode == "week" and self.GetWeeklyResetStartTime and self:GetWeeklyResetStartTime(now)) or (now - (30 * 86400))
     local visible = {}
     for _, entry in ipairs(self.db.sessionHistory or {}) do
         if type(entry) == "table" and (tonumber(entry.timestamp) or 0) >= cutoff then
@@ -1989,12 +2140,19 @@ end
 function EL:SaveCurrentSessionHistory(reason)
     if not self.db then return false end
     if not self:IsSessionHistoryEnabled() then return false end
-    local retention = self:GetSessionHistoryRetentionDays()
     local s = self:GetSessionDB()
     local elapsed = self:GetSessionElapsedSeconds()
     local total = tonumber(s.totalSilver) or 0
     local itemValue = total - (tonumber(s.rawGoldGainedSilver) or 0) + (tonumber(s.goldSpentSilver) or 0)
-    local meaningful = elapsed >= 60 or total ~= 0 or (tonumber(s.rawGoldGainedSilver) or 0) ~= 0 or (tonumber(s.goldSpentSilver) or 0) ~= 0 or itemValue ~= 0
+    local trackedItemQty = 0
+    for _, item in pairs(s.items or {}) do
+        if type(item) == "table" then
+            trackedItemQty = trackedItemQty + (tonumber(item.qty) or 0)
+        end
+    end
+    -- Do not save empty login/logout sessions. History is for useful session summaries,
+    -- not passive character hops with no tracked gold or profession materials.
+    local meaningful = total ~= 0 or (tonumber(s.rawGoldGainedSilver) or 0) ~= 0 or (tonumber(s.goldSpentSilver) or 0) ~= 0 or itemValue ~= 0 or trackedItemQty > 0
     if not meaningful then return false end
 
     local _, current = self:GetCurrentCharacter()
@@ -2046,7 +2204,7 @@ function EL:BuildSessionSummaryText()
     table.insert(lines, "EmberLedger Session")
     table.insert(lines, "Time: " .. self:FormatDuration(self:GetSessionElapsedSeconds()))
     table.insert(lines, "Total: " .. self:FormatMoneyText(s.totalSilver or 0))
-    table.insert(lines, "Rate: " .. self:FormatMoneyText(self:GetSessionGoldPerHour()) .. "/hr")
+    table.insert(lines, "Rate: " .. self:FormatMoneyRateText(self:GetSessionGoldPerHour()) .. "/hr")
     table.insert(lines, "Pricing: " .. (self.GetActivePricingSourceLabel and self:GetActivePricingSourceLabel() or "Unknown"))
     table.insert(lines, "")
     table.insert(lines, "Recent Loot:")
@@ -2284,10 +2442,21 @@ EL.frame:SetScript("OnEvent", function(_, event, ...)
     elseif event == "PLAYER_LOGOUT" then
         if EL.SaveCurrentSessionHistory then EL:SaveCurrentSessionHistory("logout") end
     else
-        if event == "PLAYER_ENTERING_WORLD" or event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_DATA_SOURCE_CHANGED" or event == "SKILL_LINES_CHANGED" then
-            local delay = (event == "PLAYER_ENTERING_WORLD") and 1 or 0.2
+        if event == "PLAYER_ENTERING_WORLD" then
             if C_Timer and C_Timer.After then
-                C_Timer.After(delay, function()
+                C_Timer.After(1, function()
+                    if not EL or not EL.db then return end
+                    if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
+                    if EL.ForEachModule then EL:ForEachModule("Refresh") end
+                    if EL.RequestUpdate then EL:RequestUpdate() end
+                end)
+            else
+                if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
+                if EL.ForEachModule then EL:ForEachModule("Refresh") end
+            end
+        elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_DATA_SOURCE_CHANGED" or event == "SKILL_LINES_CHANGED" then
+            if C_Timer and C_Timer.After then
+                C_Timer.After(0.2, function()
                     if not EL or not EL.db then return end
                     if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
                     if EL.RequestUpdate then EL:RequestUpdate() end
@@ -2298,6 +2467,9 @@ EL.frame:SetScript("OnEvent", function(_, event, ...)
         elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" or event == "SPELLS_CHANGED" or event == "BAG_UPDATE_DELAYED" then
             if EL.ShouldRefreshActionBar and EL:ShouldRefreshActionBar() and EL.RequestActionBarRefresh then EL:RequestActionBarRefresh() end
         end
+        -- Module handlers intentionally run after the core event branch. Some
+        -- events update shared identity/UI state here and then allow modules to
+        -- refresh their own cached resources.
         for _, module in pairs(EL.modules) do
             if module and module.OnEvent then
                 pcall(module.OnEvent, module, event, ...)

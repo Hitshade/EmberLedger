@@ -7,6 +7,8 @@ local EXCLUDED_ITEM_IDS = {
 }
 
 local EXCLUDED_NAME_PATTERNS = {
+    -- Exclude vial-like trade goods that can look like materials but should not
+    -- be counted as gathered profession-session items.
     "vial",
 }
 
@@ -386,11 +388,8 @@ function M:OnEvent(event, ...)
     elseif event == "PLAYER_ENTERING_WORLD" then
         C_Timer.After(1, function()
             if not EL or not EL.db then return end
-            EL:AutoStartSessionOnLogin()
             if EL.SyncSessionMoneyBaseline then EL:SyncSessionMoneyBaseline() end
-            self:Refresh()
-            EL:RequestUpdate()
-            if EL.Debug then EL:Debug("Session reset and bag baseline priming started.") end
+            if EL.Debug then EL:Debug("Session money baseline synced and bag baseline priming started.") end
         end)
         C_Timer.After(5.5, function()
             if not EL or not EL.db then return end
