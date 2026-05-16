@@ -37,6 +37,28 @@ local ROW_STRIPE_ALPHA = 0.32
 local ROW_STRIPE_ALPHA_COMPACT = 0.28
 local ROW_SEPARATOR_ALPHA = 0.14
 
+local function UpdateTickerShouldRun()
+    return not EL.HasVisibleUpdateConsumers or EL:HasVisibleUpdateConsumers()
+end
+
+function EL:RefreshUpdateTicker()
+    if not C_Timer or not C_Timer.NewTicker then return end
+    if UpdateTickerShouldRun() then
+        if not ticker then
+            ticker = C_Timer.NewTicker(1, function()
+                if UpdateTickerShouldRun() then
+                    EL:RequestUpdate()
+                elseif EL.RefreshUpdateTicker then
+                    EL:RefreshUpdateTicker()
+                end
+            end)
+        end
+    elseif ticker then
+        ticker:Cancel()
+        ticker = nil
+    end
+end
+
 local function SortDashboardConcentrationEntries(a, b)
     local aa = EL:GetProfessionAbbreviation(a)
     local bb = EL:GetProfessionAbbreviation(b)
@@ -791,6 +813,12 @@ function EL:ConfirmResetSessionHistory()
     end)
 end
 
+function EL:ConfirmResetLifetimeSessionStats()
+    ShowSettingsConfirm("Reset EmberLedger lifetime session stats? This cannot be undone. Session history will not be deleted.", "Reset Lifetime", function()
+        if EL.ResetLifetimeSessionStats then EL:ResetLifetimeSessionStats() end
+    end)
+end
+
 function EL:ConfirmRestoreHiddenCharacters()
     ShowSettingsConfirm("Unhide all hidden characters and return them to the main window table?", "Unhide All", function()
         if EL.RestoreHiddenCharacters then EL:RestoreHiddenCharacters() end
@@ -1262,16 +1290,19 @@ function EL:CreateSettingsPanel(parent)
     f.resetPinned:SetPoint("LEFT", f.resetHidden, "RIGHT", 12, 0)
     f.resetHistory = MakeSettingsButton(f.maintenanceSection, "Clear History", 138, function() if EL.ConfirmResetSessionHistory then EL:ConfirmResetSessionHistory() end end)
     f.resetHistory:SetPoint("TOPLEFT", 12, -130)
+    f.resetLifetimeStats = MakeSettingsButton(f.maintenanceSection, "Reset Lifetime", 138, function() if EL.ConfirmResetLifetimeSessionStats then EL:ConfirmResetLifetimeSessionStats() end end)
+    f.resetLifetimeStats:SetPoint("LEFT", f.resetHistory, "RIGHT", 12, 0)
     SetSettingsTooltip(f.resetPos, "Reset Windows", {"Returns EmberLedger windows to their default screen positions.", "Scale and visibility settings are kept."})
     SetSettingsTooltip(f.resetSession, "Reset Session", {"Clears current session totals and tracked items."})
     SetSettingsTooltip(f.resetHidden, "Unhide All", {"Restores every hidden character to the main window table."})
     SetSettingsTooltip(f.resetPinned, "Reset Pinned", {"Removes all pinned character markers without deleting character data."})
     SetSettingsTooltip(f.resetHistory, "Clear History", {"Deletes all saved account-wide session history data.", "This does not reset the current active session."})
+    SetSettingsTooltip(f.resetLifetimeStats, "Reset Lifetime", {"Resets only the lifetime aggregate stats.", "Session history and the current active session are not deleted."})
 
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.10.2"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.11.1"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -1785,6 +1816,7 @@ function EL:ToggleSectionSetting(section)
         if self.button then
             if self.db.settings.button.shown ~= false then self.button:Show() else self.button:Hide() end
         end
+        if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
     elseif section == "characters" then
         local shouldShow = not (self.db.settings.panel.charactersShown ~= false)
         if not shouldShow and self.SaveExpandedPanelHeight then
@@ -1836,7 +1868,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.10.2"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.11.0"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -1905,7 +1937,7 @@ function EL:CreateSessionHistoryWindow()
 
     frame.title = frame.header:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     frame.title:SetPoint("CENTER", frame.header, "CENTER", 0, 1)
-    frame.title:SetText("EmberLedger - Session History")
+    frame.title:SetText("EmberLedger - Session Stats")
     frame.title:SetTextColor(1.00, 0.82, 0.24)
 
     frame.close = CreateFrame("Button", nil, frame.header, "UIPanelCloseButton")
@@ -1921,6 +1953,7 @@ function EL:CreateSessionHistoryWindow()
             EL.db.settings.session.windowOpen = false
         end
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
+        if EL.RefreshUpdateTicker then EL:RefreshUpdateTicker() end
     end)
 
     frame.displayRange = CreateFrame("Button", nil, frame.header, "UIPanelButtonTemplate")
@@ -1928,6 +1961,27 @@ function EL:CreateSessionHistoryWindow()
     frame.displayRange:SetPoint("RIGHT", frame.close, "LEFT", -8, 0)
     StyleBlizzardButton(frame.displayRange)
     frame.displayRange:SetScript("OnClick", function(self) ShowSessionHistoryDisplayDropdown(self) end)
+
+    frame.viewMode = "stats"
+    frame.statsView = CreateFrame("Button", nil, frame.header, "UIPanelButtonTemplate")
+    frame.statsView:SetSize(58, 21)
+    frame.statsView:SetPoint("LEFT", frame.header, "LEFT", 10, 0)
+    frame.statsView:SetText("Stats")
+    StyleBlizzardButton(frame.statsView)
+    frame.statsView:SetScript("OnClick", function()
+        frame.viewMode = "stats"
+        if EL.RefreshSessionHistoryWindow then EL:RefreshSessionHistoryWindow() end
+    end)
+
+    frame.historyView = CreateFrame("Button", nil, frame.header, "UIPanelButtonTemplate")
+    frame.historyView:SetSize(64, 21)
+    frame.historyView:SetPoint("LEFT", frame.statsView, "RIGHT", 6, 0)
+    frame.historyView:SetText("History")
+    StyleBlizzardButton(frame.historyView)
+    frame.historyView:SetScript("OnClick", function()
+        frame.viewMode = "history"
+        if EL.RefreshSessionHistoryWindow then EL:RefreshSessionHistoryWindow() end
+    end)
 
     frame.infoBox = CreateFrame("Frame", nil, frame)
     frame.infoBox:SetPoint("TOPLEFT", frame.header, "BOTTOMLEFT", 12, -8)
@@ -1961,6 +2015,30 @@ function EL:CreateSessionHistoryWindow()
     frame.rangeText:SetPoint("RIGHT", frame.rangeBox, "RIGHT", -12, 0)
     frame.rangeText:SetJustifyH("LEFT")
     frame.rangeText:SetTextColor(1.00, 0.82, 0.24)
+
+    frame.statsRange = "30"
+    frame.statsRangeButtons = {}
+    local statsRanges = {
+        { key = "today", label = "Today" },
+        { key = "week", label = "This Week" },
+        { key = "30", label = "30 Days" },
+        { key = "lifetime", label = "Lifetime" },
+    }
+    local statsButtonX = 12
+    for _, option in ipairs(statsRanges) do
+        local btn = CreateFrame("Button", nil, frame.rangeBox, "UIPanelButtonTemplate")
+        btn:SetSize(option.key == "week" and 92 or 78, 21)
+        btn:SetPoint("LEFT", frame.rangeBox, "LEFT", statsButtonX, 0)
+        btn:SetText(option.label)
+        StyleBlizzardButton(btn)
+        btn.rangeKey = option.key
+        btn:SetScript("OnClick", function(self)
+            frame.statsRange = self.rangeKey or "30"
+            if EL.RefreshSessionHistoryWindow then EL:RefreshSessionHistoryWindow() end
+        end)
+        frame.statsRangeButtons[option.key] = btn
+        statsButtonX = statsButtonX + (option.key == "week" and 98 or 84)
+    end
 
     frame.table = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     frame.table:SetPoint("TOPLEFT", frame.rangeBox, "BOTTOMLEFT", 0, -8)
@@ -2053,6 +2131,67 @@ function EL:CreateSessionHistoryWindow()
         frame.rows[i] = row
     end
 
+    frame.statsPanel = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    frame.statsPanel:SetPoint("TOPLEFT", frame.rangeBox, "BOTTOMLEFT", 0, -8)
+    frame.statsPanel:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 12)
+    AddBackdrop(frame.statsPanel, 0.90, 0.66)
+    if frame.statsPanel.SetBackdropColor then frame.statsPanel:SetBackdropColor(0.012, 0.010, 0.024, 0.90) end
+    AddInnerBorder(frame.statsPanel)
+
+    frame.statsTitle = frame.statsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    frame.statsTitle:SetPoint("TOPLEFT", frame.statsPanel, "TOPLEFT", 16, -12)
+    frame.statsTitle:SetText("Aggregated Session Stats")
+    frame.statsTitle:SetTextColor(1.00, 0.82, 0.24)
+
+    frame.statsNote = frame.statsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.statsNote:SetPoint("TOPLEFT", frame.statsTitle, "BOTTOMLEFT", 0, -4)
+    frame.statsNote:SetPoint("TOPRIGHT", frame.statsPanel, "TOPRIGHT", -16, -34)
+    frame.statsNote:SetJustifyH("LEFT")
+    frame.statsNote:SetTextColor(0.74, 0.74, 0.70)
+
+    local function MakeStatsCard(icon, label, col, row)
+        local cardW, cardH = 205, 54
+        local x = 16 + ((col - 1) * 219)
+        local y = -70 - ((row - 1) * 70)
+        local card = CreateFrame("Frame", nil, frame.statsPanel, "BackdropTemplate")
+        card:SetPoint("TOPLEFT", frame.statsPanel, "TOPLEFT", x, y)
+        card:SetSize(cardW, cardH)
+        AddBackdrop(card, 0.94, 0.68)
+        if card.SetBackdropColor then card:SetBackdropColor(0.014, 0.012, 0.028, 0.94) end
+        AddInnerBorder(card)
+
+        local iconText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        iconText:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -7)
+        iconText:SetText(SessionHistoryIcon(icon))
+
+        local labelText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        labelText:SetPoint("TOPLEFT", card, "TOPLEFT", 34, -7)
+        labelText:SetPoint("TOPRIGHT", card, "TOPRIGHT", -10, -7)
+        labelText:SetJustifyH("LEFT")
+        labelText:SetText(label)
+        labelText:SetTextColor(0.86, 0.84, 0.78)
+
+        local valueText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        valueText:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 34, 10)
+        valueText:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -12, 10)
+        valueText:SetJustifyH("RIGHT")
+        valueText:SetTextColor(0.92, 0.93, 0.94)
+        return valueText, card
+    end
+
+    frame.statGold = MakeStatsCard("Interface\\Icons\\INV_Misc_Coin_17", "Gold Earned", 1, 1)
+    frame.statTime = MakeStatsCard("Interface\\Icons\\INV_Misc_PocketWatch_01", "Session Time", 2, 1)
+    frame.statRate = MakeStatsCard("Interface\\Icons\\INV_Misc_Coin_01", "Gold / Hour", 3, 1)
+    frame.statSessions = MakeStatsCard("Interface\\Icons\\INV_Misc_Note_01", "Sessions", 1, 2)
+    frame.statItems = MakeStatsCard("Interface\\Icons\\INV_Misc_Bag_10", "Items Gathered", 2, 2)
+    frame.statRaw = MakeStatsCard("Interface\\Icons\\INV_Misc_Coin_02", "Raw Gold", 3, 2)
+
+    frame.statsFootnote = frame.statsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.statsFootnote:SetPoint("BOTTOMLEFT", frame.statsPanel, "BOTTOMLEFT", 16, 14)
+    frame.statsFootnote:SetPoint("BOTTOMRIGHT", frame.statsPanel, "BOTTOMRIGHT", -16, 14)
+    frame.statsFootnote:SetJustifyH("LEFT")
+    frame.statsFootnote:SetTextColor(0.68, 0.68, 0.64)
+
     frame.totals = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     frame.totals:SetPoint("TOPLEFT", frame.table, "BOTTOMLEFT", 0, -10)
     frame.totals:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 12)
@@ -2108,7 +2247,29 @@ local function FormatSessionHistoryRange(displayMode)
         local startTime = (EL.GetWeeklyResetStartTime and EL:GetWeeklyResetStartTime(now)) or (now - (7 * 86400))
         return string.format("This Week: since %s", date("%b %d, %Y %I:%M %p", startTime))
     end
-    local startTime = now - (29 * 86400)
+    local startTime = now - (30 * 86400)
+    return string.format("Last 30 Days: %s  |  %s", date("%b %d, %Y", startTime), date("%b %d, %Y", now))
+end
+
+
+local function GetSessionStatsRangeLabel(range)
+    if range == "today" then return "Today" end
+    if range == "week" then return "This Week" end
+    if range == "lifetime" then return "Lifetime" end
+    return "30 Days"
+end
+
+local function FormatSessionStatsRange(range)
+    local now = time()
+    if range == "today" then
+        return "Today: since local midnight"
+    elseif range == "week" then
+        local startTime = (EL.GetWeeklyResetStartTime and EL:GetWeeklyResetStartTime(now)) or (now - (7 * 86400))
+        return string.format("This Week: since %s", date("%b %d, %Y %I:%M %p", startTime))
+    elseif range == "lifetime" then
+        return "Lifetime: retained history backfill plus all future saved sessions"
+    end
+    local startTime = now - (30 * 86400)
     return string.format("Last 30 Days: %s  |  %s", date("%b %d, %Y", startTime), date("%b %d, %Y", now))
 end
 
@@ -2119,6 +2280,53 @@ function EL:RefreshSessionHistoryWindow()
     local displayLabel = displayMode == "week" and "This Week" or "30 days"
     local enabled = (self.IsSessionHistoryEnabled and self:IsSessionHistoryEnabled()) or false
     if frame.displayRange then frame.displayRange:SetText("Display: " .. displayLabel) end
+
+    local viewMode = frame.viewMode or "stats"
+    local statsMode = viewMode == "stats"
+    if frame.displayRange then frame.displayRange:SetShown(not statsMode) end
+    if frame.rangeIcon then frame.rangeIcon:SetShown(not statsMode) end
+    if frame.rangeText then frame.rangeText:SetShown(not statsMode) end
+    if frame.table then frame.table:SetShown(not statsMode) end
+    if frame.totals then frame.totals:SetShown(not statsMode) end
+    if frame.statsPanel then frame.statsPanel:SetShown(statsMode) end
+    if frame.statsView then frame.statsView:SetText(statsMode and "* Stats" or "Stats") end
+    if frame.historyView then frame.historyView:SetText(statsMode and "History" or "* History") end
+    for key, btn in pairs(frame.statsRangeButtons or {}) do
+        btn:SetShown(statsMode)
+        if btn:GetFontString() then
+            local label = GetSessionStatsRangeLabel(key)
+            btn:SetText((frame.statsRange or "30") == key and ("* " .. label) or label)
+        end
+    end
+
+    if statsMode then
+        local range = frame.statsRange or "30"
+        local stats = (self.GetSessionAggregateStats and self:GetSessionAggregateStats(range)) or {}
+        if frame.info then
+            frame.info:SetText("Quick aggregated totals across saved EmberLedger sessions. Lifetime uses compact aggregate counters so raw history can remain lightweight.")
+        end
+        if frame.statsTitle then frame.statsTitle:SetText("Session Stats (" .. GetSessionStatsRangeLabel(range) .. ")") end
+        if frame.statsNote then frame.statsNote:SetText(FormatSessionStatsRange(range)) end
+        if frame.statGold then
+            frame.statGold:SetText(FormatSessionHistoryMoneyText(tonumber(stats.totalSilver) or 0))
+            local total = tonumber(stats.totalSilver) or 0
+            frame.statGold:SetTextColor(total < 0 and 1.00 or 0.55, total < 0 and 0.34 or 1.00, total < 0 and 0.28 or 0.36)
+        end
+        if frame.statTime then frame.statTime:SetText(self:FormatDuration(tonumber(stats.duration) or 0)) end
+        if frame.statRate then frame.statRate:SetText(self:FormatMoneyRateText(tonumber(stats.goldPerHourSilver) or 0) .. "/hr") end
+        if frame.statSessions then frame.statSessions:SetText(tostring(tonumber(stats.sessions) or 0)) end
+        if frame.statItems then frame.statItems:SetText(tostring(tonumber(stats.items) or 0)) end
+        if frame.statRaw then frame.statRaw:SetText(FormatSessionHistoryMoneyText(tonumber(stats.rawGoldGainedSilver) or 0)) end
+        if frame.statsFootnote then
+            if range == "lifetime" then
+                frame.statsFootnote:SetText("Lifetime totals begin with retained session history that existed when v1.11.0 first loaded, then continue from future saved sessions. Reset Lifetime in Options clears only these aggregate counters.")
+            else
+                frame.statsFootnote:SetText("Today, This Week, and 30 Days are calculated from retained session history. Current active sessions appear after they are saved by reset, logout, or reload.")
+            end
+        end
+        return
+    end
+
     local list = (self.GetSessionHistoryList and self:GetSessionHistoryList()) or {}
     local totals = {duration = 0, item = 0, raw = 0, spent = 0, total = 0}
     for _, entry in ipairs(list) do
@@ -2219,8 +2427,7 @@ function EL:CreateUI()
     if self.button and self.db and self.db.settings and self.db.settings.button and self.db.settings.button.shown == false then
         self.button:Hide()
     end
-    if ticker then ticker:Cancel() end
-    ticker = C_Timer.NewTicker(1, function() EL:RequestUpdate() end)
+    if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
 end
 
 function EL:CreateMainButton()
@@ -3183,6 +3390,7 @@ function EL:CreateSessionWindow()
             EL.db.settings.session.shown = true
         end
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
+        if EL.RefreshUpdateTicker then EL:RefreshUpdateTicker() end
     end)
     frame:SetScript("OnHide", function()
         if EL.db and EL.db.settings and EL.db.settings.session then
@@ -3192,6 +3400,7 @@ function EL:CreateSessionWindow()
             end
         end
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
+        if EL.RefreshUpdateTicker then EL:RefreshUpdateTicker() end
     end)
     frame:SetScript("OnDragStart", function(self) if not (EL.db.settings.lockWindows == true) or IsShiftKeyDown() then self:StartMoving() end end)
     frame:SetScript("OnDragStop", function(self)
@@ -3224,12 +3433,14 @@ function EL:ShowSessionWindowFromSavedState()
     self:LayoutSessionWindow()
     if self.RefreshSessionPanel then self:RefreshSessionPanel() end
     self.sessionWindow:Show()
+    if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
 end
 
 function EL:ToggleSessionWindow()
     if not self.sessionWindow then return end
     if self.sessionWindow:IsShown() then
         self.sessionWindow:Hide()
+        if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
     else
         self:ShowSessionWindowFromSavedState()
     end
@@ -3258,6 +3469,7 @@ function EL:CreatePanel()
             EL.db.settings.panel.charactersShown = true
         end
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
+        if EL.RefreshUpdateTicker then EL:RefreshUpdateTicker() end
     end)
     panel:SetScript("OnHide", function()
         if EL.db and EL.db.settings and EL.db.settings.panel then
@@ -3267,6 +3479,7 @@ function EL:CreatePanel()
             end
         end
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
+        if EL.RefreshUpdateTicker then EL:RefreshUpdateTicker() end
     end)
     panel:SetScale(math.max(PANEL_MIN_SCALE, math.min(PANEL_MAX_SCALE, tonumber(s.scale) or 1)))
 
@@ -3322,6 +3535,7 @@ function EL:CreatePanel()
             EL.db.settings.panel.windowOpen = false
         end
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
+        if EL.RefreshUpdateTicker then EL:RefreshUpdateTicker() end
     end)
 
     panel.settings = CreateFrame("Button", nil, panel.topBar, "UIPanelButtonTemplate")
@@ -4224,12 +4438,14 @@ function EL:ShowPanelFromSavedState()
     self:ApplyPanelScale()
     self:RefreshPanel()
     self.panel:Show()
+    if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
 end
 
 function EL:ToggleMainPanel()
     if not self.panel then return end
     if self.panel:IsShown() then
         self.panel:Hide()
+        if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
         return
     end
     self:ShowPanelFromSavedState()

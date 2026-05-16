@@ -1,3 +1,24 @@
+v1.11.1 - 2026-05-16
+- Addressed all remaining low-priority audit items from the v1.11.0 review.
+- Matched the 30 Days stats label to the same 30-day cutoff used by aggregation.
+- Cleaned lifetime stats access so saved counters are normalised once instead of re-normalised on every getter call.
+- Fixed positive sub-1g money formatting so small positive amounts show silver-only instead of displaying 0 gold.
+- Hoisted remaining inline Core.lua sort comparators into named local helpers.
+- Added ticker suspension support so the 1-second refresh ticker stops when no visible UI needs live updates and restarts when windows are shown again.
+- Consolidated FormatDuration and FormatCountdown through one shared duration formatter.
+- Removed ongoing showFavoritesFirst/showPinnedFirst synchronization while preserving one-time legacy migration into showPinnedFirst.
+- Bumped saved-variable DB version to 11101 for cleanup and migration state normalization.
+
+v1.11.0 - 2026-05-16
+- Added aggregated session statistics with Today, This Week, 30 Days, and Lifetime ranges.
+- Added a Stats / History toggle to the Session History window, with Stats as the default view.
+- Added compact lifetime aggregate tracking for total gold, item value, raw gold, gold spent, duration, sessions, and gathered item count.
+- Added one-time lifetime backfill from retained session history so existing users start with available historical totals.
+- Added safeguards so saved session entries are counted into lifetime totals only once.
+- Added tracked item quantity to new session history entries for future aggregate item counts.
+- Added an Options maintenance button to reset Lifetime stats without deleting session history or the active session.
+- Bumped saved-variable DB version to 11100 for the new stats table and session-history aggregate metadata.
+
 v1.10.2 - 2026-05-16
 - Consolidated minimap tooltip rendering into one shared helper used by both the fallback minimap button and LibDataBroker tooltip path.
 - Preserved the v1.10.1 Moxie separator alignment fix.

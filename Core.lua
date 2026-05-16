@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.10.2"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.11.1"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -47,7 +47,7 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 11000
+EL.DB_VERSION = 11101
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -92,6 +92,18 @@ local defaults = {
         mulch = {},
         professions = {},
         moxie = {},
+    },
+    stats = {
+        lifetime = {
+            totalSilver = 0,
+            itemValueSilver = 0,
+            rawGoldGainedSilver = 0,
+            goldSpentSilver = 0,
+            duration = 0,
+            sessions = 0,
+            items = 0,
+            backfilledFromHistory = false,
+        },
     },
     settings = {
         sort = {
@@ -183,7 +195,6 @@ local defaults = {
             showCurrentCharacterFirst = false,
             showPinnedFirst = true,
             highlightCurrentCharacter = true,
-            showFavoritesFirst = true, -- legacy saved key retained for compatibility
         },
         performance = {
             sessionTracking = true,
@@ -289,6 +300,117 @@ local function ClampNumber(value, minValue, maxValue, fallback)
     return value
 end
 
+local CORE_SORT_CONTEXT = {}
+
+local function SortProfessionEntriesBySlot(a, b)
+    local as = tonumber(a and a.slot) or 99
+    local bs = tonumber(b and b.slot) or 99
+    if as ~= bs then return as < bs end
+    return tostring(a and a.professionName or "") < tostring(b and b.professionName or "")
+end
+
+local function SortWrappedCharacterRows(a, b)
+    if a == b then return false end
+    if not a then return false end
+    if not b then return true end
+
+    if CORE_SORT_CONTEXT.showCurrentCharacterFirst and a.current ~= b.current then
+        return a.current == true
+    end
+
+    if CORE_SORT_CONTEXT.showPinnedFirst and a.pinned ~= b.pinned then
+        return a.pinned == true
+    end
+
+    local aNA = a.value == nil
+    local bNA = b.value == nil
+    if aNA ~= bNA then return not aNA end
+
+    if not aNA and not bNA then
+        if a.valueType == b.valueType then
+            if a.value ~= b.value then
+                if CORE_SORT_CONTEXT.ascending then
+                    return a.value < b.value
+                else
+                    return b.value < a.value
+                end
+            end
+        elseif a.valueType ~= b.valueType then
+            return tostring(a.valueType or "") < tostring(b.valueType or "")
+        end
+    end
+
+    if a.name ~= b.name then return a.name < b.name end
+    if a.key ~= b.key then return a.key < b.key end
+    return (a.originalIndex or 0) < (b.originalIndex or 0)
+end
+
+local function SortConcentrationEntriesForCharacter(a, b)
+    local aa = EL:GetProfessionAbbreviation(a)
+    local bb = EL:GetProfessionAbbreviation(b)
+    if aa == bb then return tostring(a and a.professionName or "") < tostring(b and b.professionName or "") end
+    return aa < bb
+end
+
+local function SortConcentrationReadyEntries(a, b)
+    local aq, bq = tonumber(a and a.quantity) or 0, tonumber(b and b.quantity) or 0
+    if aq ~= bq then return aq > bq end
+    local an, bn = tostring(a and a.displayName or ""):lower(), tostring(b and b.displayName or ""):lower()
+    if an ~= bn then return an < bn end
+    return tostring(a and a.abbrev or "") < tostring(b and b.abbrev or "")
+end
+
+local function SortMulchReadyEntries(a, b)
+    return tostring(a and a.displayName or ""):lower() < tostring(b and b.displayName or ""):lower()
+end
+
+local function SortAttentionEntries(a, b)
+    local ap = a and a.type == "mulch" and 1 or 2
+    local bp = b and b.type == "mulch" and 1 or 2
+    if ap ~= bp then return ap < bp end
+    local an, bn = tostring(a and a.displayName or ""):lower(), tostring(b and b.displayName or ""):lower()
+    if an ~= bn then return an < bn end
+    return tostring(a and (a.abbrev or a.itemName) or "") < tostring(b and (b.abbrev or b.itemName) or "")
+end
+
+local function SortSessionItems(a, b)
+    local av, bv = tonumber(a and a.silver) or 0, tonumber(b and b.silver) or 0
+    if av ~= bv then return av > bv end
+    local aq, bq = tonumber(a and a.qty) or 0, tonumber(b and b.qty) or 0
+    if aq ~= bq then return aq > bq end
+    return tostring(a and (a.name or a.itemID) or "") < tostring(b and (b.name or b.itemID) or "")
+end
+
+local function SortSessionHistoryNewestFirst(a, b)
+    return (tonumber(a and a.timestamp) or 0) > (tonumber(b and b.timestamp) or 0)
+end
+
+local function SortCharacterRowsByName(a, b)
+    local an = EL:GetCharacterDisplayName(a and a.char, a and a.key)
+    local bn = EL:GetCharacterDisplayName(b and b.char, b and b.key)
+    return tostring(an):lower() < tostring(bn):lower()
+end
+
+local function FormatCompactDuration(seconds, showSecondsUnderHour)
+    seconds = math.max(0, math.floor(tonumber(seconds) or 0))
+    if seconds <= 0 then return "Ready" end
+    local days = math.floor(seconds / 86400)
+    local hours = math.floor((seconds % 86400) / 3600)
+    local mins = math.floor((seconds % 3600) / 60)
+    local secs = seconds % 60
+    if days > 0 then
+        return string.format("%dd %dh", days, hours)
+    elseif hours > 0 then
+        return string.format("%dh %02dm", hours, mins)
+    elseif mins > 0 then
+        if showSecondsUnderHour then return string.format("%dm %02ds", mins, secs) end
+        return string.format("%dm", mins)
+    elseif showSecondsUnderHour then
+        return string.format("%ds", secs)
+    end
+    return "<1m"
+end
+
 function EL:NormalizeDatabaseSettings()
     if type(self.db) ~= "table" or type(self.db.settings) ~= "table" then return end
     local settings = self.db.settings
@@ -298,6 +420,18 @@ function EL:NormalizeDatabaseSettings()
     self.db.resources.mulch = type(self.db.resources.mulch) == "table" and self.db.resources.mulch or {}
     self.db.resources.professions = type(self.db.resources.professions) == "table" and self.db.resources.professions or {}
     self.db.resources.moxie = type(self.db.resources.moxie) == "table" and self.db.resources.moxie or {}
+    self.db.stats = type(self.db.stats) == "table" and self.db.stats or {}
+    self.db.stats.lifetime = type(self.db.stats.lifetime) == "table" and self.db.stats.lifetime or {}
+    local lifetime = self.db.stats.lifetime
+    lifetime.totalSilver = tonumber(lifetime.totalSilver) or 0
+    lifetime.itemValueSilver = tonumber(lifetime.itemValueSilver) or 0
+    lifetime.rawGoldGainedSilver = tonumber(lifetime.rawGoldGainedSilver) or 0
+    lifetime.goldSpentSilver = tonumber(lifetime.goldSpentSilver) or 0
+    lifetime.duration = tonumber(lifetime.duration) or 0
+    lifetime.sessions = tonumber(lifetime.sessions) or 0
+    lifetime.items = tonumber(lifetime.items) or 0
+    lifetime.backfilledFromHistory = lifetime.backfilledFromHistory == true
+    lifetime._normalized = true
 
     settings.display = settings.display or {}
     settings.alerts = settings.alerts or {}
@@ -353,8 +487,8 @@ function EL:NormalizeDatabaseSettings()
         settings.display.showPinnedFirst = settings.display.showFavoritesFirst
         if settings.display.showPinnedFirst == nil then settings.display.showPinnedFirst = true end
     end
-    -- Keep the old saved-variable key synchronized so v0.18-v0.20 users retain their setting.
-    settings.display.showFavoritesFirst = settings.display.showPinnedFirst
+    -- Legacy v0.18-v0.20 migration: read showFavoritesFirst once, then remove the old key.
+    settings.display.showFavoritesFirst = nil
     settings.display.showProfession1Column = settings.display.showProfession1Column ~= false
     settings.display.showConcentration1Column = settings.display.showConcentration1Column ~= false
     settings.display.showProfession2Column = settings.display.showProfession2Column ~= false
@@ -367,7 +501,7 @@ function EL:NormalizeDatabaseSettings()
     settings.display.compactMode = settings.display.compactMode == true
     settings.display.showCurrentCharacterFirst = settings.display.showCurrentCharacterFirst == true
     settings.display.showPinnedFirst = settings.display.showPinnedFirst ~= false
-    settings.display.showFavoritesFirst = settings.display.showPinnedFirst
+    settings.display.showFavoritesFirst = nil
     settings.display.showProfessionColumn = settings.display.showProfession1Column
     settings.display.showConcentrationColumn = settings.display.showConcentration1Column
     if settings.display.showProfession1Column == false and settings.display.showConcentration1Column == false and settings.display.showProfession2Column == false and settings.display.showConcentration2Column == false and settings.display.showMoxieColumn == false and settings.display.showMulchColumn == false and settings.display.showForecastColumn == false then
@@ -541,6 +675,7 @@ function EL:EnsureDB()
     end
 
     self:NormalizeDatabaseSettings()
+    if self.BackfillLifetimeSessionStatsFromHistory then self:BackfillLifetimeSessionStatsFromHistory() end
     return EmberLedgerDB
 end
 
@@ -605,20 +740,7 @@ function EL:MakeResourceKey(charKey, resourceKey)
 end
 
 function EL:FormatDuration(seconds)
-    seconds = tonumber(seconds) or 0
-    if seconds <= 0 then return "Ready" end
-    local days = math.floor(seconds / 86400)
-    local hours = math.floor((seconds % 86400) / 3600)
-    local mins = math.floor((seconds % 3600) / 60)
-    if days > 0 then
-        return string.format("%dd %dh", days, hours)
-    elseif hours > 0 then
-        return string.format("%dh %02dm", hours, mins)
-    elseif mins > 0 then
-        return string.format("%dm", mins)
-    else
-        return "<1m"
-    end
+    return FormatCompactDuration(seconds, false)
 end
 
 function EL:GetClassColor(classFile)
@@ -733,12 +855,7 @@ function EL:GetProfessionEntriesForCharacter(charKey)
     end
 
     if #out > 0 then
-        table.sort(out, function(a, b)
-            local as = tonumber(a.slot) or 99
-            local bs = tonumber(b.slot) or 99
-            if as ~= bs then return as < bs end
-            return tostring(a.professionName or "") < tostring(b.professionName or "")
-        end)
+        table.sort(out, SortProfessionEntriesBySlot)
         return out
     end
 
@@ -1147,21 +1264,7 @@ function EL:GetMulchCountdownColor(remaining)
 end
 
 function EL:FormatCountdown(seconds)
-    seconds = math.max(0, math.floor(tonumber(seconds) or 0))
-    if seconds <= 0 then return "Ready" end
-    local days = math.floor(seconds / 86400)
-    local hours = math.floor((seconds % 86400) / 3600)
-    local mins = math.floor((seconds % 3600) / 60)
-    local secs = seconds % 60
-    if days > 0 then
-        return string.format("%dd %dh", days, hours)
-    elseif hours > 0 then
-        return string.format("%dh %02dm", hours, mins)
-    elseif mins > 0 then
-        return string.format("%dm %02ds", mins, secs)
-    else
-        return string.format("%ds", secs)
-    end
+    return FormatCompactDuration(seconds, true)
 end
 
 function EL:GetSortSettings()
@@ -1332,53 +1435,10 @@ function EL:SortDashboardRows(rows, dashboardLookups)
         end
     end
 
-    table.sort(clean, function(a, b)
-        -- Absolute safety. table.sort requires a strict weak ordering.
-        if a == b then return false end
-        if not a then return false end
-        if not b then return true end
-
-        if showCurrentCharacterFirst and a.current ~= b.current then
-            return a.current == true
-        end
-
-        local showPinnedFirst = display.showPinnedFirst ~= false
-        if showPinnedFirst and a.pinned ~= b.pinned then
-            return a.pinned == true
-        end
-
-        local aNA = a.value == nil
-        local bNA = b.value == nil
-
-        -- Keep N/A values at the bottom in both directions.
-        if aNA ~= bNA then
-            return not aNA
-        end
-
-        -- Only compare the active sort value when both entries have one.
-        if not aNA and not bNA then
-            if a.valueType == b.valueType then
-                if a.value ~= b.value then
-                    if ascending then
-                        return a.value < b.value
-                    else
-                        return b.value < a.value
-                    end
-                end
-            else
-                -- Deterministic fallback for mixed types. This should rarely happen,
-                -- but avoids inconsistent comparisons if a column ever changes shape.
-                if a.valueType ~= b.valueType then
-                    return tostring(a.valueType or "") < tostring(b.valueType or "")
-                end
-            end
-        end
-
-        -- Tie breakers are always ascending and stable, regardless of selected direction.
-        if a.name ~= b.name then return a.name < b.name end
-        if a.key ~= b.key then return a.key < b.key end
-        return (a.originalIndex or 0) < (b.originalIndex or 0)
-    end)
+    CORE_SORT_CONTEXT.showCurrentCharacterFirst = showCurrentCharacterFirst
+    CORE_SORT_CONTEXT.showPinnedFirst = display.showPinnedFirst ~= false
+    CORE_SORT_CONTEXT.ascending = ascending
+    table.sort(clean, SortWrappedCharacterRows)
 
     wipe(rows)
     for i, wrapped in ipairs(clean) do
@@ -1393,12 +1453,7 @@ function EL:GetConcentrationEntriesForCharacter(charKey)
             table.insert(list, data)
         end
     end
-    table.sort(list, function(a, b)
-        local aa = self:GetProfessionAbbreviation(a)
-        local bb = self:GetProfessionAbbreviation(b)
-        if aa == bb then return tostring(a.professionName or "") < tostring(b.professionName or "") end
-        return aa < bb
-    end)
+    table.sort(list, SortConcentrationEntriesForCharacter)
     return list
 end
 
@@ -1501,13 +1556,7 @@ function EL:GetConcentrationReadyEntries(threshold, limit)
         end
     end
 
-    table.sort(entries, function(a, b)
-        local aq, bq = tonumber(a.quantity) or 0, tonumber(b.quantity) or 0
-        if aq ~= bq then return aq > bq end
-        local an, bn = tostring(a.displayName or ""):lower(), tostring(b.displayName or ""):lower()
-        if an ~= bn then return an < bn end
-        return tostring(a.abbrev or "") < tostring(b.abbrev or "")
-    end)
+    table.sort(entries, SortConcentrationReadyEntries)
 
     if limit and #entries > limit then
         local trimmed = {}
@@ -1557,9 +1606,7 @@ function EL:GetMulchReadyEntries(limit)
         end
     end
 
-    table.sort(entries, function(a, b)
-        return tostring(a.displayName or ""):lower() < tostring(b.displayName or ""):lower()
-    end)
+    table.sort(entries, SortMulchReadyEntries)
 
     if limit and #entries > limit then
         local trimmed = {}
@@ -1583,14 +1630,7 @@ function EL:GetNeedsAttentionEntries(limit)
         combined[#combined + 1] = entry
     end
 
-    table.sort(combined, function(a, b)
-        local ap = a.type == "mulch" and 1 or 2
-        local bp = b.type == "mulch" and 1 or 2
-        if ap ~= bp then return ap < bp end
-        local an, bn = tostring(a.displayName or ""):lower(), tostring(b.displayName or ""):lower()
-        if an ~= bn then return an < bn end
-        return tostring(a.abbrev or a.itemName or "") < tostring(b.abbrev or b.itemName or "")
-    end)
+    table.sort(combined, SortAttentionEntries)
 
     if limit and #combined > limit then
         local trimmed = {}
@@ -1707,9 +1747,9 @@ function EL:FormatMoneyText(silver)
     if sil == 0 then
         return string.format("%s%s %s", prefix, FormatNumberWithCommas(gold), MONEY_GOLD_ICON)
     end
-    if gold == 0 and negative then
-        -- Avoid showing "-0 [gold]" for sub-1g negative amounts.
-        return string.format("-%02d %s", sil, MONEY_SILVER_ICON)
+    if gold == 0 then
+        -- Avoid showing "0 [gold]" for sub-1g amounts.
+        return string.format("%s%02d %s", prefix, sil, MONEY_SILVER_ICON)
     end
     return string.format("%s%s %s %02d %s", prefix, FormatNumberWithCommas(gold), MONEY_GOLD_ICON, sil, MONEY_SILVER_ICON)
 end
@@ -1972,13 +2012,7 @@ function EL:GetTopSessionItems(limit)
             table.insert(list, entry)
         end
     end
-    table.sort(list, function(a, b)
-        local av, bv = tonumber(a.silver) or 0, tonumber(b.silver) or 0
-        if av ~= bv then return av > bv end
-        local aq, bq = tonumber(a.qty) or 0, tonumber(b.qty) or 0
-        if aq ~= bq then return aq > bq end
-        return tostring(a.name or a.itemID or "") < tostring(b.name or b.itemID or "")
-    end)
+    table.sort(list, SortSessionItems)
     local out = {}
     for i = 1, math.min(tonumber(limit) or 4, #list) do out[i] = list[i] end
     return out
@@ -2111,7 +2145,7 @@ function EL:PruneSessionHistory()
             kept[#kept + 1] = entry
         end
     end
-    table.sort(kept, function(a, b) return (tonumber(a.timestamp) or 0) > (tonumber(b.timestamp) or 0) end)
+    table.sort(kept, SortSessionHistoryNewestFirst)
     self.db.sessionHistory = kept
 end
 
@@ -2171,6 +2205,7 @@ function EL:SaveCurrentSessionHistory(reason)
         rawGoldGainedSilver = tonumber(s.rawGoldGainedSilver) or 0,
         goldSpentSilver = tonumber(s.goldSpentSilver) or 0,
         totalSilver = total,
+        trackedItemQty = trackedItemQty,
         goldPerHourSilver = self:GetSessionGoldPerHour(),
         reason = tostring(reason or "save"),
     }
@@ -2178,12 +2213,18 @@ function EL:SaveCurrentSessionHistory(reason)
     local replaced = false
     for i, old in ipairs(self.db.sessionHistory) do
         if type(old) == "table" and old.id == id then
+            if old.countedInLifetime == true then
+                entry.countedInLifetime = true
+            end
             self.db.sessionHistory[i] = entry
             replaced = true
             break
         end
     end
     if not replaced then table.insert(self.db.sessionHistory, 1, entry) end
+    if self.AddSessionHistoryEntryToLifetimeStats then
+        self:AddSessionHistoryEntryToLifetimeStats(entry)
+    end
     s.historySaved = true
     self:PruneSessionHistory()
     if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
@@ -2196,6 +2237,129 @@ function EL:ResetSessionHistory()
     self.db.sessionHistory = {}
     if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
     self:Print("Session history cleared.")
+end
+
+
+function EL:GetLifetimeSessionStats()
+    self.db = self.db or {}
+    self.db.stats = type(self.db.stats) == "table" and self.db.stats or {}
+    self.db.stats.lifetime = type(self.db.stats.lifetime) == "table" and self.db.stats.lifetime or {}
+    local lifetime = self.db.stats.lifetime
+    if lifetime._normalized ~= true then
+        lifetime.totalSilver = tonumber(lifetime.totalSilver) or 0
+        lifetime.itemValueSilver = tonumber(lifetime.itemValueSilver) or 0
+        lifetime.rawGoldGainedSilver = tonumber(lifetime.rawGoldGainedSilver) or 0
+        lifetime.goldSpentSilver = tonumber(lifetime.goldSpentSilver) or 0
+        lifetime.duration = tonumber(lifetime.duration) or 0
+        lifetime.sessions = tonumber(lifetime.sessions) or 0
+        lifetime.items = tonumber(lifetime.items) or 0
+        lifetime.backfilledFromHistory = lifetime.backfilledFromHistory == true
+        lifetime._normalized = true
+    end
+    return lifetime
+end
+
+function EL:AddSessionHistoryEntryToLifetimeStats(entry)
+    if type(entry) ~= "table" or entry.countedInLifetime == true then return false end
+    local total = tonumber(entry.totalSilver) or 0
+    local itemValue = tonumber(entry.itemValueSilver) or 0
+    local raw = tonumber(entry.rawGoldGainedSilver) or 0
+    local spent = tonumber(entry.goldSpentSilver) or 0
+    local duration = math.max(0, tonumber(entry.duration) or 0)
+    local itemQty = math.max(0, tonumber(entry.trackedItemQty) or tonumber(entry.items) or 0)
+    local meaningful = total ~= 0 or itemValue ~= 0 or raw ~= 0 or spent ~= 0 or itemQty > 0
+    if not meaningful then return false end
+
+    local lifetime = self:GetLifetimeSessionStats()
+    lifetime.totalSilver = lifetime.totalSilver + total
+    lifetime.itemValueSilver = lifetime.itemValueSilver + itemValue
+    lifetime.rawGoldGainedSilver = lifetime.rawGoldGainedSilver + raw
+    lifetime.goldSpentSilver = lifetime.goldSpentSilver + spent
+    lifetime.duration = lifetime.duration + duration
+    lifetime.sessions = lifetime.sessions + 1
+    lifetime.items = lifetime.items + itemQty
+    entry.countedInLifetime = true
+    return true
+end
+
+function EL:BackfillLifetimeSessionStatsFromHistory()
+    local lifetime = self:GetLifetimeSessionStats()
+    if lifetime.backfilledFromHistory == true then return false end
+    self.db.sessionHistory = type(self.db.sessionHistory) == "table" and self.db.sessionHistory or {}
+    for _, entry in ipairs(self.db.sessionHistory) do
+        if type(entry) == "table" then
+            self:AddSessionHistoryEntryToLifetimeStats(entry)
+        end
+    end
+    lifetime.backfilledFromHistory = true
+    return true
+end
+
+function EL:ResetLifetimeSessionStats()
+    self.db = self.db or {}
+    self.db.stats = type(self.db.stats) == "table" and self.db.stats or {}
+    self.db.stats.lifetime = {
+        totalSilver = 0,
+        itemValueSilver = 0,
+        rawGoldGainedSilver = 0,
+        goldSpentSilver = 0,
+        duration = 0,
+        sessions = 0,
+        items = 0,
+        backfilledFromHistory = true,
+        _normalized = true,
+    }
+    for _, entry in ipairs(self.db.sessionHistory or {}) do
+        if type(entry) == "table" then entry.countedInLifetime = nil end
+    end
+    if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
+    self:Print("Lifetime session stats reset.")
+end
+
+function EL:GetSessionAggregateStats(range)
+    range = tostring(range or "30")
+    if range == "lifetime" then
+        local lifetime = self:GetLifetimeSessionStats()
+        local total = {
+            duration = tonumber(lifetime.duration) or 0,
+            itemValueSilver = tonumber(lifetime.itemValueSilver) or 0,
+            rawGoldGainedSilver = tonumber(lifetime.rawGoldGainedSilver) or 0,
+            goldSpentSilver = tonumber(lifetime.goldSpentSilver) or 0,
+            totalSilver = tonumber(lifetime.totalSilver) or 0,
+            sessions = tonumber(lifetime.sessions) or 0,
+            items = tonumber(lifetime.items) or 0,
+        }
+        total.goldPerHourSilver = total.duration > 0 and math.floor((total.totalSilver * 3600) / total.duration) or 0
+        return total
+    end
+
+    if self.PruneSessionHistory then self:PruneSessionHistory() end
+    local now = time()
+    local cutoff
+    if range == "today" then
+        local t = date("*t", now)
+        cutoff = time({ year = t.year, month = t.month, day = t.day, hour = 0, min = 0, sec = 0, isdst = t.isdst })
+    elseif range == "week" then
+        cutoff = (self.GetWeeklyResetStartTime and self:GetWeeklyResetStartTime(now)) or (now - (7 * 86400))
+    else
+        cutoff = now - (30 * 86400)
+        range = "30"
+    end
+
+    local total = { duration = 0, itemValueSilver = 0, rawGoldGainedSilver = 0, goldSpentSilver = 0, totalSilver = 0, sessions = 0, items = 0 }
+    for _, entry in ipairs(self.db and self.db.sessionHistory or {}) do
+        if type(entry) == "table" and (tonumber(entry.timestamp) or 0) >= cutoff then
+            total.duration = total.duration + (tonumber(entry.duration) or 0)
+            total.itemValueSilver = total.itemValueSilver + (tonumber(entry.itemValueSilver) or 0)
+            total.rawGoldGainedSilver = total.rawGoldGainedSilver + (tonumber(entry.rawGoldGainedSilver) or 0)
+            total.goldSpentSilver = total.goldSpentSilver + (tonumber(entry.goldSpentSilver) or 0)
+            total.totalSilver = total.totalSilver + (tonumber(entry.totalSilver) or 0)
+            total.sessions = total.sessions + 1
+            total.items = total.items + (tonumber(entry.trackedItemQty) or tonumber(entry.items) or 0)
+        end
+    end
+    total.goldPerHourSilver = total.duration > 0 and math.floor((total.totalSilver * 3600) / total.duration) or 0
+    return total
 end
 
 function EL:BuildSessionSummaryText()
@@ -2293,11 +2457,7 @@ function EL:GetCharacterRows()
     for key, char in pairs(self.db and self.db.characters or {}) do
         table.insert(rows, { key = key, char = char })
     end
-    table.sort(rows, function(a, b)
-        local an = self:GetCharacterDisplayName(a.char, a.key)
-        local bn = self:GetCharacterDisplayName(b.char, b.key)
-        return tostring(an):lower() < tostring(bn):lower()
-    end)
+    table.sort(rows, SortCharacterRowsByName)
     return rows
 end
 
@@ -2319,7 +2479,18 @@ function EL:ShouldRefreshActionBar()
     return bar and bar:IsShown()
 end
 
+function EL:HasVisibleUpdateConsumers()
+    local buttonShown = self.button and self.button:IsShown()
+    local panelShown = self.panel and self.panel:IsShown()
+    local sessionShown = self:IsSessionTrackingEnabled() and self.sessionWindow and self.sessionWindow:IsShown()
+    return buttonShown or panelShown or sessionShown or self:ShouldRefreshActionBar()
+end
+
 function EL:RequestUpdate()
+    if self.HasVisibleUpdateConsumers and not self:HasVisibleUpdateConsumers() then
+        if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
+        return
+    end
     if self.UpdateButton then self:UpdateButton() end
 
     local panelShown = self.panel and self.panel:IsShown()
