@@ -62,7 +62,7 @@ end
 local function SortDashboardConcentrationEntries(a, b)
     local aa = EL:GetProfessionAbbreviation(a)
     local bb = EL:GetProfessionAbbreviation(b)
-    if aa == bb then return tostring(a.professionName or "") < tostring(b.professionName or "") end
+    if aa == bb then return (a.professionName or "") < (b.professionName or "") end
     return aa < bb
 end
 
@@ -70,7 +70,7 @@ local function SortDashboardProfessionEntries(a, b)
     local as = tonumber(a.slot) or 99
     local bs = tonumber(b.slot) or 99
     if as ~= bs then return as < bs end
-    return tostring(a.professionName or "") < tostring(b.professionName or "")
+    return (a.professionName or "") < (b.professionName or "")
 end
 
 
@@ -603,10 +603,11 @@ local function SetMoxieCellColor(row, r, g, b)
     end
 end
 
-local function GetMoxieDisplayValues(charKey, professionEntries)
+local function GetMoxieDisplayValues(charKey, dashboardSlots)
     local values = {}
-    if not charKey or type(professionEntries) ~= "table" then return values end
-    for _, prof in ipairs(professionEntries) do
+    if not charKey or type(dashboardSlots) ~= "table" then return values end
+    for _, slotData in ipairs(dashboardSlots) do
+        local prof = slotData and slotData.prof or slotData
         if EL.GetMoxieCurrencyIDForProfession and EL:GetMoxieCurrencyIDForProfession(prof) then
             local entry = EL.GetMoxieEntryForProfession and EL:GetMoxieEntryForProfession(charKey, prof)
             if entry and type(entry.quantity) == "number" then
@@ -717,6 +718,10 @@ end
 
 
 function EL:RefreshLayout(reason)
+    if self.IsCombatLocked and self:IsCombatLocked() then
+        if self.QueueCombatDeferredWork then self:QueueCombatDeferredWork("layout") end
+        return
+    end
     if self.ApplyDisplaySettings then self:ApplyDisplaySettings() end
     if self.LayoutPanel then self:LayoutPanel() end
     if self.LayoutSessionWindow then self:LayoutSessionWindow() end
@@ -861,27 +866,101 @@ local function SetSettingsTooltip(widget, title, lines)
 end
 
 
+local function HideSessionHistoryDisplayDropdown()
+    if EL and EL.sessionHistoryDisplayDropdown then
+        EL.sessionHistoryDisplayDropdown:Hide()
+    end
+end
+
 local function ShowSessionHistoryDisplayDropdown(anchor)
-    if not anchor or not EL then return end
+    if not anchor or not EL or not CreateFrame then return end
+
     local options = {
+        { mode = "today", text = "Today" },
         { mode = "week", text = "This Week" },
         { mode = "30", text = "30 days" },
     }
-    if EasyMenu and CreateFrame then
-        EL.sessionHistoryDisplayMenuFrame = EL.sessionHistoryDisplayMenuFrame or CreateFrame("Frame", "EmberLedgerSessionHistoryDisplayMenu", UIParent, "UIDropDownMenuTemplate")
-        local currentMode = (EL.GetSessionHistoryDisplayMode and EL:GetSessionHistoryDisplayMode()) or "30"
-        local menu = {}
-        for _, option in ipairs(options) do
-            table.insert(menu, {
-                text = option.text,
-                checked = currentMode == option.mode,
-                func = function() if EL.SetSessionHistoryDisplayMode then EL:SetSessionHistoryDisplayMode(option.mode) end end,
-            })
+
+    local menu = EL.sessionHistoryDisplayDropdown
+    if not menu then
+        menu = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+        menu:SetSize(148, 86)
+        menu:SetFrameStrata("DIALOG")
+        menu:SetClampedToScreen(true)
+        if menu.EnableKeyboard then
+            menu:EnableKeyboard(true)
+            menu:SetScript("OnKeyDown", function(_, key)
+                if key == "ESCAPE" then
+                    HideSessionHistoryDisplayDropdown()
+                end
+            end)
         end
-        EasyMenu(menu, EL.sessionHistoryDisplayMenuFrame, anchor, 0, 0, "MENU")
-    else
-        if EL.CycleSessionHistoryDisplayDays then EL:CycleSessionHistoryDisplayDays() end
+        AddBackdrop(menu, 0.95, 0.78)
+        if menu.SetBackdropColor then menu:SetBackdropColor(0.012, 0.010, 0.024, 0.98) end
+        AddInnerBorder(menu)
+        menu.buttons = {}
+        for i, option in ipairs(options) do
+            local btn = CreateFrame("Button", nil, menu)
+            btn:SetSize(132, 23)
+            btn:SetPoint("TOPLEFT", menu, "TOPLEFT", 8, -7 - ((i - 1) * 24))
+            btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            btn.text:SetPoint("LEFT", btn, "LEFT", 8, 0)
+            btn.text:SetPoint("RIGHT", btn, "RIGHT", -8, 0)
+            btn.text:SetJustifyH("LEFT")
+            btn.highlight = btn:CreateTexture(nil, "BACKGROUND")
+            btn.highlight:SetAllPoints(btn)
+            btn.highlight:SetColorTexture(1.00, 0.78, 0.24, 0.10)
+            btn.highlight:Hide()
+            btn:SetScript("OnEnter", function(self)
+                if self.highlight then self.highlight:Show() end
+                if self.text then self.text:SetTextColor(1.00, 0.82, 0.24) end
+            end)
+            btn:SetScript("OnLeave", function(self)
+                local currentMode = (EL.GetSessionHistoryDisplayMode and EL:GetSessionHistoryDisplayMode()) or "30"
+                if self.highlight then self.highlight:SetShown(self.mode == currentMode) end
+                if self.text then
+                    if self.mode == currentMode then
+                        self.text:SetTextColor(0.42, 1.00, 0.32)
+                    else
+                        self.text:SetTextColor(0.92, 0.90, 0.82)
+                    end
+                end
+            end)
+            btn:SetScript("OnClick", function(self)
+                if EL.SetSessionHistoryDisplayMode then EL:SetSessionHistoryDisplayMode(self.mode) end
+                HideSessionHistoryDisplayDropdown()
+            end)
+            menu.buttons[i] = btn
+        end
+        menu:Hide()
+        EL.sessionHistoryDisplayDropdown = menu
     end
+
+    if menu:IsShown() then
+        menu:Hide()
+        return
+    end
+
+    local currentMode = (EL.GetSessionHistoryDisplayMode and EL:GetSessionHistoryDisplayMode()) or "30"
+    for i, option in ipairs(options) do
+        local btn = menu.buttons and menu.buttons[i]
+        if btn then
+            btn.mode = option.mode
+            if btn.text then
+                btn.text:SetText(option.text)
+                if currentMode == option.mode then
+                    btn.text:SetTextColor(0.42, 1.00, 0.32)
+                else
+                    btn.text:SetTextColor(0.92, 0.90, 0.82)
+                end
+            end
+            if btn.highlight then btn.highlight:SetShown(currentMode == option.mode) end
+        end
+    end
+
+    menu:ClearAllPoints()
+    menu:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -4)
+    menu:Show()
 end
 
 local function MakeSettingsSlider(parent, labelText, minValue, maxValue, step, valueFormatter, onValueChanged)
@@ -1151,7 +1230,7 @@ function EL:CreateSettingsPanel(parent)
     f.toggleTime:SetPoint("TOPLEFT", 178, -56)
     SetSettingsTooltip(f.toggleTime, "Launcher session time", {"Controls the session timer line on the launcher only.", "This does not show or hide the standalone Session window."})
 
-    f.sessionOptions = MakeSettingsSection(f, "Session Tracking", contentX, -698, contentW, 188)
+    f.sessionOptions = MakeSettingsSection(f, "Session Tracking", contentX, -698, contentW, 166)
     f.filterHerbs = MakeSettingsCheck(f.sessionOptions, "Herbs", function() EL:ToggleSessionFilterSetting("trackHerbs") end)
     f.filterHerbs:SetPoint("TOPLEFT", 12, -34)
     f.filterOre = MakeSettingsCheck(f.sessionOptions, "Ore", function() EL:ToggleSessionFilterSetting("trackOre") end)
@@ -1168,10 +1247,13 @@ function EL:CreateSettingsPanel(parent)
     f.filterOther:SetPoint("TOPLEFT", 12, -86)
     f.trackRawGoldGains = MakeSettingsCheck(f.sessionOptions, "Raw gold gains", function() EL:ToggleSessionMoneySetting("trackRawGoldGains", true, "Raw gold gains") end)
     f.trackRawGoldGains:SetPoint("TOPLEFT", 128, -86)
-    SetSettingsTooltip(f.trackRawGoldGains, "Raw gold gains", {"Adds direct wallet gains to the session total.", "This can include loot, quest rewards, and mailbox gold."})
+    SetSettingsTooltip(f.trackRawGoldGains, "Raw gold gains", {"Adds direct wallet gains to the session total outside transaction windows.", "Mailbox item rewards are handled separately by trusted mail rewards."})
     f.trackGoldSpent = MakeSettingsCheck(f.sessionOptions, "Gold spent", function() EL:ToggleSessionMoneySetting("trackGoldSpent", false, "Gold spent") end)
     f.trackGoldSpent:SetPoint("TOPLEFT", 238, -86)
     SetSettingsTooltip(f.trackGoldSpent, "Gold spent", {"Subtracts direct wallet losses from the session total.", "Off by default so repairs and purchases do not surprise users."})
+    f.countTrustedMailRewards = MakeSettingsCheck(f.sessionOptions, "Trusted mail rewards", function() EL:ToggleSessionMoneySetting("countTrustedMailRewards", true, "Trusted mail rewards") end)
+    f.countTrustedMailRewards:SetPoint("TOPLEFT", 128, -112)
+    SetSettingsTooltip(f.countTrustedMailRewards, "Trusted mail rewards", {"Counts profession material attachments from trusted patron or crafting-order reward mail.", "Player mail, auction mail, and normal transfers remain ignored."})
     f.pricingSourceLabel = f.sessionOptions:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.pricingSourceLabel:SetPoint("TOPLEFT", 12, -134)
     f.pricingSourceLabel:SetText("Pricing:")
@@ -1185,6 +1267,21 @@ function EL:CreateSettingsPanel(parent)
     f.copySummary = MakeSettingsButton(f.sessionOptions, "Copy Summary", 112, function() EL:ShowCopySessionSummaryDialog() end)
     f.copySummary:SetPoint("TOPRIGHT", -12, -132)
     SetSettingsTooltip(f.copySummary, "Copy Summary", {"Copies a quick summary of the current session totals."})
+
+    f.craftedItemsSection = MakeSettingsSection(f, "Crafted Item Tracking", contentX, -898, contentW, 146)
+    f.countCraftedItems = MakeSettingsCheck(f.craftedItemsSection, "Count crafted items", function() EL:ToggleSessionMoneySetting("countCraftedItems", false, "Crafted items") end)
+    f.countCraftedItems:SetPoint("TOPLEFT", 12, -36)
+    SetSettingsTooltip(f.countCraftedItems, "Crafted items", {"Counts crafted outputs added to your bags during tradeskill crafting.", "Off by default. May double-count value if the crafted item is later sold and AH/mail gold is also tracked.", "Reagent costs are not deducted from crafted item value."})
+    f.craftedItemsWarning = f.craftedItemsSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.craftedItemsWarning:SetPoint("TOPLEFT", 12, -66)
+    f.craftedItemsWarning:SetText("Warning: read before enabling")
+    f.craftedItemsWarning:SetTextColor(1.00, 0.82, 0.24)
+    f.craftedItemsBody = f.craftedItemsSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.craftedItemsBody:SetPoint("TOPLEFT", 12, -86)
+    f.craftedItemsBody:SetWidth(contentW - 24)
+    f.craftedItemsBody:SetJustifyH("LEFT")
+    f.craftedItemsBody:SetText("Most users should leave this off. Use it only when you specifically want crafted outputs counted at craft time. It may double-count value if the crafted item is later sold and AH/mail gold is also tracked, and reagent costs are not deducted.")
+    f.craftedItemsBody:SetTextColor(0.76, 0.76, 0.70)
 
     f.actionButtonsSection = MakeSettingsSection(f, "Button Visibility", contentX, -42, contentW, 232)
     f.actionGeneralLabel = f.actionButtonsSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -1302,7 +1399,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.11.1"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.13.1"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -1314,6 +1411,7 @@ function EL:CreateSettingsPanel(parent)
         f.trackingColumnsSection,
         f.launcherSection,
         f.sessionOptions,
+        f.craftedItemsSection,
         f.actionButtonsSection,
         f.performanceSection,
         f.maintenanceSection,
@@ -1322,7 +1420,7 @@ function EL:CreateSettingsPanel(parent)
     f.settingsPages = {
         General = {f.generalSection, f.appearanceSection, f.scaleSection, f.footerSection},
         Launcher = {f.launcherSection},
-        Session = {f.sessionOptions},
+        Session = {f.sessionOptions, f.craftedItemsSection},
         ["Main Window"] = {f.mainWindowTogglesSection, f.thresholdSection, f.trackingColumnsSection},
         ["Action Bar"] = {f.actionButtonsSection},
         Performance = {f.performanceSection},
@@ -1455,7 +1553,7 @@ function EL:RefreshSettingsPanel()
         if btn and btn.SetAlpha then btn:SetAlpha(actionControlsAlpha) end
     end
     local sessionControlsAlpha = (performanceSettings.sessionTracking ~= false) and 1.0 or 0.45
-    for _, btn in ipairs({ f.toggleSessionSection, f.filterHerbs, f.filterOre, f.filterCloth, f.filterLeather, f.filterEnchanting, f.filterFish, f.filterOther, f.trackRawGoldGains, f.trackGoldSpent, f.toggleSessionHistory, f.resetSession }) do
+    for _, btn in ipairs({ f.toggleSessionSection, f.filterHerbs, f.filterOre, f.filterCloth, f.filterLeather, f.filterEnchanting, f.filterFish, f.filterOther, f.trackRawGoldGains, f.trackGoldSpent, f.countTrustedMailRewards, f.countCraftedItems, f.toggleSessionHistory, f.resetSession }) do
         if btn and btn.SetAlpha then btn:SetAlpha(sessionControlsAlpha) end
     end
     setToggle(f.filterHerbs, sessionSettings.trackHerbs ~= false)
@@ -1467,6 +1565,8 @@ function EL:RefreshSettingsPanel()
     setToggle(f.filterOther, sessionSettings.trackOtherMaterials ~= false)
     setToggle(f.trackRawGoldGains, sessionSettings.trackRawGoldGains ~= false)
     setToggle(f.trackGoldSpent, sessionSettings.trackGoldSpent == true)
+    setToggle(f.countTrustedMailRewards, sessionSettings.countTrustedMailRewards ~= false)
+    setToggle(f.countCraftedItems, sessionSettings.countCraftedItems == true)
     if f.toggleSessionHistory and f.toggleSessionHistory.SetChecked then
         f.toggleSessionHistory:SetChecked((self.IsSessionHistoryEnabled and self:IsSessionHistoryEnabled()) or false)
     end
@@ -1725,6 +1825,14 @@ function EL:ToggleSessionMoneySetting(key, defaultOn, label)
         enabled = not (current == true)
     end
     self.db.settings.session[key] = enabled
+    if key == "countCraftedItems" and self.GetSessionDB then
+        local s = self:GetSessionDB()
+        s.pendingCraftedItems = {}
+        if self.CountSessionItemsInBags then
+            s.lastBagCounts = self:CountSessionItemsInBags()
+            s.bagBaselineReady = true
+        end
+    end
     if self.SyncSessionMoneyBaseline then self:SyncSessionMoneyBaseline() end
     self:NotifyToggle(label or key, enabled)
     if self.RefreshSessionPanel then self:RefreshSessionPanel() end
@@ -1868,7 +1976,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.11.0"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.13.1"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -1937,7 +2045,7 @@ function EL:CreateSessionHistoryWindow()
 
     frame.title = frame.header:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     frame.title:SetPoint("CENTER", frame.header, "CENTER", 0, 1)
-    frame.title:SetText("EmberLedger - Session Stats")
+    frame.title:SetText("EmberLedger - Stats")
     frame.title:SetTextColor(1.00, 0.82, 0.24)
 
     frame.close = CreateFrame("Button", nil, frame.header, "UIPanelCloseButton")
@@ -1955,12 +2063,10 @@ function EL:CreateSessionHistoryWindow()
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
         if EL.RefreshUpdateTicker then EL:RefreshUpdateTicker() end
     end)
+    frame:SetScript("OnHide", function()
+        HideSessionHistoryDisplayDropdown()
+    end)
 
-    frame.displayRange = CreateFrame("Button", nil, frame.header, "UIPanelButtonTemplate")
-    frame.displayRange:SetSize(122, 21)
-    frame.displayRange:SetPoint("RIGHT", frame.close, "LEFT", -8, 0)
-    StyleBlizzardButton(frame.displayRange)
-    frame.displayRange:SetScript("OnClick", function(self) ShowSessionHistoryDisplayDropdown(self) end)
 
     frame.viewMode = "stats"
     frame.statsView = CreateFrame("Button", nil, frame.header, "UIPanelButtonTemplate")
@@ -1974,12 +2080,22 @@ function EL:CreateSessionHistoryWindow()
     end)
 
     frame.historyView = CreateFrame("Button", nil, frame.header, "UIPanelButtonTemplate")
-    frame.historyView:SetSize(64, 21)
+    frame.historyView:SetSize(70, 21)
     frame.historyView:SetPoint("LEFT", frame.statsView, "RIGHT", 6, 0)
-    frame.historyView:SetText("History")
+    frame.historyView:SetText("Sessions")
     StyleBlizzardButton(frame.historyView)
     frame.historyView:SetScript("OnClick", function()
         frame.viewMode = "history"
+        if EL.RefreshSessionHistoryWindow then EL:RefreshSessionHistoryWindow() end
+    end)
+
+    frame.bagView = CreateFrame("Button", nil, frame.header, "UIPanelButtonTemplate")
+    frame.bagView:SetSize(104, 21)
+    frame.bagView:SetPoint("RIGHT", frame.close, "LEFT", -8, 0)
+    frame.bagView:SetText("Bag Summary")
+    StyleBlizzardButton(frame.bagView)
+    frame.bagView:SetScript("OnClick", function()
+        frame.viewMode = "bag"
         if EL.RefreshSessionHistoryWindow then EL:RefreshSessionHistoryWindow() end
     end)
 
@@ -2012,9 +2128,58 @@ function EL:CreateSessionHistoryWindow()
 
     frame.rangeText = frame.rangeBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     frame.rangeText:SetPoint("LEFT", frame.rangeIcon, "RIGHT", 10, 0)
-    frame.rangeText:SetPoint("RIGHT", frame.rangeBox, "RIGHT", -12, 0)
+    frame.rangeText:SetPoint("RIGHT", frame.rangeBox, "RIGHT", -250, 0)
     frame.rangeText:SetJustifyH("LEFT")
     frame.rangeText:SetTextColor(1.00, 0.82, 0.24)
+
+    frame.displayRange = CreateFrame("Button", nil, frame.rangeBox, "BackdropTemplate")
+    frame.displayRange:SetSize(150, 24)
+    frame.displayRange:SetPoint("RIGHT", frame.rangeBox, "RIGHT", -12, 0)
+    AddBackdrop(frame.displayRange, 0.86, 0.70)
+    if frame.displayRange.SetBackdropColor then frame.displayRange:SetBackdropColor(0.020, 0.016, 0.030, 0.92) end
+
+    frame.displayLabel = frame.rangeBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.displayLabel:SetPoint("RIGHT", frame.displayRange, "LEFT", -8, 0)
+    frame.displayLabel:SetWidth(58)
+    frame.displayLabel:SetJustifyH("RIGHT")
+    frame.displayLabel:SetText("Display:")
+    frame.displayLabel:SetTextColor(1.00, 0.82, 0.24)
+
+    frame.displayRange.selectedText = frame.displayRange:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.displayRange.selectedText:SetPoint("LEFT", frame.displayRange, "LEFT", 10, 0)
+    frame.displayRange.selectedText:SetPoint("RIGHT", frame.displayRange, "RIGHT", -30, 0)
+    frame.displayRange.selectedText:SetJustifyH("LEFT")
+    frame.displayRange.selectedText:SetTextColor(0.92, 0.90, 0.82)
+
+    frame.displayRange.arrowBox = CreateFrame("Frame", nil, frame.displayRange, "BackdropTemplate")
+    frame.displayRange.arrowBox:SetSize(22, 20)
+    frame.displayRange.arrowBox:SetPoint("RIGHT", frame.displayRange, "RIGHT", -2, 0)
+    if frame.displayRange.arrowBox.SetBackdrop then
+        frame.displayRange.arrowBox:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        frame.displayRange.arrowBox:SetBackdropColor(0.035, 0.028, 0.045, 0.85)
+        frame.displayRange.arrowBox:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, 0.55)
+    end
+    frame.displayRange.arrowTexture = frame.displayRange.arrowBox:CreateTexture(nil, "ARTWORK")
+    frame.displayRange.arrowTexture:SetSize(12, 12)
+    frame.displayRange.arrowTexture:SetPoint("CENTER", frame.displayRange.arrowBox, "CENTER", 0, -1)
+    frame.displayRange.arrowTexture:SetTexture("Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up")
+    frame.displayRange.arrowTexture:SetTexCoord(0.20, 0.80, 0.20, 0.80)
+
+    frame.displayRange:SetScript("OnEnter", function(self)
+        if self.SetBackdropBorderColor then self:SetBackdropBorderColor(1.00, 0.82, 0.24, 0.85) end
+        if self.selectedText then self.selectedText:SetTextColor(1.00, 0.82, 0.24) end
+        if self.arrowBox and self.arrowBox.SetBackdropBorderColor then self.arrowBox:SetBackdropBorderColor(1.00, 0.82, 0.24, 0.85) end
+    end)
+    frame.displayRange:SetScript("OnLeave", function(self)
+        if self.SetBackdropBorderColor then self:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, 0.70) end
+        if self.selectedText then self.selectedText:SetTextColor(0.92, 0.90, 0.82) end
+        if self.arrowBox and self.arrowBox.SetBackdropBorderColor then self.arrowBox:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, 0.55) end
+    end)
+    frame.displayRange:SetScript("OnClick", function(self) ShowSessionHistoryDisplayDropdown(self) end)
 
     frame.statsRange = "30"
     frame.statsRangeButtons = {}
@@ -2192,6 +2357,124 @@ function EL:CreateSessionHistoryWindow()
     frame.statsFootnote:SetJustifyH("LEFT")
     frame.statsFootnote:SetTextColor(0.68, 0.68, 0.64)
 
+    frame.bagPanel = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    frame.bagPanel:SetPoint("TOPLEFT", frame.rangeBox, "BOTTOMLEFT", 0, -8)
+    frame.bagPanel:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 12)
+    AddBackdrop(frame.bagPanel, 0.90, 0.66)
+    if frame.bagPanel.SetBackdropColor then frame.bagPanel:SetBackdropColor(0.012, 0.010, 0.024, 0.90) end
+    AddInnerBorder(frame.bagPanel)
+
+    frame.bagTitle = frame.bagPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    frame.bagTitle:SetPoint("TOPLEFT", frame.bagPanel, "TOPLEFT", 16, -12)
+    frame.bagTitle:SetText("Current Bag Summary")
+    frame.bagTitle:SetTextColor(1.00, 0.82, 0.24)
+
+    frame.bagNote = frame.bagPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.bagNote:SetPoint("TOPLEFT", frame.bagTitle, "BOTTOMLEFT", 0, -4)
+    frame.bagNote:SetPoint("TOPRIGHT", frame.bagPanel, "TOPRIGHT", -16, -34)
+    frame.bagNote:SetJustifyH("LEFT")
+    frame.bagNote:SetTextColor(0.74, 0.74, 0.70)
+    frame.bagNote:SetText("Read-only estimate of currently held tracked materials. This does not change session history or lifetime stats.")
+
+    local function MakeBagCard(icon, label, col)
+        local cardW, cardH = 205, 44
+        local x = 16 + ((col - 1) * 219)
+        local card = CreateFrame("Frame", nil, frame.bagPanel, "BackdropTemplate")
+        card:SetPoint("TOPLEFT", frame.bagPanel, "TOPLEFT", x, -58)
+        card:SetSize(cardW, cardH)
+        AddBackdrop(card, 0.94, 0.68)
+        if card.SetBackdropColor then card:SetBackdropColor(0.014, 0.012, 0.028, 0.94) end
+        AddInnerBorder(card)
+
+        local iconText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        iconText:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -6)
+        iconText:SetText(SessionHistoryIcon(icon))
+
+        local labelText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        labelText:SetPoint("TOPLEFT", card, "TOPLEFT", 34, -6)
+        labelText:SetPoint("TOPRIGHT", card, "TOPRIGHT", -10, -6)
+        labelText:SetJustifyH("LEFT")
+        labelText:SetText(label)
+        labelText:SetTextColor(0.86, 0.84, 0.78)
+
+        local valueText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        valueText:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 34, 7)
+        valueText:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -12, 7)
+        valueText:SetJustifyH("RIGHT")
+        valueText:SetTextColor(0.92, 0.93, 0.94)
+        return valueText, card
+    end
+
+    frame.bagValue = MakeBagCard("Interface\\Icons\\INV_Misc_Bag_10", "Current Bag Value", 1)
+    frame.bagProjected = MakeBagCard("Interface\\Icons\\INV_Misc_Coin_17", "Projected Total", 2)
+    frame.bagQuantity = MakeBagCard("Interface\\Icons\\INV_Misc_Note_01", "Tracked Items Held", 3)
+
+    frame.bagTable = CreateFrame("Frame", nil, frame.bagPanel, "BackdropTemplate")
+    frame.bagTable:SetPoint("TOPLEFT", frame.bagPanel, "TOPLEFT", 14, -116)
+    frame.bagTable:SetPoint("BOTTOMRIGHT", frame.bagPanel, "BOTTOMRIGHT", -14, 42)
+    AddBackdrop(frame.bagTable, 0.86, 0.58)
+    if frame.bagTable.SetBackdropColor then frame.bagTable:SetBackdropColor(0.010, 0.008, 0.020, 0.86) end
+    AddInnerBorder(frame.bagTable)
+
+    frame.bagHeaders = {}
+    local bagColumns = {
+        { key = "item", label = "Item", left = 16, width = 300, justify = "LEFT" },
+        { key = "qty", label = "Qty", right = -404, width = 78, justify = "RIGHT" },
+        { key = "unit", label = "Value", right = -268, width = 112, justify = "RIGHT" },
+        { key = "total", label = "Total", right = -16, width = 230, justify = "RIGHT" },
+    }
+    frame.bagColumns = bagColumns
+
+    local function AnchorBagCell(fs, parent, col, y)
+        fs:ClearAllPoints()
+        if col.left then
+            fs:SetPoint("LEFT", parent, "LEFT", col.left, y or 0)
+        else
+            fs:SetPoint("RIGHT", parent, "RIGHT", col.right, y or 0)
+        end
+        fs:SetWidth(col.width)
+        fs:SetJustifyH(col.justify)
+    end
+
+    for _, col in ipairs(bagColumns) do
+        local fs = frame.bagTable:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        if col.left then
+            fs:SetPoint("TOPLEFT", frame.bagTable, "TOPLEFT", col.left, -9)
+        else
+            fs:SetPoint("TOPRIGHT", frame.bagTable, "TOPRIGHT", col.right, -9)
+        end
+        fs:SetWidth(col.width)
+        fs:SetJustifyH(col.justify)
+        fs:SetText(col.label)
+        fs:SetTextColor(1.00, 0.82, 0.24)
+        table.insert(frame.bagHeaders, fs)
+    end
+
+    frame.bagRows = {}
+    for i = 1, 7 do
+        local row = CreateFrame("Frame", nil, frame.bagTable, "BackdropTemplate")
+        row:SetPoint("TOPLEFT", frame.bagTable, "TOPLEFT", 0, -32 - ((i - 1) * 23))
+        row:SetPoint("RIGHT", frame.bagTable, "RIGHT", 0, 0)
+        row:SetHeight(22)
+        row.bg = row:CreateTexture(nil, "BACKGROUND")
+        row.bg:SetAllPoints()
+        row.bg:SetColorTexture(0.018, 0.014, 0.030, i % 2 == 0 and 0.30 or 0.42)
+        row.texts = {}
+        for _, col in ipairs(bagColumns) do
+            local fs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            AnchorBagCell(fs, row, col, 0)
+            fs:SetTextColor(0.90, 0.91, 0.92)
+            table.insert(row.texts, fs)
+        end
+        frame.bagRows[i] = row
+    end
+
+    frame.bagFootnote = frame.bagPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.bagFootnote:SetPoint("BOTTOMLEFT", frame.bagPanel, "BOTTOMLEFT", 16, 14)
+    frame.bagFootnote:SetPoint("BOTTOMRIGHT", frame.bagPanel, "BOTTOMRIGHT", -16, 14)
+    frame.bagFootnote:SetJustifyH("LEFT")
+    frame.bagFootnote:SetTextColor(0.68, 0.68, 0.64)
+
     frame.totals = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     frame.totals:SetPoint("TOPLEFT", frame.table, "BOTTOMLEFT", 0, -10)
     frame.totals:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 12)
@@ -2243,7 +2526,10 @@ end
 
 local function FormatSessionHistoryRange(displayMode)
     local now = time()
-    if displayMode == "week" then
+    if displayMode == "today" then
+        local startTime = (EL.GetTodayStartTime and EL:GetTodayStartTime(now)) or (now - 86400)
+        return string.format("Today: since %s", date("%I:%M %p", startTime))
+    elseif displayMode == "week" then
         local startTime = (EL.GetWeeklyResetStartTime and EL:GetWeeklyResetStartTime(now)) or (now - (7 * 86400))
         return string.format("This Week: since %s", date("%b %d, %Y %I:%M %p", startTime))
     end
@@ -2277,26 +2563,77 @@ function EL:RefreshSessionHistoryWindow()
     local frame = self.sessionHistoryWindow
     if not frame then return end
     local displayMode = (self.GetSessionHistoryDisplayMode and self:GetSessionHistoryDisplayMode()) or "30"
-    local displayLabel = displayMode == "week" and "This Week" or "30 days"
+    local displayLabel = displayMode == "today" and "Today" or (displayMode == "week" and "This Week" or "30 days")
     local enabled = (self.IsSessionHistoryEnabled and self:IsSessionHistoryEnabled()) or false
-    if frame.displayRange then frame.displayRange:SetText("Display: " .. displayLabel) end
+    if frame.displayRange and frame.displayRange.selectedText then frame.displayRange.selectedText:SetText(displayLabel) end
 
     local viewMode = frame.viewMode or "stats"
     local statsMode = viewMode == "stats"
-    if frame.displayRange then frame.displayRange:SetShown(not statsMode) end
-    if frame.rangeIcon then frame.rangeIcon:SetShown(not statsMode) end
-    if frame.rangeText then frame.rangeText:SetShown(not statsMode) end
-    if frame.table then frame.table:SetShown(not statsMode) end
-    if frame.totals then frame.totals:SetShown(not statsMode) end
+    local bagMode = viewMode == "bag"
+    local historyMode = not statsMode and not bagMode
+    if not historyMode then HideSessionHistoryDisplayDropdown() end
+    if frame.displayRange then frame.displayRange:SetShown(historyMode) end
+    if frame.displayLabel then frame.displayLabel:SetShown(historyMode) end
+    if frame.rangeIcon then frame.rangeIcon:SetShown(historyMode) end
+    if frame.rangeText then frame.rangeText:SetShown(historyMode) end
+    if frame.table then frame.table:SetShown(historyMode) end
+    if frame.totals then frame.totals:SetShown(historyMode) end
     if frame.statsPanel then frame.statsPanel:SetShown(statsMode) end
+    if frame.bagPanel then frame.bagPanel:SetShown(bagMode) end
     if frame.statsView then frame.statsView:SetText(statsMode and "* Stats" or "Stats") end
-    if frame.historyView then frame.historyView:SetText(statsMode and "History" or "* History") end
+    if frame.historyView then frame.historyView:SetText(historyMode and "* Sessions" or "Sessions") end
+    if frame.bagView then frame.bagView:SetText(bagMode and "* Bag Summary" or "Bag Summary") end
     for key, btn in pairs(frame.statsRangeButtons or {}) do
         btn:SetShown(statsMode)
         if btn:GetFontString() then
             local label = GetSessionStatsRangeLabel(key)
             btn:SetText((frame.statsRange or "30") == key and ("* " .. label) or label)
         end
+    end
+
+    if bagMode then
+        local summary = (self.GetCurrentBagSummaryLines and self:GetCurrentBagSummaryLines()) or { lines = {}, totalSilver = 0, totalQuantity = 0 }
+        local session = (self.GetSessionDB and self:GetSessionDB()) or {}
+        local sessionTotal = tonumber(session.totalSilver) or 0
+        local bagTotal = tonumber(summary.totalSilver) or 0
+        local projected = sessionTotal + bagTotal
+        if frame.info then
+            frame.info:SetText("Read-only current inventory value for tracked materials. This does not add to session history, lifetime stats, or realized gold/hour.")
+        end
+        if frame.bagValue then frame.bagValue:SetText(FormatSessionHistoryMoneyText(bagTotal)) end
+        if frame.bagProjected then frame.bagProjected:SetText(FormatSessionHistoryMoneyText(projected)) end
+        if frame.bagQuantity then frame.bagQuantity:SetText(tostring(tonumber(summary.totalQuantity) or 0)) end
+        if frame.bagFootnote then
+            frame.bagFootnote:SetText("Projected Total = current active session total plus currently held tracked bag value. It is an estimate for decision-making, not accounting or profit/loss tracking.")
+        end
+        local lines = summary.lines or {}
+        for i, row in ipairs(frame.bagRows or {}) do
+            local entry = lines[i]
+            if entry then
+                row:Show()
+                local icon = entry.icon or "Interface\\Icons\\INV_Misc_QuestionMark"
+                row.texts[1]:SetText(SessionHistoryIcon(icon) .. " " .. tostring(entry.name or ("item:" .. tostring(entry.itemID))))
+                row.texts[2]:SetText(tostring(tonumber(entry.quantity) or 0))
+                row.texts[3]:SetText(FormatSessionHistoryMoneyText(tonumber(entry.unitPrice) or 0))
+                row.texts[4]:SetText(FormatSessionHistoryMoneyText(tonumber(entry.totalSilver) or 0))
+                row.texts[4]:SetTextColor(0.55, 1.00, 0.36)
+                row.texts[1]:SetTextColor(0.90, 0.91, 0.92)
+                row.texts[2]:SetTextColor(0.90, 0.91, 0.92)
+                row.texts[3]:SetTextColor(0.90, 0.91, 0.92)
+            else
+                row:Show()
+                if i == 1 then
+                    row.texts[1]:SetText("No currently held tracked materials found.")
+                    row.texts[1]:SetTextColor(0.68, 0.68, 0.64)
+                    row.texts[2]:SetText("")
+                    row.texts[3]:SetText("")
+                    row.texts[4]:SetText("")
+                else
+                    for _, fs in ipairs(row.texts or {}) do fs:SetText(""); fs:SetTextColor(0.88, 0.90, 0.92) end
+                end
+            end
+        end
+        return
     end
 
     if statsMode then
@@ -2379,7 +2716,7 @@ function EL:RefreshSessionHistoryWindow()
         end
     end
     if frame.info then
-        local scopeText = displayMode == "week" and "Showing sessions since weekly reset." or "Showing last 30 days."
+        local scopeText = displayMode == "today" and "Showing today's saved sessions." or (displayMode == "week" and "Showing sessions since weekly reset." or "Showing last 30 days.")
         frame.info:SetText(scopeText .. " Saved summaries are retained up to 30 days. " .. (enabled and "Sessions save on reset and logout/reload." or "Session history is currently disabled."))
     end
     if frame.rangeText then frame.rangeText:SetText(FormatSessionHistoryRange(displayMode)) end
@@ -3005,6 +3342,10 @@ function EL:CreateActionBar(parent)
 end
 
 function EL:UpdateActionBar()
+    if self:IsCombatLocked() then
+        if self.QueueCombatDeferredWork then self:QueueCombatDeferredWork("actionBar") end
+        return
+    end
     if self.IsActionBarEnabled and not self:IsActionBarEnabled() then
         local bar = self.panel and self.panel.actionBar
         if bar then bar:Hide() end
@@ -3012,8 +3353,7 @@ function EL:UpdateActionBar()
     end
     local bar = self.panel and self.panel.actionBar
     if not bar or not bar.itemButtons then return end
-    local locked = self:IsCombatLocked()
-    if locked then self.pendingActionBarRefresh = true end
+    local locked = false
 
     local lastVisible
     for _, info in ipairs(ACTION_ITEM_BUTTONS) do
@@ -3124,7 +3464,7 @@ function EL:CreateSessionPanel(parent)
     session.history = CreateFrame("Button", nil, session.buttonBar, "UIPanelButtonTemplate")
     session.history:SetSize(64, 20)
     session.history:SetPoint("CENTER", session.buttonBar, "CENTER", 0, 0)
-    session.history:SetText("History")
+    session.history:SetText("Stats")
     StyleBlizzardButton(session.history)
     session.history.text = session.history:GetFontString()
     session.history:SetScript("OnClick", function() if EL.ToggleSessionHistoryWindow then EL:ToggleSessionHistoryWindow() end end)
@@ -3743,12 +4083,20 @@ local function SetPanelHeightKeepTopLeft(panel, height, settings)
 end
 
 function EL:AutoSizePanelHeight(reason)
+    if self.IsCombatLocked and self:IsCombatLocked() then
+        if self.QueueCombatDeferredWork then self:QueueCombatDeferredWork("layout") end
+        return
+    end
     if self.AutoSizeTrackingPanel then
         self:AutoSizeTrackingPanel(reason or "autoHeight")
     end
 end
 
 function EL:LayoutPanel()
+    if self.IsCombatLocked and self:IsCombatLocked() then
+        if self.QueueCombatDeferredWork then self:QueueCombatDeferredWork("layout") end
+        return
+    end
     local p = self.panel
     if not p or not p.header or not p.scroll or not p.content then return end
     if self.AutoSizeTrackingPanel then self:AutoSizeTrackingPanel("layout") end
@@ -4247,7 +4595,7 @@ function EL:RefreshPanel()
             row.conc2:SetTextColor(0.7, 0.7, 0.7)
         end
         if row.full then row.full:Hide() end
-        local moxieValues = GetMoxieDisplayValues(charKey, profEntries)
+        local moxieValues = GetMoxieDisplayValues(charKey, slots)
         local moxieValue = #moxieValues > 0 and table.concat(moxieValues, " • ") or "N/A"
         local useSplitMoxie = visible.moxie and #moxieValues == 2
         row._emberMoxieSplit = useSplitMoxie and true or false

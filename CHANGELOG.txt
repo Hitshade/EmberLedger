@@ -1,3 +1,154 @@
+## v1.13.10
+
+- Fixed the session display dropdown lifecycle so it closes when the Stats window closes or when switching away from the Sessions view.
+- Added Escape-key closing support for the session display dropdown.
+- Updated the fallback version string for consistency.
+- Hoisted the remaining Bag Summary sort closure for consistency with previous cleanup passes.
+- Removed a redundant legacy favorites migration cleanup write.
+- README title/version updated only.
+
+## v1.13.9
+
+- Reworked the session history display selector into a cleaner dropdown field layout.
+- Replaced the text-symbol arrow with a texture-based dropdown arrow.
+- Fixed Display label overlap in the range/filter bar.
+- Preserved Today, This Week, and 30 days range options.
+
+## v1.13.8
+
+- Rebuilt the Session history display selector as a proper field-style dropdown instead of a Blizzard action button.
+- The selected range now displays as plain readable text inside the dropdown field.
+- Removed the leading selected-state symbol from dropdown options.
+- Kept Today, This Week, and 30 days as selectable history ranges.
+
+## v1.13.7
+- Replaced the Sessions display selector with an actual custom dropdown menu anchored to the range/filter bar.
+- Preserved Today, This Week, and 30 days as selectable history ranges.
+- Fixed session display-mode normalization so Today persists correctly after reload.
+- README title/version updated only.
+
+## v1.13.6
+- Converted the Sessions history display selector into a clearer dropdown-style control in the range bar.
+- Added a Today display range for saved session history.
+- Updated history range labels and helper text for Today, This Week, and 30 days.
+- README title/version updated only.
+
+## v1.13.5
+- Renamed the Session Stats window header to EmberLedger - Stats.
+- Moved the session history display selector out of the header and into the range/filter bar.
+- Changed the history range selector to behave like a cleaner dropdown-style control beside the active range label.
+- Preserved the Stats, Sessions, and Bag Summary view buttons.
+
+EmberLedger v1.13.4 - Bag Summary Value Column Clarification
+
+Changed
+- Restored the per-item price column in Bag Summary.
+- Renamed the former Unit column to Value for clearer wording.
+- Renamed the stack total column to Total.
+- Preserved wider spacing for large gold totals.
+
+EmberLedger v1.13.3 - Bag Summary Value Column Polish
+
+Changed
+- Removed the Bag Summary Unit column because it was not providing useful decision-making value.
+- Expanded the Bag Summary Value column to better support substantially larger totals, including multi-million gold values.
+- Adjusted Bag Summary Item, Qty, and Value column widths for cleaner spacing after removing Unit.
+
+Unchanged
+- Bag Summary remains read-only and does not modify active session totals, session history, lifetime stats, or realized gold/hour.
+- README title/version updated only.
+
+EmberLedger v1.13.2 - Bag Summary Column Alignment Fix
+
+Changed
+- Re-anchored Bag Summary table columns so Qty, Unit, and Value use fixed right-edge anchors.
+- Improved alignment between Bag Summary headers and row values.
+- Prevented money values from drifting or clipping at the right edge of the Bag Summary table.
+
+Unchanged
+- Bag Summary remains read-only and does not modify session history, lifetime stats, or realized gold/hour.
+- README title/version updated only.
+
+EmberLedger v1.13.1 - Bag Summary Layout Polish
+
+Changed
+- Moved the Bag Summary view button to the right side of the Session Stats header beside the close button.
+- Renamed the Session window shortcut button from History to Stats.
+- Renamed the saved-session view button from History to Sessions to better distinguish it from the Stats view.
+- Adjusted Bag Summary stat card and table column alignment for cleaner quantity, unit value, and total value spacing.
+
+Notes
+- Bag Summary remains read-only and does not change active session totals, session history, or lifetime stats.
+- README title/version updated only.
+
+EmberLedger v1.13.0 - Bag Summary Mode
+
+Added
+- Added Bag Summary mode to the Session Stats window.
+- Added current tracked bag value, projected total, and tracked item quantity cards.
+- Added grouped current-bag item rows with item name, quantity, unit price, and estimated value.
+
+Changed
+- Session Stats window now supports Stats, History, and Bag Summary views.
+- Bag Summary is read-only and does not mutate active session totals, session history, or lifetime stats.
+
+Notes
+- Projected Total is an estimate: current active session total plus currently held tracked bag value.
+- This release completes the planned feature-complete scope for EmberLedger's lightweight profession/session utility identity.
+
+# EmberLedger v1.12.5
+
+- Added a lightweight refresh debounce so clustered UI refresh requests during heavy crafting, gathering, bag updates, and tradeskill events collapse into one short delayed refresh instead of repeated immediate refreshes.
+- Added action bar refresh debounce with visibility re-checks before updating.
+- Preserved immediate refresh behavior for combat-deferred flushes and fallback paths where timers are unavailable.
+- Kept saved-variable DB version unchanged because this release does not change database structure.
+- README title/version updated only.
+
+# EmberLedger v1.12.4
+
+- Moved Crafted Item Tracking out of the crowded Session Tracking option grid into its own dedicated section.
+- Added clear in-addon guidance: "Warning: read before enabling" with a plain-language explanation that most users should leave crafted tracking off unless they specifically want crafted outputs counted at craft time.
+- Preserved crafted item tracking as off by default.
+- README title/version updated only.
+
+# EmberLedger v1.12.3
+
+- Changed crafted item session tracking to remain off by default.
+- Added a clearer crafted item tracking warning explaining possible double-counting if crafted items are later sold and AH/mail gold is also tracked.
+- Clarified that crafted item tracking does not deduct reagent costs from crafted item value.
+- Bumped DB version to 11203 for the crafted tracking default/setting cleanup.
+
+# EmberLedger v1.12.2
+
+- Added combat-safe deferred UI refresh handling so visual updates queue during combat and flush after combat ends.
+- Added deferred action bar/layout refresh handling for protected UI edge cases.
+- Hardened main panel layout, auto-height, full layout refresh, and action bar refresh entry points against combat lockdown.
+- Reduced small sort-time allocations by removing redundant string conversions in Core.lua and UI.lua comparators.
+- README title/version updated only.
+
+## v1.12.1
+
+- Added optional crafted item session tracking.
+- Crafted outputs added to bags during tradeskill crafting can now count toward session value.
+- Added a Session Tracking option for Crafted items.
+- Crafted tracking uses short pending crafted-item windows tied to tradeskill result/chat events so normal inventory transfers remain ignored.
+- Bank, mailbox, auction, trade, and ordinary transfer safeguards remain in place.
+- Bumped saved-variable DB version to 11201 for the new session setting.
+
+## v1.12.0
+
+- Added trusted mailbox reward handling for session tracking.
+- Profession material attachments from trusted patron/crafting-order style system mail can now count toward session value.
+- Player mail, auction mail, COD mail, banking transfers, Warband bank movement, and ordinary mailbox item transfers remain ignored to prevent false session inflation.
+- Added a Session Tracking option for Trusted mail rewards.
+- Updated raw-gold tooltip wording to clarify that mailbox item rewards are handled separately.
+- Bumped saved-variable DB version to 11200 for the new session setting.
+
+## v1.11.2
+
+- Corrected Moxie display ordering so split Moxie values follow the visible P1 / P2 profession order.
+- Preserved aligned Moxie separator formatting.
+
 v1.11.1 - 2026-05-16
 - Addressed all remaining low-priority audit items from the v1.11.0 review.
 - Matched the 30 Days stats label to the same 30-day cutoff used by aggregation.

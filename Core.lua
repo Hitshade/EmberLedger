@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.11.1"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.13.10"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -13,6 +13,9 @@ EL.TRADEGOODS_CLASS = Enum.ItemClass and Enum.ItemClass.Tradegoods or 7
 EL.CONSUMABLE_CLASS = Enum.ItemClass and Enum.ItemClass.Consumable or 0
 EL.SESSION_DEDUPE_SECONDS = 5
 EL.HERBALISM_ID = 182
+
+EL.UPDATE_DEBOUNCE_SECONDS = 0.05
+EL.ACTION_BAR_DEBOUNCE_SECONDS = 0.05
 
 EL.MOXIE_CURRENCY_BY_PROFESSION_ID = {
     [171] = 3256, -- Alchemy
@@ -47,7 +50,7 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 11101
+EL.DB_VERSION = 11203
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -160,6 +163,8 @@ local defaults = {
             trackEnchanting = true,
             trackFish = true,
             trackOtherMaterials = true,
+            countTrustedMailRewards = true,
+            countCraftedItems = false,
             trackRawGoldGains = true,
             trackGoldSpent = false,
             sessionHistoryEnabled = true,
@@ -306,7 +311,7 @@ local function SortProfessionEntriesBySlot(a, b)
     local as = tonumber(a and a.slot) or 99
     local bs = tonumber(b and b.slot) or 99
     if as ~= bs then return as < bs end
-    return tostring(a and a.professionName or "") < tostring(b and b.professionName or "")
+    return ((a and a.professionName) or "") < ((b and b.professionName) or "")
 end
 
 local function SortWrappedCharacterRows(a, b)
@@ -336,7 +341,7 @@ local function SortWrappedCharacterRows(a, b)
                 end
             end
         elseif a.valueType ~= b.valueType then
-            return tostring(a.valueType or "") < tostring(b.valueType or "")
+            return (a.valueType or "") < (b.valueType or "")
         end
     end
 
@@ -348,29 +353,29 @@ end
 local function SortConcentrationEntriesForCharacter(a, b)
     local aa = EL:GetProfessionAbbreviation(a)
     local bb = EL:GetProfessionAbbreviation(b)
-    if aa == bb then return tostring(a and a.professionName or "") < tostring(b and b.professionName or "") end
+    if aa == bb then return ((a and a.professionName) or "") < ((b and b.professionName) or "") end
     return aa < bb
 end
 
 local function SortConcentrationReadyEntries(a, b)
     local aq, bq = tonumber(a and a.quantity) or 0, tonumber(b and b.quantity) or 0
     if aq ~= bq then return aq > bq end
-    local an, bn = tostring(a and a.displayName or ""):lower(), tostring(b and b.displayName or ""):lower()
+    local an, bn = ((a and a.displayName) or ""):lower(), ((b and b.displayName) or ""):lower()
     if an ~= bn then return an < bn end
-    return tostring(a and a.abbrev or "") < tostring(b and b.abbrev or "")
+    return ((a and a.abbrev) or "") < ((b and b.abbrev) or "")
 end
 
 local function SortMulchReadyEntries(a, b)
-    return tostring(a and a.displayName or ""):lower() < tostring(b and b.displayName or ""):lower()
+    return ((a and a.displayName) or ""):lower() < ((b and b.displayName) or ""):lower()
 end
 
 local function SortAttentionEntries(a, b)
     local ap = a and a.type == "mulch" and 1 or 2
     local bp = b and b.type == "mulch" and 1 or 2
     if ap ~= bp then return ap < bp end
-    local an, bn = tostring(a and a.displayName or ""):lower(), tostring(b and b.displayName or ""):lower()
+    local an, bn = ((a and a.displayName) or ""):lower(), ((b and b.displayName) or ""):lower()
     if an ~= bn then return an < bn end
-    return tostring(a and (a.abbrev or a.itemName) or "") < tostring(b and (b.abbrev or b.itemName) or "")
+    return ((a and (a.abbrev or a.itemName)) or "") < ((b and (b.abbrev or b.itemName)) or "")
 end
 
 local function SortSessionItems(a, b)
@@ -378,7 +383,7 @@ local function SortSessionItems(a, b)
     if av ~= bv then return av > bv end
     local aq, bq = tonumber(a and a.qty) or 0, tonumber(b and b.qty) or 0
     if aq ~= bq then return aq > bq end
-    return tostring(a and (a.name or a.itemID) or "") < tostring(b and (b.name or b.itemID) or "")
+    return ((a and (a.name or a.itemID)) or "") < ((b and (b.name or b.itemID)) or "")
 end
 
 local function SortSessionHistoryNewestFirst(a, b)
@@ -388,7 +393,7 @@ end
 local function SortCharacterRowsByName(a, b)
     local an = EL:GetCharacterDisplayName(a and a.char, a and a.key)
     local bn = EL:GetCharacterDisplayName(b and b.char, b and b.key)
-    return tostring(an):lower() < tostring(bn):lower()
+    return (an or ""):lower() < (bn or ""):lower()
 end
 
 local function FormatCompactDuration(seconds, showSecondsUnderHour)
@@ -501,7 +506,6 @@ function EL:NormalizeDatabaseSettings()
     settings.display.compactMode = settings.display.compactMode == true
     settings.display.showCurrentCharacterFirst = settings.display.showCurrentCharacterFirst == true
     settings.display.showPinnedFirst = settings.display.showPinnedFirst ~= false
-    settings.display.showFavoritesFirst = nil
     settings.display.showProfessionColumn = settings.display.showProfession1Column
     settings.display.showConcentrationColumn = settings.display.showConcentration1Column
     if settings.display.showProfession1Column == false and settings.display.showConcentration1Column == false and settings.display.showProfession2Column == false and settings.display.showConcentration2Column == false and settings.display.showMoxieColumn == false and settings.display.showMulchColumn == false and settings.display.showForecastColumn == false then
@@ -537,12 +541,15 @@ function EL:NormalizeDatabaseSettings()
     normalizeBool(settings.session, "trackEnchanting", true)
     normalizeBool(settings.session, "trackFish", true)
     normalizeBool(settings.session, "trackOtherMaterials", true)
+    normalizeBool(settings.session, "countTrustedMailRewards", true)
+    normalizeBool(settings.session, "countCraftedItems", false)
     normalizeBool(settings.session, "sessionHistoryEnabled", true)
     settings.session.historyRetentionDays = 30
-    if settings.session.historyDisplayMode ~= "week" and settings.session.historyDisplayMode ~= "30" then
-        settings.session.historyDisplayMode = (tonumber(settings.session.historyDisplayDays) == 7) and "week" or "30"
+    if settings.session.historyDisplayMode ~= "today" and settings.session.historyDisplayMode ~= "week" and settings.session.historyDisplayMode ~= "30" then
+        local oldDays = tonumber(settings.session.historyDisplayDays) or 30
+        settings.session.historyDisplayMode = oldDays == 1 and "today" or (oldDays == 7 and "week" or "30")
     end
-    settings.session.historyDisplayDays = settings.session.historyDisplayMode == "week" and 7 or 30
+    settings.session.historyDisplayDays = settings.session.historyDisplayMode == "today" and 1 or (settings.session.historyDisplayMode == "week" and 7 or 30)
 
     settings.session.collapsed = nil
     settings.panel.sessionCollapsed = nil
@@ -563,24 +570,70 @@ function EL:IsCombatLocked()
     return InCombatLockdown and InCombatLockdown()
 end
 
-function EL:RequestActionBarRefresh()
-    if self:IsCombatLocked() then
+function EL:QueueCombatDeferredWork(kind)
+    if kind == "actionBar" then
         self.pendingActionBarRefresh = true
+    elseif kind == "layout" then
+        self.pendingSecureLayout = true
+        self.pendingUIRefresh = true
+    else
+        self.pendingUIRefresh = true
+    end
+end
+
+function EL:PerformActionBarRefresh()
+    if self:IsCombatLocked() then
+        self:QueueCombatDeferredWork("actionBar")
         return
     end
     if self.UpdateActionBar then self:UpdateActionBar() end
 end
 
-function EL:FlushCombatDeferredWork()
-    if self.pendingActionBarRefresh then
-        self.pendingActionBarRefresh = nil
-        if self.UpdateActionBar then self:UpdateActionBar() end
+function EL:RequestActionBarRefresh(immediate)
+    if self:IsCombatLocked() then
+        self:QueueCombatDeferredWork("actionBar")
+        return
     end
-    if self.pendingSecureLayout then
-        self.pendingSecureLayout = nil
+
+    if immediate or not (C_Timer and C_Timer.After) then
+        self:PerformActionBarRefresh()
+        return
+    end
+
+    if self.actionBarRefreshQueued then return end
+    self.actionBarRefreshQueued = true
+
+    C_Timer.After(self.ACTION_BAR_DEBOUNCE_SECONDS or 0.05, function()
+        if not EL then return end
+        EL.actionBarRefreshQueued = nil
+        if EL.IsCombatLocked and EL:IsCombatLocked() then
+            if EL.QueueCombatDeferredWork then EL:QueueCombatDeferredWork("actionBar") end
+            return
+        end
+        if EL.ShouldRefreshActionBar and not EL:ShouldRefreshActionBar() then return end
+        if EL.PerformActionBarRefresh then EL:PerformActionBarRefresh() end
+    end)
+end
+
+function EL:FlushCombatDeferredWork()
+    local needsActionBar = self.pendingActionBarRefresh
+    local needsLayout = self.pendingSecureLayout
+    local needsRefresh = self.pendingUIRefresh
+
+    self.pendingActionBarRefresh = nil
+    self.pendingSecureLayout = nil
+    self.pendingUIRefresh = nil
+
+    if needsLayout then
         if self.LayoutPanel then self:LayoutPanel() end
         if self.AutoSizePanelHeight then self:AutoSizePanelHeight("combatDeferred") end
-        if self.RequestUpdate then self:RequestUpdate() end
+        if self.LayoutSessionWindow then self:LayoutSessionWindow() end
+    end
+    if needsActionBar and self.RequestActionBarRefresh then
+        self:RequestActionBarRefresh(true)
+    end
+    if needsRefresh and self.RequestUpdate then
+        self:RequestUpdate(true)
     end
 end
 
@@ -1852,6 +1905,8 @@ function EL:GetSessionDB()
     s.items = type(s.items) == "table" and s.items or {}
     s.recent = type(s.recent) == "table" and s.recent or {}
     s.pendingChatLoot = type(s.pendingChatLoot) == "table" and s.pendingChatLoot or {}
+    s.trustedMailItems = type(s.trustedMailItems) == "table" and s.trustedMailItems or {}
+    s.pendingCraftedItems = type(s.pendingCraftedItems) == "table" and s.pendingCraftedItems or {}
     s.lastBagCounts = type(s.lastBagCounts) == "table" and s.lastBagCounts or {}
     s.categoryTotals = type(s.categoryTotals) == "table" and s.categoryTotals or {}
     if s.isPaused == nil then s.isPaused = false end
@@ -1875,6 +1930,8 @@ function EL:StartFreshSessionOnLogin()
         items = {},
         recent = {},
         pendingChatLoot = {},
+        trustedMailItems = {},
+        pendingCraftedItems = {},
         lastBagCounts = {},
         categoryTotals = {},
         isPaused = false,
@@ -1987,6 +2044,8 @@ function EL:ResetSession()
         items = {},
         recent = {},
         pendingChatLoot = {},
+        trustedMailItems = {},
+        pendingCraftedItems = {},
         lastBagCounts = {},
         categoryTotals = {},
         isPaused = false,
@@ -2076,11 +2135,12 @@ end
 function EL:GetSessionHistoryDisplayMode()
     local session = self.db and self.db.settings and self.db.settings.session or {}
     local mode = tostring(session.historyDisplayMode or "")
-    if mode == "week" or mode == "30" then return mode end
+    if mode == "today" or mode == "week" or mode == "30" then return mode end
 
     -- Compatibility: older builds stored a numeric display window. Treat the old
     -- 7-day view as the new WoW-native current-week view.
     local days = tonumber(session.historyDisplayDays) or 30
+    if days == 1 then return "today" end
     if days == 7 then return "week" end
     return "30"
 end
@@ -2088,7 +2148,10 @@ end
 function EL:GetSessionHistoryDisplayDays()
     -- Compatibility accessor for older UI/call sites. The current-week mode is
     -- not a rolling 7-day window, but 7 remains its nearest legacy equivalent.
-    return self:GetSessionHistoryDisplayMode() == "week" and 7 or 30
+    local mode = self:GetSessionHistoryDisplayMode()
+    if mode == "today" then return 1 end
+    if mode == "week" then return 7 end
+    return 30
 end
 
 function EL:GetWeeklyResetStartTime(now)
@@ -2114,24 +2177,37 @@ function EL:GetWeeklyResetStartTime(now)
     return resetTime
 end
 
+function EL:GetTodayStartTime(now)
+    now = tonumber(now) or time()
+    local t = date("*t", now)
+    return time({ year = t.year, month = t.month, day = t.day, hour = 0, min = 0, sec = 0, isdst = t.isdst })
+end
+
 function EL:SetSessionHistoryDisplayMode(mode)
     self.db.settings.session = self.db.settings.session or {}
     mode = tostring(mode or "30")
-    if mode ~= "week" and mode ~= "30" then mode = "30" end
+    if mode ~= "today" and mode ~= "week" and mode ~= "30" then mode = "30" end
     self.db.settings.session.historyDisplayMode = mode
-    self.db.settings.session.historyDisplayDays = (mode == "week") and 7 or 30
+    self.db.settings.session.historyDisplayDays = (mode == "today") and 1 or ((mode == "week") and 7 or 30)
     if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
-    self:Print("Session history display: " .. (mode == "week" and "This Week" or "30 days") .. ".")
+    local label = mode == "today" and "Today" or (mode == "week" and "This Week" or "30 days")
+    self:Print("Session history display: " .. label .. ".")
 end
 
 function EL:SetSessionHistoryDisplayDays(days)
     days = tonumber(days) or 30
-    self:SetSessionHistoryDisplayMode(days == 7 and "week" or "30")
+    self:SetSessionHistoryDisplayMode(days == 1 and "today" or (days == 7 and "week" or "30"))
 end
 
 function EL:CycleSessionHistoryDisplayDays()
     local current = self:GetSessionHistoryDisplayMode()
-    self:SetSessionHistoryDisplayMode(current == "week" and "30" or "week")
+    if current == "today" then
+        self:SetSessionHistoryDisplayMode("week")
+    elseif current == "week" then
+        self:SetSessionHistoryDisplayMode("30")
+    else
+        self:SetSessionHistoryDisplayMode("today")
+    end
 end
 
 function EL:PruneSessionHistory()
@@ -2154,7 +2230,14 @@ function EL:GetSessionHistoryList()
     self:PruneSessionHistory()
     local mode = self.GetSessionHistoryDisplayMode and self:GetSessionHistoryDisplayMode() or "30"
     local now = time()
-    local cutoff = (mode == "week" and self.GetWeeklyResetStartTime and self:GetWeeklyResetStartTime(now)) or (now - (30 * 86400))
+    local cutoff
+    if mode == "today" then
+        cutoff = (self.GetTodayStartTime and self:GetTodayStartTime(now)) or (now - 86400)
+    elseif mode == "week" then
+        cutoff = (self.GetWeeklyResetStartTime and self:GetWeeklyResetStartTime(now)) or (now - (7 * 86400))
+    else
+        cutoff = now - (30 * 86400)
+    end
     local visible = {}
     for _, entry in ipairs(self.db.sessionHistory or {}) do
         if type(entry) == "table" and (tonumber(entry.timestamp) or 0) >= cutoff then
@@ -2486,11 +2569,17 @@ function EL:HasVisibleUpdateConsumers()
     return buttonShown or panelShown or sessionShown or self:ShouldRefreshActionBar()
 end
 
-function EL:RequestUpdate()
+function EL:PerformUpdate()
     if self.HasVisibleUpdateConsumers and not self:HasVisibleUpdateConsumers() then
         if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
         return
     end
+
+    if self:IsCombatLocked() then
+        self:QueueCombatDeferredWork("ui")
+        return
+    end
+
     if self.UpdateButton then self:UpdateButton() end
 
     local panelShown = self.panel and self.panel:IsShown()
@@ -2500,6 +2589,32 @@ function EL:RequestUpdate()
     if sessionShown and self.RefreshSessionPanel then self:RefreshSessionPanel() end
 
     if self:ShouldRefreshActionBar() and self.RequestActionBarRefresh then self:RequestActionBarRefresh() end
+end
+
+function EL:RequestUpdate(immediate)
+    if self.HasVisibleUpdateConsumers and not self:HasVisibleUpdateConsumers() then
+        if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
+        return
+    end
+
+    if self:IsCombatLocked() then
+        self:QueueCombatDeferredWork("ui")
+        return
+    end
+
+    if immediate or not (C_Timer and C_Timer.After) then
+        self:PerformUpdate()
+        return
+    end
+
+    if self.updateRefreshQueued then return end
+    self.updateRefreshQueued = true
+
+    C_Timer.After(self.UPDATE_DEBOUNCE_SECONDS or 0.05, function()
+        if not EL then return end
+        EL.updateRefreshQueued = nil
+        if EL.PerformUpdate then EL:PerformUpdate() end
+    end)
 end
 
 function EL:Print(msg)
@@ -2658,7 +2773,11 @@ EL.frame:RegisterEvent("TRADE_SKILL_ITEM_CRAFTED_RESULT")
 EL.frame:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
 EL.frame:RegisterEvent("BAG_UPDATE_DELAYED")
 EL.frame:RegisterEvent("CHAT_MSG_LOOT")
+EL.frame:RegisterEvent("CHAT_MSG_TRADESKILLS")
 EL.frame:RegisterEvent("PLAYER_MONEY")
+EL.frame:RegisterEvent("MAIL_SHOW")
+EL.frame:RegisterEvent("MAIL_INBOX_UPDATE")
+EL.frame:RegisterEvent("MAIL_CLOSED")
 EL.frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 EL.frame:RegisterEvent("PLAYER_LOGOUT")
 EL.frame:RegisterEvent("SPELLS_CHANGED")

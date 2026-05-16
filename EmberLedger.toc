@@ -2,7 +2,7 @@
 ## Title: EmberLedger
 ## Notes: Account-wide alt resource dashboard for concentration, Imbued Mulch, and profession session value tracking, and future resource timers.
 ## Author: Hitshade
-## Version: 1.11.1
+## Version: 1.13.10
 ## SavedVariables: EmberLedgerDB
 ## OptionalDeps: LibStub, LibDataBroker-1.1, LibDBIcon-1.0
 ## DefaultState: Enabled

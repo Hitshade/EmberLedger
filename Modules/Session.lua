@@ -12,6 +12,34 @@ local EXCLUDED_NAME_PATTERNS = {
     "vial",
 }
 
+local TRUSTED_MAIL_KEYWORDS = {
+    "patron",
+    "crafting order",
+    "work order",
+}
+
+local BLOCKED_MAIL_KEYWORDS = {
+    "auction",
+    "outbid",
+    "sale pending",
+    "expired",
+}
+
+local function TextContainsAny(value, patterns)
+    local lower = tostring(value or ""):lower()
+    if lower == "" then return false end
+    for _, pattern in ipairs(patterns) do
+        if lower:find(pattern, 1, true) then return true end
+    end
+    return false
+end
+
+local function GetInboxAttachmentQuantity(mailIndex, attachmentIndex)
+    if not GetInboxItem then return 0 end
+    local _, itemID, _, count = GetInboxItem(mailIndex, attachmentIndex)
+    if itemID and tonumber(count) then return tonumber(count) or 0 end
+    return tonumber(count) or 0
+end
 
 local function IsShownFrame(frame)
     return frame and frame.IsShown and frame:IsShown()
@@ -160,6 +188,165 @@ function EL:GetSessionItemCategory(itemLinkOrID)
     return sub
 end
 
+function EL:IsTrustedMailRewardTrackingEnabled()
+    local settings = self.db and self.db.settings and self.db.settings.session or {}
+    return settings.countTrustedMailRewards ~= false
+end
+
+function EL:IsCraftedSessionItemTrackingEnabled()
+    local settings = self.db and self.db.settings and self.db.settings.session or {}
+    return settings.countCraftedItems == true
+end
+
+local function ExtractCraftedItemFromEvent(...)
+    local itemID, quantity
+
+    -- Prefer item links/tables first. Numeric event args are less reliable because
+    -- quantity and itemID are both numbers on some client builds.
+    for i = 1, select("#", ...) do
+        local value = select(i, ...)
+        if type(value) == "string" then
+            local link = value:match("(|c%x+|Hitem:.-|h%[.-%]|h|r)") or value
+            local parsed = GetItemInfoInstantSafe(link)
+            if parsed then itemID = itemID or parsed end
+            local stackText = value:match("x(%d+)")
+            if stackText then quantity = quantity or tonumber(stackText) end
+        elseif type(value) == "table" then
+            local link = value.itemLink or value.hyperlink or value.link
+            local parsed = link and GetItemInfoInstantSafe(link)
+            itemID = itemID or parsed or value.itemID or value.id
+            quantity = quantity or value.quantity or value.count or value.stackCount
+        end
+    end
+
+    for i = 1, select("#", ...) do
+        local value = select(i, ...)
+        if type(value) == "number" and value > 0 then
+            if not itemID and value >= 1000 then
+                local parsed = GetItemInfoInstantSafe(value)
+                if parsed then
+                    itemID = parsed
+                end
+            elseif not quantity and (not itemID or value ~= itemID) and value < 10000 then
+                quantity = value
+            end
+        end
+    end
+
+    return tonumber(itemID), math.max(tonumber(quantity) or 1, 1)
+end
+
+function EL:MarkPendingSessionCraftedItem(itemID, quantity)
+    if not self:IsCraftedSessionItemTrackingEnabled() then return end
+    if not itemID or not quantity or quantity <= 0 then return end
+    local s = self:GetSessionDB()
+    if s.isPaused then return end
+    local now = GetTime()
+    local pending = s.pendingCraftedItems[itemID]
+    if pending and (pending.expiresAt or 0) > now then
+        if (now - (tonumber(pending.lastMarkedAt) or 0)) < 0.30 then
+            pending.quantity = math.max(tonumber(pending.quantity) or 0, quantity)
+        else
+            pending.quantity = (tonumber(pending.quantity) or 0) + quantity
+        end
+        pending.expiresAt = now + self.SESSION_DEDUPE_SECONDS
+        pending.lastMarkedAt = now
+    else
+        s.pendingCraftedItems[itemID] = { quantity = quantity, expiresAt = now + self.SESSION_DEDUPE_SECONDS, lastMarkedAt = now }
+    end
+end
+
+function EL:IsPendingSessionCraftedItem(itemID)
+    if not self:IsCraftedSessionItemTrackingEnabled() then return false end
+    if not itemID then return false end
+    local s = self:GetSessionDB()
+    local pending = s.pendingCraftedItems and s.pendingCraftedItems[itemID]
+    if not pending then return false end
+    if (pending.expiresAt or 0) <= GetTime() then
+        s.pendingCraftedItems[itemID] = nil
+        return false
+    end
+    return (tonumber(pending.quantity) or 0) > 0
+end
+
+function EL:ConsumePendingSessionCraftedItem(itemID, quantity)
+    if not self:IsCraftedSessionItemTrackingEnabled() then return 0 end
+    if not itemID or not quantity or quantity <= 0 then return 0 end
+    local s = self:GetSessionDB()
+    local pending = s.pendingCraftedItems and s.pendingCraftedItems[itemID]
+    if not pending then return 0 end
+    if (pending.expiresAt or 0) <= GetTime() then
+        s.pendingCraftedItems[itemID] = nil
+        return 0
+    end
+    local consumed = math.min(quantity, tonumber(pending.quantity) or 0)
+    pending.quantity = (tonumber(pending.quantity) or 0) - consumed
+    if pending.quantity <= 0 then s.pendingCraftedItems[itemID] = nil end
+    return consumed
+end
+
+function EL:IsTrustedSessionRewardMail(sender, subject, codAmount, itemCount, isGM)
+    if not self:IsTrustedMailRewardTrackingEnabled() then return false end
+    if (tonumber(codAmount) or 0) > 0 then return false end
+    if (tonumber(itemCount) or 0) <= 0 then return false end
+
+    -- Avoid obvious auction/transaction mail. These can contain valuable items,
+    -- but counting them would turn session tracking into mailbox accounting.
+    if TextContainsAny(sender, BLOCKED_MAIL_KEYWORDS) or TextContainsAny(subject, BLOCKED_MAIL_KEYWORDS) then
+        return false
+    end
+
+    -- Keep this intentionally narrow: patron/crafting order reward mail can
+    -- contain reagent rewards that represent earned profession-session value.
+    -- Player mail, alt transfers, bank shuffling, and auction mail remain ignored.
+    return isGM == true
+        or TextContainsAny(sender, TRUSTED_MAIL_KEYWORDS)
+        or TextContainsAny(subject, TRUSTED_MAIL_KEYWORDS)
+end
+
+function EL:ClearTrustedSessionMailCache()
+    local s = self:GetSessionDB()
+    s.trustedMailItems = {}
+end
+
+function EL:RefreshTrustedSessionMailCache()
+    local s = self:GetSessionDB()
+    s.trustedMailItems = {}
+    if not self:IsTrustedMailRewardTrackingEnabled() then return end
+    if not IsShownFrame(_G.MailFrame) then return end
+    if not GetInboxNumItems or not GetInboxHeaderInfo or not GetInboxItemLink then return end
+
+    local numItems = GetInboxNumItems() or 0
+    for mailIndex = 1, numItems do
+        local _, _, sender, subject, _, codAmount, _, itemCount, _, _, _, _, isGM = GetInboxHeaderInfo(mailIndex)
+        if self:IsTrustedSessionRewardMail(sender, subject, codAmount, itemCount, isGM) then
+            for attachmentIndex = 1, tonumber(itemCount) or 0 do
+                local itemLink = GetInboxItemLink(mailIndex, attachmentIndex)
+                local itemID = itemLink and GetItemInfoInstantSafe(itemLink)
+                if itemID and self:IsSessionTrackedItem(itemID) then
+                    local qty = GetInboxAttachmentQuantity(mailIndex, attachmentIndex)
+                    if qty > 0 then
+                        s.trustedMailItems[itemID] = (tonumber(s.trustedMailItems[itemID]) or 0) + qty
+                    end
+                end
+            end
+        end
+    end
+end
+
+function EL:ConsumeTrustedSessionMailItem(itemID, quantity)
+    if not itemID or not quantity or quantity <= 0 then return 0 end
+    if not self:IsTrustedMailRewardTrackingEnabled() then return 0 end
+    local s = self:GetSessionDB()
+    if type(s.trustedMailItems) ~= "table" then return 0 end
+    local allowed = tonumber(s.trustedMailItems[itemID]) or 0
+    if allowed <= 0 then return 0 end
+    local consumed = math.min(quantity, allowed)
+    s.trustedMailItems[itemID] = allowed - consumed
+    if s.trustedMailItems[itemID] <= 0 then s.trustedMailItems[itemID] = nil end
+    return consumed
+end
+
 function EL:CountSessionItemsInBags()
     local counts = {}
     if self.IsSessionTrackingEnabled and not self:IsSessionTrackingEnabled() then return counts end
@@ -170,7 +357,7 @@ function EL:CountSessionItemsInBags()
         for slot = 1, slots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
             local itemID = info and info.itemID
-            if itemID and self:IsSessionTrackedItem(itemID) then
+            if itemID and (self:IsSessionTrackedItem(itemID) or (self.IsPendingSessionCraftedItem and self:IsPendingSessionCraftedItem(itemID))) then
                 counts[itemID] = (counts[itemID] or 0) + (info.stackCount or 0)
             end
         end
@@ -184,6 +371,49 @@ local function PushRecent(session, entry)
     -- This makes the session list behave like a real scrolling loot feed.
     table.insert(session.recent, 1, entry)
     while #session.recent > 100 do table.remove(session.recent) end
+end
+
+
+local function SortBagSummaryLines(a, b)
+    local av = tonumber(a and a.totalSilver) or 0
+    local bv = tonumber(b and b.totalSilver) or 0
+    if av ~= bv then return av > bv end
+    return (a and a.name or "") < (b and b.name or "")
+end
+
+function EL:GetCurrentBagSummaryLines()
+    local summary = { lines = {}, totalSilver = 0, totalQuantity = 0 }
+    if not C_Container or not C_Container.GetContainerNumSlots or not C_Container.GetContainerItemInfo then return summary end
+    local counts = {}
+    local maxBag = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
+    for bag = 0, maxBag do
+        local slots = C_Container.GetContainerNumSlots(bag) or 0
+        for slot = 1, slots do
+            local info = C_Container.GetContainerItemInfo(bag, slot)
+            local itemID = info and info.itemID
+            local count = info and tonumber(info.stackCount) or 0
+            if itemID and count and count > 0 and self:IsSessionTrackedItem(itemID) then
+                counts[itemID] = (counts[itemID] or 0) + count
+            end
+        end
+    end
+    for itemID, quantity in pairs(counts) do
+        local unitPrice = (self.GetUnitPriceSilver and self:GetUnitPriceSilver(itemID)) or 0
+        local total = (tonumber(unitPrice) or 0) * (tonumber(quantity) or 0)
+        summary.totalSilver = summary.totalSilver + total
+        summary.totalQuantity = summary.totalQuantity + quantity
+        table.insert(summary.lines, {
+            itemID = itemID,
+            name = GetItemName(itemID) or ("item:" .. tostring(itemID)),
+            icon = GetItemIcon(itemID),
+            quantity = quantity,
+            unitPrice = unitPrice or 0,
+            totalSilver = total,
+            category = self.GetSessionItemCategory and self:GetSessionItemCategory(itemID) or "other",
+        })
+    end
+    table.sort(summary.lines, SortBagSummaryLines)
+    return summary
 end
 
 function EL:RecordPendingSessionChatLoot(itemID, quantity)
@@ -216,10 +446,10 @@ function EL:ConsumePendingSessionChatLoot(itemID, quantity)
     return quantity - consumed
 end
 
-function EL:AddSessionLootValue(itemID, quantity)
+function EL:AddSessionLootValue(itemID, quantity, allowUntracked)
     if self.IsSessionTrackingEnabled and not self:IsSessionTrackingEnabled() then return end
     if not itemID or not quantity or quantity <= 0 then return end
-    if not self:IsSessionTrackedItem(itemID) then
+    if not allowUntracked and not self:IsSessionTrackedItem(itemID) then
         if self.Debug then self:Debug("Ignored session item: " .. tostring(itemID)) end
         return
     end
@@ -305,6 +535,21 @@ function M:ProcessBagDiff()
     -- bags without being gameplay loot. Refresh the baseline while these UIs
     -- are open so closing them does not create delayed false gains.
     if EL.IsSessionInventoryTransferOpen and EL:IsSessionInventoryTransferOpen() then
+        if IsShownFrame(_G.MailFrame) and EL.IsTrustedMailRewardTrackingEnabled and EL:IsTrustedMailRewardTrackingEnabled() then
+            if EL.RefreshTrustedSessionMailCache and (not s.trustedMailItems or next(s.trustedMailItems) == nil) then
+                EL:RefreshTrustedSessionMailCache()
+            end
+            for itemID, count in pairs(current) do
+                local prev = tonumber(s.lastBagCounts[itemID]) or 0
+                local diff = count - prev
+                if diff > 0 and EL.ConsumeTrustedSessionMailItem then
+                    local trusted = EL:ConsumeTrustedSessionMailItem(itemID, diff)
+                    if trusted > 0 then
+                        EL:AddSessionLootValue(itemID, trusted)
+                    end
+                end
+            end
+        end
         s.lastBagCounts = current
         s.bagBaselineReady = true
         s.baselinePrimingUntil = nil
@@ -331,9 +576,16 @@ function M:ProcessBagDiff()
         local prev = tonumber(s.lastBagCounts[itemID]) or 0
         local diff = count - prev
         if diff > 0 then
-            local remaining = EL:ConsumePendingSessionChatLoot(itemID, diff)
+            local crafted = (EL.ConsumePendingSessionCraftedItem and EL:ConsumePendingSessionCraftedItem(itemID, diff)) or 0
+            if crafted > 0 then
+                EL:AddSessionLootValue(itemID, crafted, true)
+            end
+            local remaining = diff - crafted
             if remaining > 0 then
-                EL:AddSessionLootValue(itemID, remaining)
+                remaining = EL:ConsumePendingSessionChatLoot(itemID, remaining)
+                if remaining > 0 then
+                    EL:AddSessionLootValue(itemID, remaining)
+                end
             end
         end
     end
@@ -364,10 +616,36 @@ function M:OnLoad()
     end
 end
 
+function M:ProcessCraftedItemResult(...)
+    if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then return end
+    if EL.IsCraftedSessionItemTrackingEnabled and not EL:IsCraftedSessionItemTrackingEnabled() then return end
+    if EL.IsSessionInventoryTransferOpen and EL:IsSessionInventoryTransferOpen() then return end
+    local itemID, quantity = ExtractCraftedItemFromEvent(...)
+    if not itemID or quantity <= 0 then return end
+    EL:MarkPendingSessionCraftedItem(itemID, quantity)
+end
+
+function M:ProcessCraftedItemMessage(msg)
+    if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then return end
+    if EL.IsCraftedSessionItemTrackingEnabled and not EL:IsCraftedSessionItemTrackingEnabled() then return end
+    if EL.IsSessionInventoryTransferOpen and EL:IsSessionInventoryTransferOpen() then return end
+    if not msg then return end
+    local itemLink = tostring(msg):match("(|c%x+|Hitem:.-|h%[.-%]|h|r)")
+    if not itemLink then return end
+    local itemID = GetItemInfoInstantSafe(itemLink)
+    if not itemID then return end
+    local quantity = tonumber(tostring(msg):match("x(%d+)")) or 1
+    EL:MarkPendingSessionCraftedItem(itemID, quantity)
+end
+
 function M:OnEvent(event, ...)
     if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then return end
     if event == "CHAT_MSG_LOOT" then
         self:ProcessChatLoot(...)
+    elseif event == "CHAT_MSG_TRADESKILLS" then
+        self:ProcessCraftedItemMessage(...)
+    elseif event == "TRADE_SKILL_ITEM_CRAFTED_RESULT" then
+        self:ProcessCraftedItemResult(...)
     elseif event == "BAG_UPDATE_DELAYED" then
         C_Timer.After(0.2, function()
             if not EL or not EL.db then return end
@@ -385,6 +663,19 @@ function M:OnEvent(event, ...)
         if delta ~= 0 and EL.AddSessionMoneyDelta then
             EL:AddSessionMoneyDelta(delta)
         end
+    elseif event == "MAIL_SHOW" or event == "MAIL_INBOX_UPDATE" then
+        if EL.RefreshTrustedSessionMailCache then
+            if C_Timer and C_Timer.After then
+                C_Timer.After(0.15, function()
+                    if not EL or not EL.db then return end
+                    EL:RefreshTrustedSessionMailCache()
+                end)
+            else
+                EL:RefreshTrustedSessionMailCache()
+            end
+        end
+    elseif event == "MAIL_CLOSED" then
+        if EL.ClearTrustedSessionMailCache then EL:ClearTrustedSessionMailCache() end
     elseif event == "PLAYER_ENTERING_WORLD" then
         C_Timer.After(1, function()
             if not EL or not EL.db then return end
