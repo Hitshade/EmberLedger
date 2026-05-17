@@ -900,17 +900,32 @@ local function SetSettingsTooltip(widget, title, lines)
 end
 
 
+local function IsOptionsWindow(frame)
+    return frame and EL and frame == EL.settingsPanel
+end
+
 local function BringEmberWindowToFront(frame)
-    if not frame then return end
-    if EL then
-        EL._emberWindowFrontLevel = (tonumber(EL._emberWindowFrontLevel) or 100) + 10
-        if EL._emberWindowFrontLevel > 900 then
-            EL._emberWindowFrontLevel = 110
+    if not frame or not EL then return end
+
+    -- Keep the Options panel above normal UI because it is a configuration dialog.
+    -- All other EmberLedger windows stay below Blizzard's standard panel strata so
+    -- character, profession, inventory, and other native windows remain on top.
+    if IsOptionsWindow(frame) then
+        EL._emberOptionsFrontLevel = (tonumber(EL._emberOptionsFrontLevel) or 500) + 10
+        if EL._emberOptionsFrontLevel > 900 then
+            EL._emberOptionsFrontLevel = 510
         end
-        local currentStrata = frame.GetFrameStrata and frame:GetFrameStrata()
-        if frame.SetFrameStrata and currentStrata ~= "DIALOG" then frame:SetFrameStrata("HIGH") end
-        if frame.SetFrameLevel then frame:SetFrameLevel(EL._emberWindowFrontLevel) end
+        if frame.SetFrameStrata then frame:SetFrameStrata("DIALOG") end
+        if frame.SetFrameLevel then frame:SetFrameLevel(EL._emberOptionsFrontLevel) end
+        return
     end
+
+    EL._emberWindowFrontLevel = (tonumber(EL._emberWindowFrontLevel) or 20) + 5
+    if EL._emberWindowFrontLevel > 80 then
+        EL._emberWindowFrontLevel = 25
+    end
+    if frame.SetFrameStrata then frame:SetFrameStrata("MEDIUM") end
+    if frame.SetFrameLevel then frame:SetFrameLevel(EL._emberWindowFrontLevel) end
 end
 
 function EL:BringWindowToFront(frame)
@@ -936,7 +951,7 @@ local function ShowSessionHistoryDisplayDropdown(anchor)
     if not menu then
         menu = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
         menu:SetSize(148, 86)
-        menu:SetFrameStrata("DIALOG")
+        menu:SetFrameStrata("MEDIUM")
         menu:SetClampedToScreen(true)
         if menu.EnableKeyboard then
             menu:EnableKeyboard(true)
@@ -1018,6 +1033,8 @@ local function ShowSessionHistoryDisplayDropdown(anchor)
 
     menu:ClearAllPoints()
     menu:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -4)
+    if menu.SetFrameStrata then menu:SetFrameStrata("MEDIUM") end
+    if menu.SetFrameLevel then menu:SetFrameLevel(((anchor.GetFrameLevel and anchor:GetFrameLevel()) or 30) + 20) end
     menu:Show()
 end
 
@@ -1499,7 +1516,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.15.3"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.15.4"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -2081,7 +2098,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.15.3"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.15.4"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
