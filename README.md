@@ -1,233 +1,169 @@
-# 🔥 EmberLedger v1.15.3
+# EmberLedger v1.15.3
 
-**EmberLedger** is a lightweight World of Warcraft profession utility addon focused on helping players manage profession alts, concentration, Artisan Moxie, Imbued Mulch, and gathering sessions without unnecessary complexity or UI clutter.
+**EmberLedger** is a lightweight World of Warcraft Retail addon for profession-alt management, concentration tracking, Artisan Moxie, Imbued Mulch, session tracking, and long-term session statistics.
 
-Designed primarily for multi-character profession management in Retail WoW, EmberLedger provides a clean dashboard-style interface for quickly checking which characters are ready to craft, gather, process materials, or spend profession resources.
+It is designed for players who manage multiple crafting or gathering alts and want a compact dashboard without installing a large profession suite, auction house system, or inventory manager.
 
-***
+---
 
-# ⚒️ Core Features
+## Core Features
 
-## 🧪 Profession & Concentration Tracking
+### Profession and Concentration Tracking
 
-EmberLedger tracks profession information across your Warband so you can quickly see which alts need attention.
+EmberLedger tracks profession readiness across characters so you can quickly see which alts need attention.
 
-* Tracks known professions across characters
-* Supports multiple concentration-based professions per character
-* Displays current concentration values and readiness states
-* Optional **Next** forecast column for quick readiness timing
-* Supports pinned characters for easier alt management
-* Supports hidden characters for cleaner tracking
-* Optional **Current character first** behavior
-* Optional **Highlight current character** behavior
-* Optional compact display mode for smaller tracking windows
+- Known professions across characters
+- Multi-profession concentration tracking
+- Current and maximum concentration values
+- Ready and near-ready highlighting
+- Optional **Next** forecast column
+- Pinned and hidden characters
+- Current-character-first sorting
+- Optional compact mode
+- Optional vertical resizing for the main tracker
 
-The main tracking window can display:
+The main tracker can show Character, Profession 1, Concentration 1, Profession 2, Concentration 2, Next, Artisan Moxie, and Imbued Mulch columns. Width is determined by visible columns, while height can be resized vertically.
 
-* Character
-* Profession 1
-* Concentration 1
-* Profession 2
-* Concentration 2
-* Artisan Moxie
-* Next ready forecast
-* Imbued Mulch
+### Artisan Moxie
 
-If a character only has one concentration-tracked profession, EmberLedger places it in the first profession/concentration slot instead of leaving awkward empty gaps.
+EmberLedger can track profession-specific Artisan Moxie values across characters.
 
-***
+- Per-profession Moxie display
+- Multi-profession Moxie support
+- Configurable Moxie threshold
+- Threshold highlighting
+- Profession-specific tooltip details
 
-## ✨ Artisan Moxie Tracking
+### Imbued Mulch
 
-EmberLedger includes optional **Artisan Moxie** tracking for profession-specific Moxie currencies.
+EmberLedger tracks Imbued Mulch readiness and bag counts directly in the main tracker.
 
-* Tracks Moxie values per profession
-* Supports multiple profession Moxie values per character
-* Optional Moxie column in the main tracker
-* Profession-specific tooltip details
-* Configurable Moxie threshold setting
-* Default threshold of **600** for valuable trade-good satchel spending
-* Highlights Moxie values that meet or exceed your configured threshold
+- Ready state display
+- Remaining-time countdowns
+- Bag count tracking
+- Verified character access checks
 
-This makes it easier to identify which characters have enough Moxie to spend without logging through every profession alt manually.
+### Session Tracking
 
-***
+EmberLedger includes a lightweight gathering and profession session tracker.
 
-## 🌱 Imbued Mulch Tracking
+- Session total
+- Gold per hour
+- Raw gold
+- Item value
+- Gold spent
+- Elapsed time
+- Recent item list
+- Tracked item quantities
+- Session history
+- Bag Summary view
+- Today, This Week, 30 Days, and Lifetime stats
 
-EmberLedger tracks **Imbued Mulch** readiness across characters and includes it directly inside the main profession tracker.
+Session stats use compact daily and weekly aggregates so long-term totals remain accurate without relying on a large raw history list. The visible session history remains capped and pruned to protect SavedVariables size.
 
-* Tracks Imbued Mulch cooldown readiness
-* Displays remaining time until ready
-* Displays ready states clearly
-* Tracks mulch bag counts
-* Supports characters with verified mulch access
-* Integrates mulch timing into the main dashboard
+### Bag Summary
 
-This is useful for players managing herbalism characters, mulch routines, and profession-alt cooldown checks.
+Bag Summary is a read-only session view that shows currently held tracked items.
 
-***
+- Current tracked bag value
+- Projected total
+- Tracked item quantities
+- Per-item value and total value
 
-## 💰 Session Tracking
+Bag Summary does not modify active session totals, session history, or lifetime stats.
 
-EmberLedger includes lightweight gathering-session tracking for herbalism, mining, and general profession gameplay.
+### Utility Action Bar
 
-It can track:
-
-* Session gold
-* Item value
-* Gold-per-hour
-* Elapsed time
-* Session item list
-* Session item quantities
-* Individual session item values
-* Basic material categorization
-* Session history
-
-Session tracking can appear in the launcher, in the standalone Session window, or both. Launcher display and Session window visibility are customized independently, so hiding the Session window does not remove session information from the launcher.
-
-Session history keeps up to **30 days** of useful session summaries, can show either **This Week** since weekly reset or the full **30 days**, and automatically prunes empty/no-value sessions to avoid unnecessary SavedVariables growth.
-
-***
-
-## 🛠️ Compact Utility Action Bar
-
-EmberLedger includes an optional profession utility action bar for commonly used profession items, spells, and convenience tools.
+The optional action bar provides quick access to useful profession and travel tools.
 
 Supported buttons include:
 
-* Imbued Mulch
-* Resilient Seeds
-* Green Thumb
-* Overload Herb
-* Overload Ore
-* Interdimensional Parcel
-* Warband Bank
-* Hearthstone
-* Profession tools and utility items where supported
+- Imbued Mulch
+- Resilient Seeds
+- Green Thumb
+- Overload Herb
+- Overload Ore
+- Interdimensional Parcel
+- Warband Bank
+- Hearthstone
+- Profession tools and supported utility items
 
-The action bar is configurable, compact, and performance-aware.
+Buttons can be individually enabled or disabled, and action bar processing can be turned off under Performance options.
 
-* Individual buttons can be enabled or disabled
-* Seed buttons can be selected through Options
-* Spell buttons respect learned abilities where possible
-* Item buttons can hide when unavailable
-* Zone-specific abilities are limited to appropriate areas where possible
-* Action bar processing can be disabled entirely under Performance options
+### Minimap Integration
 
-***
+EmberLedger includes minimap access with LibDataBroker / LibDBIcon support where available, plus a fallback standalone button.
 
-## 🪟 Clean Dashboard Interface
+- Left-click to toggle EmberLedger
+- Right-click to open Options
+- Compact tooltip summary
+- Optional show/hide setting
 
-EmberLedger is built around a polished dashboard-style interface designed to stay readable without taking over the screen.
+---
 
-Main window options include:
+## Interface
 
-* Compact Mode
-* Show character realm
-* Show pinned first
-* Current character first
-* Highlight current character
-* Optional Profession 2 column
-* Optional Concentration 2 column
-* Optional Moxie column
-* Optional Next column
-* Optional Mulch column
-* Configurable Moxie spend threshold
+EmberLedger uses a compact dark dashboard style with readable tables, subtle row striping, coin-icon money formatting, and consistent window styling.
 
-The Options window is organized into clear sections for main-window toggles, column visibility, launcher behavior, session behavior, action bar controls, performance settings, and maintenance tools.
+Main options include:
 
-***
+- Compact Mode
+- Show character realm
+- Show pinned first
+- Current character first
+- Highlight current character
+- Column visibility controls
+- Configurable Moxie threshold
+- Launcher display controls
+- Session tracking controls
+- Performance guidance and safeguards
+- Maintenance tools
 
-# ⚡ Lightweight by Design
+---
 
-EmberLedger was intentionally designed to avoid unnecessary overhead.
+## Lightweight by Design
 
-* Hidden windows avoid unnecessary refresh work
-* Disabled systems stop background processing
-* Action bar refreshes are gated
-* Event-driven updates are preferred over excessive polling
-* Dashboard refreshes cache profession and concentration lookups where practical
-* Row frames are reused instead of recreated every refresh
-* Combat-sensitive action bar layout changes are guarded
-* Performance cleanup and optimization passes have been performed repeatedly throughout development
+EmberLedger focuses on practical visibility and avoids heavy systems that do not fit its purpose.
 
-Real-world testing and WoW addon CPU profiling consistently show very low CPU usage during normal gameplay.
+It intentionally does not include:
 
-***
+- Auction house scanning
+- Crafting simulation
+- Inventory management suites
+- Import/export frameworks
+- Large automation systems
+- Full economy accounting
+- Heavy background scanning
 
-# 🎯 Design Goals
+Most work is event-driven, hidden windows avoid unnecessary refreshes, disabled systems stop processing, and UI refreshes are debounced or suspended where appropriate.
 
-EmberLedger focuses on:
+---
 
-* Practical utility
-* Lightweight performance
-* Clean visual presentation
-* Fast alt management
-* Low screen clutter
-* Straightforward configuration
-* Profession-alt quality of life
-* Safe behavior around protected Blizzard UI systems
+## Recommended For
 
-The addon intentionally avoids:
+EmberLedger is useful if you:
 
-* Auction house systems
-* Inventory management systems
-* Import/export frameworks
-* Large automation systems
-* Bloated profession simulation tools
-* Complex crafting calculators
-* Heavy background scanning
+- Manage several profession alts
+- Track concentration across characters
+- Watch Artisan Moxie totals
+- Check Imbued Mulch regularly
+- Run gathering or farming sessions
+- Want quick gold/hour visibility
+- Prefer focused utility addons over large profession suites
 
-EmberLedger is meant to answer simple, practical questions quickly:
+---
 
-* Which character has concentration ready?
-* Which profession needs attention?
-* Who has enough Moxie to spend?
-* Is Imbued Mulch ready?
-* What did I earn this session?
-* Which utility buttons do I actually want visible?
-* Which alts should stay pinned at the top?
+## Slash Commands
 
-***
+```text
+/emberledger
+/el
+```
 
-# 👤 Who EmberLedger Is For
+---
 
-EmberLedger is for players who:
+## AI-Assisted Development Notice
 
-* Manage several profession alts
-* Use concentration-based profession systems
-* Want to track Artisan Moxie across characters
-* Check Imbued Mulch regularly
-* Run herbalism or mining sessions
-* Prefer compact, readable UI tools
-* Want useful information without a large profession suite
+EmberLedger was built with significant AI assistance and manual iteration. AI was used for prototyping, code review support, UI iteration, cleanup passes, and release-note preparation.
 
-If you manage multiple profession characters and want a faster way to check readiness, resources, and session value, EmberLedger was built for that exact workflow.
-
-***
-
-# 🤖 AI Disclosure
-
-EmberLedger was developed with significant AI assistance and iterative manual refinement/testing.
-
-AI-assisted development was used primarily to accelerate:
-
-* Prototyping
-* UI iteration
-* Cleanup passes
-* Feature implementation
-* Code review support
-* Release-note preparation
-
-All major systems, release decisions, performance passes, visual polish decisions, and user-facing workflow adjustments were manually reviewed and repeatedly tested during development.
-
-The addon has gone through multiple cleanup and optimization passes focused on:
-
-* Reducing unnecessary refresh work
-* Minimizing hidden UI processing
-* Avoiding protected Blizzard UI behavior
-* Keeping the addon lightweight and maintainable
-* Preserving readable source files for future maintenance
-
-Performance, usability, and practical in-game behavior have remained the primary priorities throughout development.
+All major design decisions, feature scope choices, performance passes, and user-facing behavior were reviewed through practical testing and manual direction. The addon has been repeatedly cleaned up with a focus on low overhead, defensive saved-variable handling, readable source files, and predictable in-game behavior.
