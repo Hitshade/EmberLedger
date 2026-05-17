@@ -1,3 +1,57 @@
+v1.14.0
+- Hardened tracking-column toggles so they always mutate the live saved settings table.
+- Preserved the non-mutating tracking-column read path added in the previous cleanup pass.
+- Updated version metadata for the 1.14 code polish release.
+
+v1.13.19
+- Cleaned up resize grip double-click handling so the reset path fires only once.
+- Corrected the resize grip line styling so the widest line sits at the bottom like a traditional resize handle.
+- Documented the intentional Next/Moxie column order change in the changelog.
+- Made tracking column reads non-mutating during refreshes to remove harmless hot-path settings writes.
+- Improved dropdown Escape handling with focus guards.
+- Removed a harmless legacy 1x1 session collapse frame.
+- Slightly refined Session Stats total-card spacing.
+
+v1.13.17
+- Improved resize grip placement when the action bar is disabled.
+- Grip now sits inside the lower-right frame border instead of overlapping the outer edge.
+- Existing action-bar-enabled grip placement is unchanged.
+
+EmberLedger v1.13.16
+- Removed the old fixed visible-row cap from the main tracker.
+- Vertical resizing can now show as many character rows as will fit within the available screen height.
+- Width remains automatic based on visible columns, and scrolling still appears when the character list exceeds the available height.
+
+# EmberLedger v1.13.15
+
+- Moved the vertical resize grip inside the bottom action bar area, to the right of the Logout button.
+- Adjusted Logout button spacing so the resize grip fits cleanly without overlap.
+- Preserved existing resize grip behavior and tooltip text.
+
+## v1.13.14
+
+- Moved the Logout button slightly left to prevent overlap with the bottom-right vertical resize grip.
+- Preserved the existing resize grip look, behavior, and tooltip text.
+
+## v1.13.13
+- Updated the vertical resize grip to use a more traditional bottom-right corner handle look.
+- Moved the resize grip from the bottom center to the bottom-right corner.
+- Preserved existing resize behavior, reset behavior, and tooltip text.
+
+## v1.13.12
+
+- Added WoW addon-list category metadata for Professions.
+- Added vertical-only resizing to the main tracker window.
+- Tracker width remains automatically controlled by visible columns.
+- Added double-click reset on the resize grip to return to automatic height.
+- README title/version updated only.
+
+## v1.13.11
+
+- Swapped the main tracker column order so Next appears before Moxie when both columns are shown.
+- This keeps the concentration forecast visually closer to the concentration columns it describes.
+- README title/version updated only.
+
 ## v1.13.10
 
 - Fixed the session display dropdown lifecycle so it closes when the Stats window closes or when switching away from the Sessions view.

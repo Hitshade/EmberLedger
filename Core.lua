@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.13.10"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.14.0"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -45,12 +45,12 @@ EL.UI_CONSTANTS = {
     PANEL_DEFAULT_VISIBLE_ROWS = 12,
     PANEL_EXPANDED_MIN_H = 300,
     PANEL_MAX_W = 900,
-    PANEL_MAX_H = 720,
+    PANEL_MAX_H = 1600,
     PANEL_MIN_SCALE = 0.6,
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 11203
+EL.DB_VERSION = 11316
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -527,6 +527,9 @@ function EL:NormalizeDatabaseSettings()
 
     settings.panel.width = math.floor(ClampNumber(settings.panel.width, ui.TRACKING_DYNAMIC_MIN_W or ui.PANEL_MIN_W or 352, ui.PANEL_MAX_W or 900, 352))
     settings.panel.height = math.floor(ClampNumber(settings.panel.height, ui.PANEL_MIN_H or 120, ui.PANEL_MAX_H or 720, 360))
+    if settings.panel.customHeight ~= nil then
+        settings.panel.customHeight = math.floor(ClampNumber(settings.panel.customHeight, ui.PANEL_MIN_H or 120, ui.PANEL_MAX_H or 720, settings.panel.height))
+    end
     settings.session.width = math.floor(ClampNumber(settings.session.width, ui.SESSION_MIN_W or 320, ui.PANEL_MAX_W or 900, ui.SESSION_MIN_W or 320))
     settings.session.height = math.floor(ClampNumber(settings.session.height, 120, ui.PANEL_MAX_H or 720, 180))
 

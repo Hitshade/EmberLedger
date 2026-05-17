@@ -12,12 +12,12 @@ local ACTION_BAR_H = UIC.ACTION_BAR_H or 36
 local SESSION_VISIBLE_ITEM_ROWS = UIC.SESSION_VISIBLE_ITEM_ROWS or 4
 local SESSION_ITEM_ROW_H = UIC.SESSION_ITEM_ROW_H or 18
 local PANEL_DEFAULT_VISIBLE_ROWS = UIC.PANEL_DEFAULT_VISIBLE_ROWS or 12
-local TRACKING_MAX_VISIBLE_ROWS = 20
 local TRACKING_ROW_H = 23
 local TRACKING_COMPACT_ROW_H = 18
 local PANEL_EXPANDED_MIN_H = UIC.PANEL_EXPANDED_MIN_H or 300
 local PANEL_MAX_W = UIC.PANEL_MAX_W or 900
-local PANEL_MAX_H = UIC.PANEL_MAX_H or 720
+local PANEL_MAX_H = UIC.PANEL_MAX_H or 1600
+local PANEL_SCREEN_MARGIN = 18
 local PANEL_MIN_SCALE = UIC.PANEL_MIN_SCALE or 0.6
 local PANEL_MAX_SCALE = UIC.PANEL_MAX_SCALE or 1.4
 local READY_ICON = "|TInterface\\RaidFrame\\ReadyCheck-Ready:14|t"
@@ -251,13 +251,32 @@ local function GetCurrentPanelMinHeight(panel)
     return math.max(compactMin, topPadding + charHeaderH + charBodyMinH + bottomPadding)
 end
 
+local function GetTrackingPanelMaxHeight(panel)
+    local minH = GetCurrentPanelMinHeight(panel)
+    local screenH = UIParent and UIParent.GetHeight and UIParent:GetHeight()
+    if not screenH or screenH <= 0 then
+        return math.max(minH, PANEL_MAX_H)
+    end
+
+    local screenMax = math.max(minH, screenH - (PANEL_SCREEN_MARGIN * 2))
+    local top = panel and panel.GetTop and panel:GetTop()
+    if top and top > 0 then
+        -- The tracker resizes downward from its current top edge. Limit the
+        -- lower edge to the visible screen area instead of using an arbitrary
+        -- visible-row cap.
+        return math.max(minH, math.min(PANEL_MAX_H, top - PANEL_SCREEN_MARGIN, screenMax))
+    end
+
+    return math.max(minH, math.min(PANEL_MAX_H, screenMax))
+end
+
 local function ClampPanelSize(panel)
     if not panel then return end
     local minH = GetCurrentPanelMinHeight(panel)
     local minW = (EL.GetTrackingPanelMinWidth and EL:GetTrackingPanelMinWidth()) or PANEL_MIN_W
     local maxW = (EL.GetTrackingPanelMaxWidth and EL:GetTrackingPanelMaxWidth()) or PANEL_MAX_W
     local w = math.max(minW, math.min(maxW, panel:GetWidth() or minW))
-    local h = math.max(minH, math.min(PANEL_MAX_H, panel:GetHeight() or minH))
+    local h = math.max(minH, math.min(GetTrackingPanelMaxHeight(panel), panel:GetHeight() or minH))
     if math.abs((panel:GetWidth() or 0) - w) > 1 or math.abs((panel:GetHeight() or 0) - h) > 1 then
         panel:SetSize(w, h)
     end
@@ -286,7 +305,7 @@ function EL:GetTrackingPanelAutoSize()
     local actionBarShown = not self.IsActionBarEnabled or self:IsActionBarEnabled()
 
     local width = (self.GetTrackingPanelMaxWidth and self:GetTrackingPanelMaxWidth()) or PANEL_MIN_W
-    local rowCount = charShown and math.min(TRACKING_MAX_VISIBLE_ROWS, self:GetVisibleTrackingRowCount()) or 0
+    local rowCount = charShown and self:GetVisibleTrackingRowCount() or 0
     local tableBodyH = 0
     if charShown then
         tableBodyH = rowCount > 0 and (rowCount * GetTrackingRowHeight()) or 46
@@ -296,8 +315,41 @@ function EL:GetTrackingPanelAutoSize()
     local headerAndGapH = charShown and ((IsCompactModeEnabled() and 28 or 32) + 4) or 0
     local bottomPadding = GetTrackingBottomPadding(actionBarShown)
     local height = topPadding + headerAndGapH + tableBodyH + bottomPadding
-    height = math.max(GetCurrentPanelMinHeight(self.panel), math.min(PANEL_MAX_H, height))
+    local customHeight = tonumber(settings.customHeight)
+    if customHeight then
+        height = customHeight
+    end
+    height = math.max(GetCurrentPanelMinHeight(self.panel), math.min(GetTrackingPanelMaxHeight(self.panel), height))
     return math.floor(width + 0.5), math.floor(height + 0.5)
+end
+
+function EL:ClearTrackingPanelCustomHeight()
+    local settings = self.db and self.db.settings and self.db.settings.panel
+    if not settings then return end
+    settings.customHeight = nil
+    if self.LayoutPanel then self:LayoutPanel() end
+    if self.RequestUpdate then self:RequestUpdate(true) end
+end
+
+local function SetTrackingPanelVerticalHeight(panel, height)
+    local settings = EL and EL.db and EL.db.settings and EL.db.settings.panel
+    if not panel or not settings then return end
+    local targetW = (EL.GetTrackingPanelMaxWidth and EL:GetTrackingPanelMaxWidth()) or (panel:GetWidth() or PANEL_MIN_W)
+    local minH = GetCurrentPanelMinHeight(panel)
+    local targetH = math.max(minH, math.min(GetTrackingPanelMaxHeight(panel), tonumber(height) or minH))
+    local left, top = panel:GetLeft(), panel:GetTop()
+    panel._autoSizingPanel = true
+    panel:SetSize(targetW, targetH)
+    if left and top then
+        panel:ClearAllPoints()
+        panel:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+        SaveFramePoint(panel, settings)
+    end
+    panel._autoSizingPanel = false
+    settings.width = targetW
+    settings.height = targetH
+    settings.customHeight = targetH
+    settings.expandedHeight = targetH
 end
 
 function EL:AutoSizeTrackingPanel(reason)
@@ -334,7 +386,7 @@ function EL:SaveExpandedPanelHeight()
     if not settings.charactersCollapsed then
         local h = math.floor(p:GetHeight() or 0)
         if h and h > PANEL_MIN_H then
-            settings.expandedHeight = math.max(PANEL_MIN_H, math.min(PANEL_MAX_H, h))
+            settings.expandedHeight = math.max(PANEL_MIN_H, math.min(GetTrackingPanelMaxHeight(p), h))
         end
     end
 end
@@ -374,8 +426,8 @@ local TRACKING_COLUMN_DEFS = {
     { key = "conc1", label = "Conc 1", width = 86, minWidth = 86, compactWidth = 68, compactMinWidth = 68, justify = "RIGHT", sortKey = "conc1", setting = "showConcentration1Column", toggleLabel = "Conc 1 column" },
     { key = "prof2", label = "P2", width = 34, minWidth = 30, compactWidth = 28, compactMinWidth = 26, justify = "CENTER", sortKey = "prof2", setting = "showProfession2Column", toggleLabel = "Prof 2 column", secondary = true },
     { key = "conc2", label = "Conc 2", width = 86, minWidth = 86, compactWidth = 68, compactMinWidth = 68, justify = "RIGHT", sortKey = "conc2", setting = "showConcentration2Column", toggleLabel = "Conc 2 column", secondary = true },
-    { key = "moxie", label = "Moxie", width = 82, minWidth = 78, compactWidth = 70, compactMinWidth = 64, justify = "RIGHT", sortKey = "moxie", setting = "showMoxieColumn", toggleLabel = "Moxie column" },
     { key = "forecast", label = "Next", width = 84, minWidth = 72, compactWidth = 72, compactMinWidth = 64, justify = "RIGHT", sortKey = "forecast", setting = "showForecastColumn", toggleLabel = "Next column" },
+    { key = "moxie", label = "Moxie", width = 82, minWidth = 78, compactWidth = 70, compactMinWidth = 64, justify = "RIGHT", sortKey = "moxie", setting = "showMoxieColumn", toggleLabel = "Moxie column" },
     { key = "mulch", label = "Mulch", width = 68, minWidth = 64, compactWidth = 60, compactMinWidth = 58, justify = "RIGHT", sortKey = "mulch", setting = "showMulchColumn", toggleLabel = "Mulch column" },
 }
 
@@ -420,41 +472,23 @@ function EL:HasSecondaryConcentrationColumnData()
     return false
 end
 
+local TRACKING_COLUMN_DEFAULT_SETTINGS = {
+    showProfession1Column = true,
+    showConcentration1Column = true,
+    showProfession2Column = true,
+    showConcentration2Column = true,
+    showMoxieColumn = false,
+    showMulchColumn = true,
+    showForecastColumn = false,
+    showCharacterRealm = true,
+    showProfessionColumn = true,
+    showConcentrationColumn = true,
+}
+
 function EL:GetTrackingColumnSettings()
-    self.db.settings = self.db.settings or {}
-    self.db.settings.display = self.db.settings.display or {}
-    local display = self.db.settings.display
-
-    if display.showProfession1Column == nil then
-        display.showProfession1Column = display.showProfessionColumn ~= false
-    end
-    if display.showConcentration1Column == nil then
-        display.showConcentration1Column = display.showConcentrationColumn ~= false
-    end
-    if display.showProfession2Column == nil then display.showProfession2Column = true end
-    if display.showConcentration2Column == nil then display.showConcentration2Column = true end
-    if display.showMoxieColumn == nil then display.showMoxieColumn = false end
-    if display.showMulchColumn == nil then display.showMulchColumn = true end
-    if display.showForecastColumn == nil then display.showForecastColumn = false end
-    if display.showCharacterRealm == nil then display.showCharacterRealm = true end
-
-    display.showProfession1Column = display.showProfession1Column ~= false
-    display.showConcentration1Column = display.showConcentration1Column ~= false
-    display.showProfession2Column = display.showProfession2Column ~= false
-    display.showConcentration2Column = display.showConcentration2Column ~= false
-    display.showMoxieColumn = display.showMoxieColumn == true
-    display.showMulchColumn = display.showMulchColumn ~= false
-    display.showForecastColumn = display.showForecastColumn == true
-    display.showCharacterRealm = display.showCharacterRealm ~= false
-
-    -- Keep legacy keys in sync for older saved variables and older code paths.
-    display.showProfessionColumn = display.showProfession1Column
-    display.showConcentrationColumn = display.showConcentration1Column
-
-    if display.showProfession1Column == false and display.showConcentration1Column == false and display.showProfession2Column == false and display.showConcentration2Column == false and display.showMoxieColumn == false and display.showMulchColumn == false and display.showForecastColumn == false then
-        display.showProfession1Column = true
-        display.showProfessionColumn = true
-    end
+    local settings = self.db and self.db.settings
+    local display = settings and settings.display
+    if type(display) ~= "table" then return TRACKING_COLUMN_DEFAULT_SETTINGS end
     return display
 end
 
@@ -893,6 +927,13 @@ local function ShowSessionHistoryDisplayDropdown(anchor)
                 if key == "ESCAPE" then
                     HideSessionHistoryDisplayDropdown()
                 end
+            end)
+            menu:SetScript("OnShow", function(self)
+                if self.SetPropagateKeyboardInput then self:SetPropagateKeyboardInput(false) end
+                if self.SetFocus then self:SetFocus() end
+            end)
+            menu:SetScript("OnHide", function(self)
+                if self.ClearFocus then self:ClearFocus() end
             end)
         end
         AddBackdrop(menu, 0.95, 0.78)
@@ -1399,7 +1440,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.13.1"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.14.0"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -1751,7 +1792,10 @@ local TRACKING_COLUMN_SETTING_KEYS = {
 function EL:ToggleTrackingColumn(key)
     local settingKey = TRACKING_COLUMN_SETTING_KEYS[key]
     if not settingKey then return end
-    local display = self:GetTrackingColumnSettings()
+    self.db = self.db or {}
+    self.db.settings = self.db.settings or {}
+    self.db.settings.display = self.db.settings.display or {}
+    local display = self.db.settings.display
     local enabled = not (display[settingKey] ~= false)
     if not enabled then
         local remaining = 0
@@ -2489,7 +2533,7 @@ function EL:CreateSessionHistoryWindow()
 
     local function MakeTotalCard(icon, label, col, row)
         local cardW, cardH = 205, 36
-        local x = 12 + ((col - 1) * 219)
+        local x = 14 + ((col - 1) * 219)
         local y = -34 - ((row - 1) * 46)
         local card = CreateFrame("Frame", nil, frame.totals, "BackdropTemplate")
         card:SetPoint("TOPLEFT", frame.totals, "TOPLEFT", x, y)
@@ -3336,7 +3380,7 @@ function EL:CreateActionBar(parent)
     end
 
     bar.logout = MakeLogoutButton(bar)
-    bar.logout:SetPoint("RIGHT", bar, "RIGHT", -6, 0)
+    bar.logout:SetPoint("RIGHT", bar, "RIGHT", -34, 0)
 
     if self:IsActionBarEnabled() then self:RequestActionBarRefresh() end
 end
@@ -3427,12 +3471,6 @@ function EL:CreateSessionPanel(parent)
     if session.header.SetBackdropColor then session.header:SetBackdropColor(EL_HEADER_R, EL_HEADER_G, EL_HEADER_B, 0.78) end
     if session.header.SetBackdropBorderColor then session.header:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, 0.38) end
     AddHeaderAccent(session.header)
-
-    -- The standalone Session window no longer needs an internal collapse
-    -- control. Visibility is handled by the window close button and Options.
-    session.collapse = CreateFrame("Button", nil, session.header, "UIPanelButtonTemplate")
-    session.collapse:SetSize(1, 1)
-    session.collapse:Hide()
 
     session.title = session.header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     session.title:SetPoint("LEFT", session.header, "LEFT", 10, 0)
@@ -3553,7 +3591,6 @@ function EL:RefreshSessionPanel()
         for _, row in ipairs(sp.items or {}) do row:SetShown(false) end
         return
     end
-    if sp.collapse then sp.collapse:Hide() end
     if sp.metrics then sp.metrics:SetShown(true) end
     if sp.metricDiv1 then sp.metricDiv1:SetShown(true) end
     if sp.metricDiv2 then sp.metricDiv2:SetShown(true) end
@@ -3792,7 +3829,7 @@ function EL:CreatePanel()
     self.panel = panel
     local autoW = (self.GetTrackingPanelMaxWidth and self:GetTrackingPanelMaxWidth()) or PANEL_MIN_W
     panel:SetSize(autoW, math.max(PANEL_MIN_H, tonumber(s.height) or 360))
-    if panel.SetResizeBounds then panel:SetResizeBounds(autoW, GetCurrentPanelMinHeight(panel), autoW, PANEL_MAX_H) end
+    if panel.SetResizeBounds then panel:SetResizeBounds(autoW, GetCurrentPanelMinHeight(panel), autoW, GetTrackingPanelMaxHeight(panel)) end
     panel:SetMovable(true)
     panel:SetResizable(false)
     panel:EnableMouse(true)
@@ -3992,9 +4029,74 @@ function EL:CreatePanel()
     panel.version:SetText("")
     panel.version:Hide()
 
-    -- The tracking window auto-sizes to its visible columns and up to 20 rows.
-    -- Manual resizing was removed to avoid clipped columns and empty table space.
-    panel.resize = nil
+    -- Width remains automatic from the visible columns, but the lower edge can
+    -- be dragged to choose how many character rows are visible. Double-click
+    -- the resize grip to return to automatic height.
+    panel.resize = CreateFrame("Button", nil, panel, "BackdropTemplate")
+    panel.resize:SetSize(18, 18)
+    panel.resize:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -14, 10)
+    panel.resize:SetFrameLevel((panel:GetFrameLevel() or 1) + 20)
+    panel.resize.lines = {}
+    for i = 1, 3 do
+        local line = panel.resize:CreateTexture(nil, "OVERLAY")
+        line:SetHeight(2)
+        line:SetWidth(7 + ((4 - i) * 4))
+        line:SetPoint("BOTTOMRIGHT", panel.resize, "BOTTOMRIGHT", -2, 2 + ((i - 1) * 5))
+        line:SetColorTexture(1.00, 0.78, 0.24, 0.58)
+        panel.resize.lines[i] = line
+    end
+    panel.resize.corner = panel.resize:CreateTexture(nil, "BACKGROUND")
+    panel.resize.corner:SetPoint("BOTTOMRIGHT", panel.resize, "BOTTOMRIGHT", 0, 0)
+    panel.resize.corner:SetSize(18, 18)
+    panel.resize.corner:SetColorTexture(0.02, 0.015, 0.01, 0.22)
+    panel.resize:RegisterForClicks("LeftButtonUp")
+    panel.resize:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Resize tracker height", 1, 0.82, 0.24)
+        GameTooltip:AddLine("Drag to change how many character rows are visible.", 0.78, 0.78, 0.72)
+        GameTooltip:AddLine("Width remains automatic based on visible columns.", 0.62, 0.68, 0.76)
+        GameTooltip:AddLine("Double-click to reset automatic height.", 0.62, 0.68, 0.76)
+        GameTooltip:Show()
+    end)
+    panel.resize:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    panel.resize:SetScript("OnDoubleClick", function()
+        if EL.ClearTrackingPanelCustomHeight then EL:ClearTrackingPanelCustomHeight() end
+    end)
+    panel.resize:SetScript("OnMouseDown", function(self, button)
+        if button ~= "LeftButton" then return end
+        if EL.db and EL.db.settings and EL.db.settings.lockWindows == true and not (IsShiftKeyDown and IsShiftKeyDown()) then return end
+        local parent = self:GetParent()
+        if not parent then return end
+        local _, cursorY = GetCursorPosition()
+        local scale = parent:GetEffectiveScale() or 1
+        parent._emberResizeStartY = (cursorY or 0) / scale
+        parent._emberResizeStartH = parent:GetHeight() or GetCurrentPanelMinHeight(parent)
+        parent._emberVerticalResizing = true
+        self:SetScript("OnUpdate", function()
+            local _, y = GetCursorPosition()
+            local effectiveScale = parent:GetEffectiveScale() or 1
+            local currentY = (y or 0) / effectiveScale
+            local delta = (parent._emberResizeStartY or currentY) - currentY
+            SetTrackingPanelVerticalHeight(parent, (parent._emberResizeStartH or 0) + delta)
+            if EL.LayoutPanel then EL:LayoutPanel() end
+        end)
+    end)
+    panel.resize:SetScript("OnMouseUp", function(self)
+        self:SetScript("OnUpdate", nil)
+        local parent = self:GetParent()
+        if parent then
+            parent._emberVerticalResizing = nil
+            parent._emberResizeStartY = nil
+            parent._emberResizeStartH = nil
+            if EL.db and EL.db.settings and EL.db.settings.panel then
+                EL.db.settings.panel.customHeight = math.floor(parent:GetHeight() or GetCurrentPanelMinHeight(parent))
+                EL.db.settings.panel.height = EL.db.settings.panel.customHeight
+                SaveFramePoint(parent, EL.db.settings.panel)
+            end
+            if EL.LayoutPanel then EL:LayoutPanel() end
+            if EL.RequestUpdate then EL:RequestUpdate(true) end
+        end
+    end)
 
     self:CreateSettingsPanel(UIParent)
     self:ApplyDisplaySettings()
@@ -4099,7 +4201,7 @@ function EL:LayoutPanel()
     end
     local p = self.panel
     if not p or not p.header or not p.scroll or not p.content then return end
-    if self.AutoSizeTrackingPanel then self:AutoSizeTrackingPanel("layout") end
+    if self.AutoSizeTrackingPanel and not p._emberVerticalResizing then self:AutoSizeTrackingPanel("layout") end
 
     local w, h = p:GetWidth(), p:GetHeight()
     local settings = self.db and self.db.settings and self.db.settings.panel or {}
@@ -4118,6 +4220,17 @@ function EL:LayoutPanel()
         p.actionBar:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -14, actionBottom)
         p.actionBar:SetHeight(actionBarShown and ACTION_BAR_H or 1)
         p.actionBar:SetShown(actionBarShown)
+    end
+    if p.resize then
+        p.resize:ClearAllPoints()
+        if actionBarShown and p.actionBar then
+            p.resize:SetPoint("RIGHT", p.actionBar, "RIGHT", -8, 0)
+        else
+            -- With the action bar hidden, keep the resize grip inside the
+            -- lower-right frame border instead of letting it sit on the edge.
+            p.resize:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -14, 10)
+        end
+        p.resize:Show()
     end
 
     local compactMode = IsCompactModeEnabled()
@@ -4149,7 +4262,7 @@ function EL:LayoutPanel()
 
         local headerW = math.max(1, w - 36)
         local targetW = self:GetTrackingPanelMaxWidth()
-        if p.SetResizeBounds then p:SetResizeBounds(targetW, GetCurrentPanelMinHeight(p), targetW, PANEL_MAX_H) end
+        if p.SetResizeBounds then p:SetResizeBounds(targetW, GetCurrentPanelMinHeight(p), targetW, GetTrackingPanelMaxHeight(p)) end
         local cols = GetColumnLayout(headerW)
         local visible = {}
         for _, def in ipairs(cols.columns or {}) do visible[def.key] = true end
@@ -4655,7 +4768,7 @@ function EL:RefreshPanel()
         p.empty:SetShown(#rows == 0)
     end
     p.content:SetHeight(math.max(40, #rows * (rowH + gap)))
-    if self.AutoSizeTrackingPanel then self:AutoSizeTrackingPanel("refresh") end
+    if self.AutoSizeTrackingPanel and not p._emberVerticalResizing then self:AutoSizeTrackingPanel("refresh") end
 end
 
 function EL:UpdateButton()
