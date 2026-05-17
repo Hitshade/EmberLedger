@@ -144,6 +144,7 @@ local function IsActionVariantZoneAllowed(variant, info)
     return IsActionZoneAllowed(zoneGroup)
 end
 
+-- Forward-declared so icon resolution can use the same zone-variant spell resolver as button attributes.
 local ResolveActionSpell
 
 local function GetActionIcon(info)
@@ -211,7 +212,7 @@ local function PlayerKnowsSpellSafe(spellID, spellName)
     return false
 end
 
-local ResolveActionSpell = function(info)
+ResolveActionSpell = function(info)
     if not info then return nil end
 
     if info.spellVariants then
@@ -547,7 +548,6 @@ function EL:UpdateActionBar()
     end
     local bar = self.panel and self.panel.actionBar
     if not bar or not bar.itemButtons then return end
-    local locked = false
 
     local lastVisible
     for _, info in ipairs(ACTION_ITEM_BUTTONS) do
@@ -557,25 +557,19 @@ function EL:UpdateActionBar()
             local enabled = (not actionButtons) or actionButtons[info.key] ~= false
             local available = GetActionAvailable(info)
             local show = enabled and ((not b.hideWhenMissing) or available)
-            if not locked then
-                if info.kind == "spell" then SetSpellButtonAttributes(b, info) end
-                b:SetShown(show)
-            elseif info.kind == "spell" then
-                b.resolvedSpell = ResolveActionSpell(info)
-            end
-            if show or (locked and b:IsShown()) then
-                if not locked then
-                    b:ClearAllPoints()
-                    if lastVisible then
-                        b:SetPoint("LEFT", lastVisible, "RIGHT", 3, 0)
-                    else
-                        b:SetPoint("LEFT", bar, "LEFT", 6, 0)
-                    end
-                    lastVisible = b
+            if info.kind == "spell" then SetSpellButtonAttributes(b, info) end
+            b:SetShown(show)
+            if show then
+                b:ClearAllPoints()
+                if lastVisible then
+                    b:SetPoint("LEFT", lastVisible, "RIGHT", 3, 0)
+                else
+                    b:SetPoint("LEFT", bar, "LEFT", 6, 0)
                 end
+                lastVisible = b
 
                 if b.icon then
-                    if not locked and info.kind == "spell" then b.icon:SetTexture(GetActionIcon(info)) end
+                    if info.kind == "spell" then b.icon:SetTexture(GetActionIcon(info)) end
                     b.icon:SetDesaturated(not available)
                     b.icon:SetAlpha(available and 1 or 0.38)
                 end

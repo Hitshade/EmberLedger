@@ -65,6 +65,7 @@ function Style:StyleScrollBar(scrollFrame)
         if bar.SetAlpha then bar:SetAlpha(0) end
         if bar.EnableMouse then bar:EnableMouse(false) end
     end
+    -- Named global children exist on Blizzard's standard named scroll frames. Anonymous custom frames are already handled through scrollFrame.ScrollBar above.
     if name then
         for _, suffix in ipairs({"ScrollUpButton", "ScrollDownButton", "ScrollBarTop", "ScrollBarBottom", "ScrollBarMiddle", "ThumbTexture"}) do
             local region = _G[name .. suffix]

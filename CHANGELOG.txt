@@ -1,5 +1,13 @@
 # EmberLedger Changelog
 
+## v1.17.3
+
+- Fixed Action Bar spell-variant icon resolution so zone-specific profession utility spells use the resolved active spell icon.
+- Removed dead locked-branch cleanup code from Action Bar refresh after the combat deferral guard.
+- Added a clarification comment for Styling scroll bar handling on anonymous versus named scroll frames.
+
+---
+
 ## v1.17.2
 
 - Final polish pass for the completed UI modularization cycle.
