@@ -1,1574 +1,355 @@
-v1.15.4
-- Adjusted EmberLedger window stacking so normal EmberLedger windows no longer appear above standard Blizzard UI panels.
-- Kept the Options window at dialog level so addon settings remain usable when opened.
+# EmberLedger Changelog
 
-v1.15.3
-- Reworked Performance guidance with a top-level read-first warning.
-- Added setting-specific guidance for session tracking, action bar performance, and session history cap.
-- Clarified that the default session history cap is enough for nearly everyone because stats use compact aggregates.
-- README title/version updated only.
+## v1.17.2
 
-v1.15.2
-- Added window stacking polish so clicked or newly shown EmberLedger windows come to the front cleanly.
-- Updated the Performance warning for Session History Cap to clarify that even very active players usually do not need to increase the default.
+- Final polish pass for the completed UI modularization cycle.
+- Added a one-time release warning if required modules fail initialization, while keeping detailed diagnostics debug-only.
+- Moved remaining Session total-card layout values into named UI constants.
+- Added a scope comment to `Modules/SessionWindow.lua` for future maintenance.
+- Cleaned several outdated internal version-specific comments without changing behavior.
 
-v1.15.1
-- Added defensive non-negative guards to aggregate item value, raw gold, and gold spent buckets.
-- Cleaned up the Session History Cap slider value formatter to avoid redundant rounding.
+---
 
-v1.15.0
-- Added compact daily and weekly aggregate session stats.
-- Today, This Week, and 30 Days stats no longer depend only on raw saved session rows.
-- Raw session history still keeps up to 30 days, capped by the configurable session history limit.
-- Backfilled aggregate stats from retained session history for existing users.
-- Updated Stats/Sessions guidance text to clarify compact aggregates vs visible saved summaries.
+## v1.17.1
 
-v1.14.2
-- Moved Session History Cap lower in Performance options.
-- Added a red Warning label and firm guidance explaining that very large history caps may increase SavedVariables size and affect login/logout performance for heavy users.
-- Updated tooltip wording for the history cap.
+- Added a debug-only module initialization self-check for the staged UI modules and expected public helpers.
+- Moved additional Session window layout values into named UI constants while preserving the existing layout.
+- Simplified the SessionWindow module OnLoad sanity check to use the shared verification path.
+- Declared the v1.16.x to v1.17.x UI modularization phase complete for this maintenance series.
 
-v1.14.1
-- Added a configurable Session History cap in Performance Options.
-- Session history still keeps up to 30 days, but now also prunes to the configured maximum entry count.
-- Default cap is 500 entries, adjustable from 50 to 3000.
-- Updated Stats/Sessions wording to show the 30-day view with the active max-entry cap.
+---
+## v1.17.0
 
-v1.14.0
-- Hardened tracking-column toggles so they always mutate the live saved settings table.
-- Preserved the non-mutating tracking-column read path added in the previous cleanup pass.
-- Updated version metadata for the 1.14 code polish release.
+- Completed medium-priority SessionWindow refactor cleanup.
+- Added a unified Session view refresh dispatcher for Stats and Bag Summary tabs.
+- Replaced several session window layout magic numbers with named constants while preserving the existing layout.
+- Added short comments documenting the extracted SessionWindow refresh paths.
 
-v1.13.19
-- Cleaned up resize grip double-click handling so the reset path fires only once.
-- Corrected the resize grip line styling so the widest line sits at the bottom like a traditional resize handle.
-- Documented the intentional Next/Moxie column order change in the changelog.
-- Made tracking column reads non-mutating during refreshes to remove harmless hot-path settings writes.
-- Improved dropdown Escape handling with focus guards.
-- Removed a harmless legacy 1x1 session collapse frame.
-- Slightly refined Session Stats total-card spacing.
+---
 
-v1.13.17
-- Improved resize grip placement when the action bar is disabled.
-- Grip now sits inside the lower-right frame border instead of overlapping the outer edge.
-- Existing action-bar-enabled grip placement is unchanged.
+## v1.16.9
 
-EmberLedger v1.13.16
-- Removed the old fixed visible-row cap from the main tracker.
-- Vertical resizing can now show as many character rows as will fit within the available screen height.
-- Width remains automatic based on visible columns, and scrolling still appears when the character list exceeds the available height.
+- Cleaned up maintenance refactor metadata after the staged SessionWindow extraction.
+- Updated the Core/UI fallback version strings so displayed versions remain consistent if TOC metadata is unavailable.
+- Corrected duplicate/missing changelog headings from the v1.16.x refactor sequence.
+- Added a lightweight SessionWindow module registration sanity check and debug-only warnings for missing session view helpers.
 
-# EmberLedger v1.13.15
+---
 
-- Moved the vertical resize grip inside the bottom action bar area, to the right of the Logout button.
-- Adjusted Logout button spacing so the resize grip fits cleanly without overlap.
-- Preserved existing resize grip behavior and tooltip text.
+## v1.16.8
+
+- Continued the staged SessionWindow maintenance refactor.
+- Moved Session window layout, show/hide, and frame creation wiring into `Modules/SessionWindow.lua`.
+- Kept shared session panel creation in `UI.lua` to avoid a larger high-risk extraction.
+- Preserved existing Session window behavior while reducing `UI.lua` responsibility.
+
+---
+
+## v1.16.7
+
+- Continued the staged SessionWindow maintenance refactor.
+- Moved Session Stats refresh/render helper logic into `Modules/SessionWindow.lua`.
+- Fixed visible package version metadata so the TOC and README match the active test build.
+- Kept frame creation and tab initialization in `UI.lua` to reduce regression risk.
+
+---
+
+## v1.16.6
+
+- Continued the staged SessionWindow maintenance refactor.
+- Moved Bag Summary refresh/render helper logic into `Modules/SessionWindow.lua`.
+- Kept session stats, history frame creation, and tab initialization in `UI.lua` to reduce regression risk.
+
+---
+
+## v1.16.5
+
+- Continued the staged SessionWindow maintenance refactor.
+- Moved session history row formatting and rendering helpers into `Modules/SessionWindow.lua`.
+- Kept frame creation and tab initialization in `UI.lua` to reduce regression risk.
+
+---
+
+## v1.16.4
+
+- Fixed the SessionWindow helper module load pattern so extracted session formatting helpers attach to EmberLedger correctly.
+- Resolves a nil helper error in the Stats window after the v1.16.3 initial SessionWindow refactor.
+
+---
+
+## v1.16.3
+
+- Started the Session window maintenance refactor in smaller, safer steps.
+- Added `Modules/SessionWindow.lua` for shared Session Stats, Sessions, and Bag Summary formatting helpers.
+- Kept Session window creation and rendering logic in `UI.lua` for this pass to reduce refactor risk.
+- No intended user-facing behavior changes.
+
+---
+
+
+## v1.16.2
+
+### Maintenance Refactor
+
+- Added `Modules/Styling.lua` for shared UI styling helpers.
+- Moved common backdrop, inner border, header accent, scrollbar, text color, and Blizzard button styling helpers out of `UI.lua`.
+- Preserved existing UI behavior and visual styling.
+
+---
+
+## v1.16.1
+
+- Hotfix: corrected action bar button styling so Blizzard button template textures are cleared safely without passing nil to SetNormalTexture or related texture setters.
+- Preserved the v1.16.0 action bar module split with no intended user-facing behavior changes.
+
+---
+
+## v1.16.0
+
+- Maintenance refactor: moved action bar creation, action button helpers, secure button setup, and action bar refresh logic into `Modules/ActionBar.lua`.
+- Preserved existing action bar behavior while reducing the size and responsibility of `UI.lua`.
+- Updated addon metadata for v1.16.0.
+
+---
+
+## v1.15.4
+
+- Adjusted EmberLedger window stacking behavior
+- Standard Blizzard windows now correctly appear above most EmberLedger windows
+- Options window retains elevated priority for usability
+- Additional UI polish and cleanup
+
+---
+
+## v1.15.3
+
+### Performance Guidance Polish
+
+- Moved Performance warning guidance to the top of the settings section
+- Added clearer read-first warnings for performance-related settings
+- Added guidance text for:
+  - Session tracking
+  - Action bar behavior
+  - Session history retention
+- Clarified that default settings are appropriate for nearly all users
+
+---
+
+## v1.15.2
+
+### Window Stacking & UI Polish
+
+- Added improved EmberLedger window stacking behavior
+- Newly opened or interacted windows now correctly move to the front
+- Improved interaction behavior between overlapping EmberLedger windows
+- Updated Session History warning guidance text
+
+---
+
+## v1.15.1
+
+### Aggregate Safety Hardening
+
+- Added defensive non-negative guards for aggregate monetary values
+- Hardened aggregate stat calculations against edge-case corruption
+- Cleaned Session History Cap slider rounding behavior
+- Minor internal cleanup and maintenance polish
+
+---
+
+## v1.15.0
+
+### Aggregate Statistics Architecture
+
+- Added compact aggregate statistics architecture
+- Today, This Week, and 30 Days stats no longer depend solely on raw session history entries
+- Added daily and weekly aggregate stat buckets
+- Improved long-term SavedVariables scalability
+- Session stat cards now remain accurate regardless of session history cap size
+
+### Session History Improvements
+
+- Added support for retaining up to 30 days of sessions while enforcing a configurable maximum entry cap
+- Added pruning safeguards for extremely large alt rosters
+- Improved long-term performance stability for heavy users
+
+---
+
+## v1.14.2
+
+### Session History Performance Controls
+
+- Added configurable Session History Cap setting
+- Added Performance warning guidance for Session History Cap settings
+- Clarified potential SavedVariables and login/logout performance impacts for extreme users
+- Additional settings panel polish
+
+---
+
+## v1.14.1
+
+### Session History Improvements
+
+- Added session history pruning safeguards
+- Stats window now displays range labels with max-entry indicators
+- Improved retention handling for very large session histories
+
+---
+
+## v1.14.0
+
+### Cleanup & Stability
+
+- Final code polish and cleanup release
+- Hardened tracking column setting mutation paths
+- Additional internal cleanup and maintenance
+
+---
+
+## v1.13.19
+
+### Tracking Column Stability
+
+- Hardened tracking column mutation safety
+- Removed remaining dependency on fallback display table mutation behavior
+- Minor internal cleanup
+
+---
+
+## v1.13.18
+
+### Resize Grip & Dropdown Cleanup
+
+- Removed duplicate resize grip double-click handling
+- Corrected resize grip visual line direction
+- Improved dropdown ESC handling reliability
+- Removed legacy hidden session collapse frame
+- Minor stat card spacing polish
+- Additional hot-path cleanup and optimization
+
+---
+
+## v1.13.17
+
+### Resize Grip Positioning
+
+- Added alternate resize grip positioning when the action bar is disabled
+- Improved resize grip placement behavior
+- Minor UI polish
+
+---
+
+## v1.13.16
+
+### Vertical Resize Improvements
+
+- Removed hard cap on visible character rows
+- Main tracker window height now scales naturally with vertical resizing
+- Scroll behavior now depends on available screen space instead of fixed row limits
+
+---
+
+## v1.13.15
+
+### Resize Grip Layout
+
+- Moved resize grip into the action bar region
+- Improved spacing between the resize grip and Logout button
+
+---
 
 ## v1.13.14
 
-- Moved the Logout button slightly left to prevent overlap with the bottom-right vertical resize grip.
-- Preserved the existing resize grip look, behavior, and tooltip text.
+### Action Bar Layout Polish
+
+- Adjusted Logout button positioning to improve resize grip spacing
+
+---
 
 ## v1.13.13
-- Updated the vertical resize grip to use a more traditional bottom-right corner handle look.
-- Moved the resize grip from the bottom center to the bottom-right corner.
-- Preserved existing resize behavior, reset behavior, and tooltip text.
+
+### Resize Grip Visual Pass
+
+- Added traditional bottom-right resize grip styling
+- Improved resize grip visuals and interaction area
+
+---
 
 ## v1.13.12
 
-- Added WoW addon-list category metadata for Professions.
-- Added vertical-only resizing to the main tracker window.
-- Tracker width remains automatically controlled by visible columns.
-- Added double-click reset on the resize grip to return to automatic height.
-- README title/version updated only.
+### Resize Behavior Improvements
+
+- Increased maximum vertical resize limits
+- Added resize double-click reset behavior
+
+---
 
 ## v1.13.11
 
-- Swapped the main tracker column order so Next appears before Moxie when both columns are shown.
-- This keeps the concentration forecast visually closer to the concentration columns it describes.
-- README title/version updated only.
+### Vertical Resizing
+
+- Added vertical-only resizing support for the main tracking window
+- Width remains automatically managed by visible columns
+
+---
 
 ## v1.13.10
 
-- Fixed the session display dropdown lifecycle so it closes when the Stats window closes or when switching away from the Sessions view.
-- Added Escape-key closing support for the session display dropdown.
-- Updated the fallback version string for consistency.
-- Hoisted the remaining Bag Summary sort closure for consistency with previous cleanup passes.
-- Removed a redundant legacy favorites migration cleanup write.
-- README title/version updated only.
+### Session History Dropdown Cleanup
+
+- Completed dropdown lifecycle cleanup
+- Added additional dropdown close-path handling
+- Improved session history dropdown behavior and stability
+
+---
 
 ## v1.13.9
 
-- Reworked the session history display selector into a cleaner dropdown field layout.
-- Replaced the text-symbol arrow with a texture-based dropdown arrow.
-- Fixed Display label overlap in the range/filter bar.
-- Preserved Today, This Week, and 30 days range options.
-
-## v1.13.8
-
-- Rebuilt the Session history display selector as a proper field-style dropdown instead of a Blizzard action button.
-- The selected range now displays as plain readable text inside the dropdown field.
-- Removed the leading selected-state symbol from dropdown options.
-- Kept Today, This Week, and 30 days as selectable history ranges.
-
-## v1.13.7
-- Replaced the Sessions display selector with an actual custom dropdown menu anchored to the range/filter bar.
-- Preserved Today, This Week, and 30 days as selectable history ranges.
-- Fixed session display-mode normalization so Today persists correctly after reload.
-- README title/version updated only.
-
-## v1.13.6
-- Converted the Sessions history display selector into a clearer dropdown-style control in the range bar.
-- Added a Today display range for saved session history.
-- Updated history range labels and helper text for Today, This Week, and 30 days.
-- README title/version updated only.
-
-## v1.13.5
-- Renamed the Session Stats window header to EmberLedger - Stats.
-- Moved the session history display selector out of the header and into the range/filter bar.
-- Changed the history range selector to behave like a cleaner dropdown-style control beside the active range label.
-- Preserved the Stats, Sessions, and Bag Summary view buttons.
-
-EmberLedger v1.13.4 - Bag Summary Value Column Clarification
-
-Changed
-- Restored the per-item price column in Bag Summary.
-- Renamed the former Unit column to Value for clearer wording.
-- Renamed the stack total column to Total.
-- Preserved wider spacing for large gold totals.
-
-EmberLedger v1.13.3 - Bag Summary Value Column Polish
-
-Changed
-- Removed the Bag Summary Unit column because it was not providing useful decision-making value.
-- Expanded the Bag Summary Value column to better support substantially larger totals, including multi-million gold values.
-- Adjusted Bag Summary Item, Qty, and Value column widths for cleaner spacing after removing Unit.
-
-Unchanged
-- Bag Summary remains read-only and does not modify active session totals, session history, lifetime stats, or realized gold/hour.
-- README title/version updated only.
-
-EmberLedger v1.13.2 - Bag Summary Column Alignment Fix
-
-Changed
-- Re-anchored Bag Summary table columns so Qty, Unit, and Value use fixed right-edge anchors.
-- Improved alignment between Bag Summary headers and row values.
-- Prevented money values from drifting or clipping at the right edge of the Bag Summary table.
-
-Unchanged
-- Bag Summary remains read-only and does not modify session history, lifetime stats, or realized gold/hour.
-- README title/version updated only.
-
-EmberLedger v1.13.1 - Bag Summary Layout Polish
-
-Changed
-- Moved the Bag Summary view button to the right side of the Session Stats header beside the close button.
-- Renamed the Session window shortcut button from History to Stats.
-- Renamed the saved-session view button from History to Sessions to better distinguish it from the Stats view.
-- Adjusted Bag Summary stat card and table column alignment for cleaner quantity, unit value, and total value spacing.
-
-Notes
-- Bag Summary remains read-only and does not change active session totals, session history, or lifetime stats.
-- README title/version updated only.
-
-EmberLedger v1.13.0 - Bag Summary Mode
-
-Added
-- Added Bag Summary mode to the Session Stats window.
-- Added current tracked bag value, projected total, and tracked item quantity cards.
-- Added grouped current-bag item rows with item name, quantity, unit price, and estimated value.
-
-Changed
-- Session Stats window now supports Stats, History, and Bag Summary views.
-- Bag Summary is read-only and does not mutate active session totals, session history, or lifetime stats.
-
-Notes
-- Projected Total is an estimate: current active session total plus currently held tracked bag value.
-- This release completes the planned feature-complete scope for EmberLedger's lightweight profession/session utility identity.
-
-# EmberLedger v1.12.5
-
-- Added a lightweight refresh debounce so clustered UI refresh requests during heavy crafting, gathering, bag updates, and tradeskill events collapse into one short delayed refresh instead of repeated immediate refreshes.
-- Added action bar refresh debounce with visibility re-checks before updating.
-- Preserved immediate refresh behavior for combat-deferred flushes and fallback paths where timers are unavailable.
-- Kept saved-variable DB version unchanged because this release does not change database structure.
-- README title/version updated only.
-
-# EmberLedger v1.12.4
-
-- Moved Crafted Item Tracking out of the crowded Session Tracking option grid into its own dedicated section.
-- Added clear in-addon guidance: "Warning: read before enabling" with a plain-language explanation that most users should leave crafted tracking off unless they specifically want crafted outputs counted at craft time.
-- Preserved crafted item tracking as off by default.
-- README title/version updated only.
-
-# EmberLedger v1.12.3
-
-- Changed crafted item session tracking to remain off by default.
-- Added a clearer crafted item tracking warning explaining possible double-counting if crafted items are later sold and AH/mail gold is also tracked.
-- Clarified that crafted item tracking does not deduct reagent costs from crafted item value.
-- Bumped DB version to 11203 for the crafted tracking default/setting cleanup.
-
-# EmberLedger v1.12.2
-
-- Added combat-safe deferred UI refresh handling so visual updates queue during combat and flush after combat ends.
-- Added deferred action bar/layout refresh handling for protected UI edge cases.
-- Hardened main panel layout, auto-height, full layout refresh, and action bar refresh entry points against combat lockdown.
-- Reduced small sort-time allocations by removing redundant string conversions in Core.lua and UI.lua comparators.
-- README title/version updated only.
-
-## v1.12.1
-
-- Added optional crafted item session tracking.
-- Crafted outputs added to bags during tradeskill crafting can now count toward session value.
-- Added a Session Tracking option for Crafted items.
-- Crafted tracking uses short pending crafted-item windows tied to tradeskill result/chat events so normal inventory transfers remain ignored.
-- Bank, mailbox, auction, trade, and ordinary transfer safeguards remain in place.
-- Bumped saved-variable DB version to 11201 for the new session setting.
-
-## v1.12.0
-
-- Added trusted mailbox reward handling for session tracking.
-- Profession material attachments from trusted patron/crafting-order style system mail can now count toward session value.
-- Player mail, auction mail, COD mail, banking transfers, Warband bank movement, and ordinary mailbox item transfers remain ignored to prevent false session inflation.
-- Added a Session Tracking option for Trusted mail rewards.
-- Updated raw-gold tooltip wording to clarify that mailbox item rewards are handled separately.
-- Bumped saved-variable DB version to 11200 for the new session setting.
-
-## v1.11.2
-
-- Corrected Moxie display ordering so split Moxie values follow the visible P1 / P2 profession order.
-- Preserved aligned Moxie separator formatting.
-
-v1.11.1 - 2026-05-16
-- Addressed all remaining low-priority audit items from the v1.11.0 review.
-- Matched the 30 Days stats label to the same 30-day cutoff used by aggregation.
-- Cleaned lifetime stats access so saved counters are normalised once instead of re-normalised on every getter call.
-- Fixed positive sub-1g money formatting so small positive amounts show silver-only instead of displaying 0 gold.
-- Hoisted remaining inline Core.lua sort comparators into named local helpers.
-- Added ticker suspension support so the 1-second refresh ticker stops when no visible UI needs live updates and restarts when windows are shown again.
-- Consolidated FormatDuration and FormatCountdown through one shared duration formatter.
-- Removed ongoing showFavoritesFirst/showPinnedFirst synchronization while preserving one-time legacy migration into showPinnedFirst.
-- Bumped saved-variable DB version to 11101 for cleanup and migration state normalization.
-
-v1.11.0 - 2026-05-16
-- Added aggregated session statistics with Today, This Week, 30 Days, and Lifetime ranges.
-- Added a Stats / History toggle to the Session History window, with Stats as the default view.
-- Added compact lifetime aggregate tracking for total gold, item value, raw gold, gold spent, duration, sessions, and gathered item count.
-- Added one-time lifetime backfill from retained session history so existing users start with available historical totals.
-- Added safeguards so saved session entries are counted into lifetime totals only once.
-- Added tracked item quantity to new session history entries for future aggregate item counts.
-- Added an Options maintenance button to reset Lifetime stats without deleting session history or the active session.
-- Bumped saved-variable DB version to 11100 for the new stats table and session-history aggregate metadata.
-
-v1.10.2 - 2026-05-16
-- Consolidated minimap tooltip rendering into one shared helper used by both the fallback minimap button and LibDataBroker tooltip path.
-- Preserved the v1.10.1 Moxie separator alignment fix.
-- Kept saved-variable DB version at 11000 because this is a maintenance-only cleanup.
-
-v1.10.1 - 2026-05-16
-- Adjusted the main tracker Moxie column so dual profession values render as separate left value, centered separator, and right value fields.
-- Kept single Moxie values and N/A states centered in the column.
-- Improved visual alignment so the Moxie separator lines up consistently across rows.
-
-v1.10.0 - 2026-05-16
-- Added minimap integration with LibDataBroker/LibDBIcon support when those libraries are available from the addon environment.
-- Added a fallback standalone minimap button when LibDBIcon is unavailable.
-- Added a General option to show or hide the minimap button.
-- Added a minimap tooltip summary for concentration readiness, Imbued Mulch readiness, current session total, rate, and time.
-- Left-clicking the minimap button toggles EmberLedger windows; right-clicking opens Options.
-- Bumped saved-variable DB version to 11000 for minimap settings normalization.
-
-v1.9.29 - 2026-05-16
-- Fixed negative sub-1g money displays so small expenses show as silver only instead of displaying negative zero gold.
-- Kept DB version at 10928 because this is a display-only formatting fix.
-
-v1.9.28 - 2026-05-16
-- Implemented audit corrections after v1.9.27.
-- Updated money formatting so clean whole-gold amounts hide the trailing 00 silver display.
-- Bumped saved-variable DB version to 10928 and normalized Session History settings to 30-day retention plus week/30-day display modes.
-- Made the weekly-reset fallback calculation use epoch arithmetic instead of direct day subtraction across month boundaries.
-- Changed the This Week range label to show the start time only, reducing future-date confusion.
-- Added a defensive comment around the Session History close-button state-preservation write.
-
-v1.9.27 - 2026-05-16
-- Changed launcher/window behavior so closing the main tracker or Session window with the X button no longer disables that window in Options.
-- Left-clicking the launcher now restores windows that were manually closed with their X buttons, while Options toggles can still fully disable them.
-- Updated launcher tooltip wording to mention restore behavior.
-- Kept the saved-variable DB version at 10908 because this is a behavior/UI-state update only.
-
-v1.9.26 - 2026-05-16
-- Darkened the Session History header and key section boxes to better match the main tracker and Session window theme.
-- Adjusted the Session History scrollbar and Gold/hr column spacing so row highlights contain the rate text cleanly.
-- Recentered and widened the six Session Total stat cards to fill the totals panel more evenly.
-- Kept Gold/hr and session-rate fields in the clean abbreviated format.
-
-## v1.9.24
-
-- Restored abbreviated formatting for all Gold/hr and session-rate displays, such as `1.4k/hr`, for cleaner rate readability.
-- Kept standard gold/silver coin-icon formatting for non-rate money fields, including session totals, item values, raw gold, gold spent, and history row totals.
-- Kept the saved-variable DB version at 10908 because this is a display-only formatting update.
-
-## v1.9.23
-
-- Standardized addon gold displays to use WoW-style coin icons instead of plain `g` and `s` letters.
-- Added comma separators to large gold values for readability.
-- Removed abbreviated `k` gold formatting from the shared money display helper.
-- Updated Session History money totals, row totals, tooltips, launcher/session displays, and session item values to use the unified coin-icon format.
-- Kept the saved-variable DB version at 10908 because this is a display-only formatting update.
-
-
-## v1.9.22
-
-- Extended Session History row background strips to the scrollbar edge.
-- Removed the visible gap between scrolling row backgrounds and the scrollbar area.
-- Kept Session History sizing, column placement, and saved-variable schema unchanged.
-
-EmberLedger v1.9.22
-- Darkened the Session History header to match the tracking and session windows more closely.
-- Unified Session History range, table, totals, and stat-card coloring around the darker EmberLedger theme.
-- Moved the Session History scrollbar away from the Gold/hr column to prevent overlap.
-- Widened the six total stat cards so they fill the totals panel more evenly.
-- Changed Session History Total values to show full gold/silver values instead of abbreviated k values.
-
-EmberLedger v1.9.20
-- Darkened the Session History range panel and totals cards to better match the main tracking window palette.
-- Tightened the six-card Session Total layout to avoid overlapping the totals container.
-- Reduced card height and adjusted internal label/value spacing for cleaner alignment.
-
-EmberLedger v1.9.19
-
-- Contained the Session History scrollbar inside the table backdrop so it no longer leaks outside the background box.
-- Darkened Session History range, table, totals, and stat-card backdrops to better match the main tracking window.
-- Reduced the brown/purple tint in Session History row striping for a more unified EmberLedger visual style.
-- Kept Session History layout and behavior unchanged.
-
-EmberLedger v1.9.18
-
-- Reworked Session History totals into a cleaner six-card layout with better label/value separation.
-- Fixed Sessions Total alignment so labels and values no longer crowd each other.
-- Increased Session History range-box clearance and reduced the range icon size to avoid visual noise in the 30-day display.
-
-EmberLedger v1.9.17
-
-- Adjusted Session History window shade/opacity values to better match the main tracking window.
-- Darkened and unified Session History table, date-range, and total-card panels while preserving the compact layout from v1.9.16.
-
-EmberLedger v1.9.16
-
-- Reduced the overall Session History window footprint to better match the compact main tracker style.
-- Simplified the Last 30 Days date-range display to show dates only, with full-day boundaries implied.
-- Reduced Session Total stat value text size and tightened stat-card spacing to avoid overlap with larger totals.
-- Adjusted Session History table, range, and totals spacing for a more balanced layout.
-
-EmberLedger v1.9.15
-
-- Fixed Session History layout shifting when toggling between This Week and 30 days.
-- Added a fixed-height information area below the Session History header so longer explanatory text can wrap without pushing the date range, table, or totals sections around.
-- Re-anchored the Session History table to the fixed date-range box for more stable layout behavior.
-- Kept DB version at 10908 because this is a UI-only layout fix.
-
-EmberLedger v1.9.14
-
-- Polished the Session History window with a clearer tracked-date range line for This Week and 30-day views.
-- Added a visible scrollbar to the Session History table while keeping mousewheel scrolling.
-- Removed the old mousewheel range hint text from the Session History table.
-- Restyled Session History totals as bordered stat cards for better alignment and readability.
-
-EmberLedger v1.9.13
-
-- Changed the short Session History display view from a rolling 7 days to This Week, measured from weekly reset when Blizzard reset timing is available.
-- Kept the 30-day maximum Session History retention introduced in v1.9.12.
-- Added a safe local Tuesday reset fallback for environments where Blizzard weekly-reset timing is unavailable.
-- Kept the database version at 10908 because no saved-variable schema migration was required.
-
-EmberLedger v1.9.12
-
-- Reduced detailed Session History retention from 90 days to 30 days to limit long-term SavedVariables growth.
-- Limited Session History display choices to 7 or 30 days, matching the new maximum retention window.
-- Added pruning for empty/no-value sessions so passive login/logout activity is not saved as history.
-- Kept DB version at 10908 because this behavior change does not require a saved-variable schema migration.
-
-EmberLedger v1.9.11
-
-- Rewrote README.md and README.txt so the project description can also serve as the CurseForge description.
-- Updated the README to highlight newer systems including Artisan Moxie tracking, Moxie threshold highlighting, Session history, Main Window toggles, compact dashboard options, and the configurable utility action bar.
-- Kept the database version at 10908 because no saved-variable schema migration was required.
-
-EmberLedger v1.9.10
-
-- Hoisted dashboard concentration and profession sort helper functions out of the per-refresh row-building path.
-- Reduced tiny per-refresh closure allocation overhead in the main window without changing visible behavior.
-- Kept the database version at 10908 because no schema migration was required.
-
-EmberLedger v1.9.9
-
-- Removed redundant login-time module refresh paths so Core.lua performs the unified delayed refresh without modules also refreshing at nearly the same timestamp.
-- Added a prebuilt profession lookup for the main window refresh path to avoid per-row profession table scans.
-- Reused the main-window concentration/profession lookups during dashboard sorting so sort and render no longer build independent concentration caches.
-- Cleaned up the disabled Session-window collapse state by removing forced collapsed-state writes and dead collapse toggling code.
-- Kept the saved-variable DB version at 10908 because this release does not require a schema migration.
-
-EmberLedger v1.9.8
-
-- Optimized main-window refresh by caching per-character profession, concentration, forecast, and Moxie lookups during each refresh.
-- Reduced repeated row re-anchoring when the main-window column layout has not changed.
-- Avoided current-character sorting writes by using the cached/current character key instead of updating last-seen during sort.
-- Coalesced login-time refresh behavior to reduce duplicate one-second RequestUpdate calls.
-- Memoized clean profession names to avoid repeated expansion-prefix string parsing during refreshes.
-- Kept Session History retention fixed at 90 days while marking old retention setter/cycle helpers as compatibility shims.
-- Added maintenance comments for module event dispatch and session material name exclusions.
-
-EmberLedger v1.9.7
-
-Code review and cleanup pass.
-- Hardened concentration refresh paths with defensive guards for early or incomplete saved-variable states.
-- Hardened settings refresh so Options cannot error if display or alert tables are briefly unavailable.
-- Removed a duplicate Launcher session-rate tooltip assignment.
-- Simplified display toggle logic for readability without changing option behavior.
-- No feature scope changes were added.
-
-EmberLedger v1.9.6
-
-- Moved Show pinned first and Highlight current character out of General and into Main Window options.
-- Added a separate Main Window Toggles container for Compact Mode, Show character realm, Show pinned first, Current character first, and Highlight current character.
-- Renamed the former Main Window Controls container to Main Window Columns so table column visibility settings are visually separate from behavior toggles.
-
-EmberLedger v1.9.5
-
-- Added a Main Window option to keep the current character at the top of the main window list.
-- Kept current-character sticky sorting separate from the existing highlight current character option.
-- Current character sorting applies before pinned-first sorting and the selected table sort.
-
-EmberLedger v1.9.4
-
-- Moved the Compact Mode setting from General Controls to the Main Window page.
-- Renamed Compact tracking rows to Compact Mode for clearer Options wording.
-
-EmberLedger v1.9.3
-
-- Increased the compact-mode Moxie column width so two profession values display fully without cramped truncation.
-- Kept the non-compact Moxie improvements from v1.9.2 and aligned compact width behavior with normal mode.
-
-EmberLedger v1.9.2
-
-- Increased the non-compact Moxie column width so two profession values display without truncation.
-- Kept compact-mode Moxie sizing unchanged because compact display already fit correctly.
-
-EmberLedger v1.9.1
-
-- Reduced action bar cooldown number size by hiding the default large cooldown text and using EmberLedger's smaller cooldown label.
-- Changed the Moxie column separator from slash to centered dot spacing for clearer profession separation.
-- Added a Main Window Moxie spend threshold slider, default 600.
-- Highlighted Moxie column text green when any tracked profession Moxie value meets or exceeds the configured threshold.
-
-EmberLedger v1.9.0
-
-- Added optional profession-specific Artisan Moxie tracking.
-- Added a Main Window option to show or hide the Moxie column, default off.
-- Added Moxie display after Conc 2 and before Next/Mulch in the main window.
-- Added Moxie tooltip details for tracked professions when known.
-- Moxie values update per character after logging into that character or receiving currency updates.
-
-EmberLedger v1.8.1
-
-Session window title and button layout polish.
-- Restored the standalone Session window title to EmberLedger Session.
-- Moved Pause, History, and Reset out of the Session header and into a bottom button row.
-- Slightly increased the Session panel height so the item list and bottom controls do not crowd each other.
-- Kept session tracking, history, launcher behavior, and visual styling unchanged.
-
-EmberLedger v1.8.0
-
-Visual unification pass.
-- Applied the newer dark purple and gold visual style more consistently across EmberLedger windows.
-- Refined main window, launcher, Session window, Session History, and Options styling for a more unified look.
-- Preserved existing color meanings and window scale as much as possible.
-- Kept tracking, session history, raw gold safeguards, and launcher behavior unchanged.
-
-EmberLedger v1.7.6
-- Improved Session History window visual presentation to better match the v1.5+ EmberLedger polish style.
-- Enlarged the Session History window and centered the title for a stronger header treatment.
-- Refined the history table frame, row spacing, row hover highlight, and column readability.
-- Improved the Sessions Total section with larger icon-style labels and clearer spacing.
-- Preserved fixed 90-day retention and display-only range selection.
-
-EmberLedger v1.7.5
-- Removed the extra History button from the Session options page.
-- Added Clear History under Maintenance / Resets to delete saved account-wide session history data.
-- Improved Session History class color fallback for character names.
-- Enlarged Session History summary icons for clearer visual polish.
-
-EmberLedger v1.7.3
-- Session History retention now controls saved-data cleanup only.
-- Added separate display range selector for 7, 30, 60, or 90 days.
-- Added 7-day retention option to reduce saved-variable size for users who want a shorter history.
-- Session History character names now use class coloring where class data is available.
-- Added compact visual markers/icons to Session History totals for sessions, duration, item value, raw gold, spent gold, and net total.
-- Preserved existing raw gold tracking safeguards for mail, bank, Warband bank, auction house, and trade windows.
-
-EmberLedger v1.7.2
-
-- Improved raw gold session accuracy.
-- Raw gold gains and gold spent tracking now ignore money changes while bank, Warband bank, mailbox, auction house, or trade windows are open.
-- Prevents stored, transferred, auction, or mailed gold from inflating farming session totals.
-- Kept direct gameplay money tracking outside those transaction windows.
-
-EmberLedger v1.7.1
-- Added a dedicated Session History enable toggle.
-- Changed history retention to a dropdown-style selector for 30, 60, or 90 days.
-- Improved Session History column alignment.
-- Added a Sessions Total summary panel with duration, item value, raw gold, spent gold, and net total.
-- Added a History button to the standalone Session window and shortened the title to EL Session.
-
-EmberLedger v1.7.0
-- Added lightweight account-wide Session History.
-- Session summaries now auto-save on logout/reload and save when resetting the current session.
-- Added retention options for Off, 30, 60, and 90 days.
-- Added a simple Session History window with date, character, duration, total, and gold-per-hour.
-- Stored summary records only, with no item-by-item history or graphs.
-
-v1.6.2 Collapse State Cleanup
-- Removed layout-time resets that could forcibly clear the saved character collapse state.
-- Preserved current main window, session, launcher, and raw gold tracking behavior.
-
-v1.6.2 Session Rate Color Polish
-
-- Restored the Session rate value to the muted gray text style.
-- Negative coloring now applies only to the main Session total value.
-- Preserved v1.6.0 raw gold gain and gold spent tracking behavior.
-
-v1.6.0 Raw Gold Session Tracking
-- Added optional raw gold gain tracking for direct wallet increases.
-- Added optional gold spent tracking for direct wallet decreases.
-- Session total now reflects net value when gold tracking is enabled.
-- Negative session totals and rates display in red in the Session window.
-- Raw gold gains are enabled by default; gold spent tracking is disabled by default.
-- Bank, Warband bank, and mailbox item-transfer protections remain in place so stored or mailed items are not counted as session loot.
-
-v1.5.5 Session Transfer Tracking Fix
-- Paused positive session item tracking while bank, Warband bank, or mailbox windows are open.
-- Kept bag baselines synchronized during storage/mail transfers so moved items are not counted later.
-- Prevented mailed or stored materials from inflating session totals.
-- Kept session timer, launcher, and Session window behavior unchanged.
-
-v1.5.4 Branding Cleanup
-- Replaced public-facing author references with Hitshade.
-- Updated addon metadata/author branding where applicable.
-- Preserved existing addon behavior and documentation structure.
-
-v1.5.3 Current Character Highlight Polish
-- Adjusted the current-character highlight to frame the full table row area instead of sitting narrowly inside the row.
-- Expanded the active-row border and fill to better match the darker row background boundaries.
-- Kept the Character header left-aligned from the previous polish pass.
-- Preserved existing tracking, sorting, launcher, and session behavior.
-
-v1.5.2 Table Highlight Polish
-- Left-aligned the Character table header for a cleaner visual match with character names.
-- Improved the current-character row highlight so it is more visible and fits cleanly inside row boundaries.
-- Preserved existing sorting, tracking, launcher, and session behavior.
-
-v1.5.1 Launcher Visual Polish
-- Refined the launcher into a smaller dashboard-style display.
-- Reduced title prominence and removed redundant launcher labels.
-- Combined concentration and mulch status onto one compact line.
-- Combined session rate and elapsed time onto one compact line.
-- Preserved launcher size, behavior, and options.
-
-v1.5.0 Visual Polish Pass
-- Refined main, launcher, and Session window borders for a cleaner framed look.
-- Strengthened title/header bar styling with subtle accent lines.
-- Centered table headers and numeric/status table values for easier scanning.
-- Softened the current-character row highlight so it is less visually heavy.
-- Adjusted row striping and dividers for a cleaner table presentation.
-- Improved button text centering across EmberLedger controls.
-- Preserved existing launcher, session, tracking, sorting, and action bar behavior.
-
-v1.4.11 Main Window Toggle Hotfix
-- Fixed the Main Window option toggle after the launcher temporarily hides windows.
-- The Show main window checkbox now uses the saved visibility setting instead of actual frame visibility when deciding the next state.
-- Preserved launcher temporary hide/show behavior and X-button close behavior.
-
-v1.4.10 Launcher Window Restore Hotfix
-- Fixed launcher click behavior so hiding windows from the launcher does not turn off the saved main or Session window visibility settings.
-- Launcher left-click can now hide visible EmberLedger windows and restore them again on the next click.
-- Preserved X-button behavior so manually closing a window still turns off its matching visibility option.
-
-EmberLedger v1.4.9
-- Simplified the launcher tooltip to a short usage tip.
-- Removed detailed attention, concentration, mulch, character count, and session summaries from the launcher tooltip.
-- Kept the launcher click hints for showing or hiding EmberLedger windows, locking the launcher, and moving it while locked.
-- Preserved launcher display lines and window toggle behavior.
-
-EmberLedger v1.4.8
-- Added clearer Next column ready handling for characters with two ready concentration professions.
-- Next now shows 2x Ready only when more than one concentration-tracked profession is ready.
-- Kept normal Ready and countdown behavior unchanged for single-profession and not-ready characters.
-- Preserved tooltip readability changes from the recent polish pass.
-
-EmberLedger v1.4.7
-- Changed Mulch tooltip labels Ready at and In bags to muted gray for improved hierarchy.
-- Kept the Imbued Mulch tooltip section header orange.
-- Removed the redundant Class line from row tooltips because the character name already uses class coloring.
-
-EmberLedger v1.4.6
-
-Tooltip readability polish.
-- Restored Ready at wording for exact tooltip timing.
-- Reduced main row tooltip clutter by removing redundant status/update fields.
-- Kept useful profession, concentration, mulch, pin, and action hint details.
-- Preserved Next column behavior from v1.4.4 and v1.4.5.
-
-v1.4.5 Tooltip Time Hotfix
-- Replaced the Imbued Mulch tooltip's exact local ready timestamp with a countdown-based Ready in value.
-- This keeps the tooltip aligned with the main window countdown and avoids local time display mismatches.
-- Preserved the Next column behavior from v1.4.4.
-
-v1.4.4 Next Column Text Polish
-- Updated the Next column so only the Ready state uses green text.
-- Changed all non-ready Next values to the same muted gray-white style used by inactive table values.
-- Preserved the simplified Next column display and default-off setting.
-
-v1.4.3 Next Column Color Hotfix
-- Updated the Next column so only the Ready state uses green text.
-- Changed Full, countdown timers, and N/A to plain white text.
-- Updated the Next column tooltip example text to match the simplified display.
-- Preserved the default-off Next column setting and existing sorting behavior.
-
-v1.4.2 Next Column Readability Update
-- Renamed the Forecast column to Next.
-- Simplified Next column output to Full, Ready, or the estimated threshold time.
-- Removed color-coded Next text for improved readability.
-- Reduced Next column width to better fit compact table layouts.
-- Updated Options wording to match the new Next column naming.
-
-v1.4.1 Forecast Column Hotfix
-- Fixed an error that occurred when the Forecast column was disabled by default.
-- Added safe fallback layout values for the Forecast column.
-- Restored main and Session window display behavior after the v1.4.0 Forecast column addition.
-- No new features were added.
-
-v1.4.0 Concentration Forecast Column
-
-- Added an optional Forecast column to the main window table.
-- Forecast is off by default and can be enabled from Options > Main Window > Main Window Table.
-- Forecast uses the configured concentration threshold and fixed concentration regeneration rate to show ready and full timing.
-- Added Forecast column sorting support.
-- Preserved existing Conc 1, Conc 2, Imbued Mulch, launcher, session, and action bar behavior.
-- Updated README title/version only.
-
-v1.3.7 Session Tracking Repair and Package Validation
-
-- Restored proven session chat loot crediting behavior after reviewing the v1.3.6 cleanup pass.
-- Chat loot is again credited immediately and queued so the following bag diff can consume the pending amount instead of double-counting it.
-- Fixed version metadata consistency for the 1.3.x cleanup line.
-- Kept the corrected CurseForge package structure with a top-level EmberLedger folder.
-- Updated README title/version only.
-- No new features added.
-
-v1.3.6 Bug Fixes and Code Cleanup
-
-- Fixed ProcessChatLoot using a bare C_Item call instead of the safe wrapper used everywhere else in the file.
-- Attempted to adjust chat loot handling. Superseded by v1.3.7 after review found the change could undercount normal loot.
-- Fixed NormalizeDatabaseSettings being called twice in EnsureDB. The premature call before migrations ran has been removed.
-- Fixed sessionWidthVersion migration blocks reading the already-mutated key; both blocks now compare against the original pre-migration value.
-- Fixed RestoreHiddenCharacters using an unnecessary self-existence guard on a method defined in the same file.
-- Fixed ResolveActionSpell being an unintentional global; it is now correctly scoped as a local.
-- Replaced sequential gsub calls in GetCleanProfessionName with a table-driven loop so future expansion prefixes can be added in one place.
-- GetProfessionAbbreviation now checks the PROFESSION_ABBREVIATIONS lookup table by profession ID before falling back to name-string derivation.
-- ForEachModule now logs module errors to chat when debug mode is enabled instead of silently discarding them.
-- Replaced unused addonName with _ in all three module files (Concentration, Mulch, Session).
-- Removed the unused MULCH_ITEM_ID alias (duplicate of IMBUED_MULCH_ITEM_ID).
-- defaults.version now references EL.DB_VERSION instead of duplicating the literal value.
-- No intended sorting, launcher, action bar, or saved-variable behavior changes.
-
-v1.3.5 Action Bar Options Cleanup
-
-- Removed the redundant Show action bar checkbox from Options > Action Bar.
-- Action bar visibility is now controlled only by Options > Performance > Enable action bar.
-- Kept individual action bar button visibility settings under Options > Action Bar.
-- Ignored the legacy actionBarShown setting so older saved settings cannot hide the bar separately from the Performance toggle.
-- Reviewed Options for other redundancies; session/main-window visibility controls remain because they hide windows, while Performance controls disable background systems.
-- Updated README title and release metadata for v1.3.5.
-
-v1.3.4 Options Menu Polish
-
-- Merged the old Display page into General for a cleaner Options menu.
-- Renamed the Tracking Options category to Main Window for clearer wording.
-- Moved Copy Summary from General/Information into the Session options page.
-- Added a short tooltip for Copy Summary in the Session page.
-- Updated README title and release metadata for v1.3.4.
-- No tracking, sorting, session calculation, launcher, action bar, or Blizzard frame behavior changes.
-
-v1.3.3 Maintenance Cleanup
-
-- Updated README title and release metadata for v1.3.3.
-- Added README.md to the packaged addon alongside README.txt.
-- Skipped hidden Settings panel refresh work unless the panel is open.
-- Skipped event-driven action bar refresh requests when the action bar is not actually visible.
-- Scanned for abandoned Blizzard frame-hiding code and seed flyout leftovers.
-- No tracking, sorting, session calculation, launcher, Blizzard frame, or saved-variable migration behavior changes.
-
-v1.3.2 Performance Controls Hotfix
-
-- Fixed tracking window auto-height when the action bar is disabled from Performance settings.
-- Fixed session tracking re-enable behavior so the Session window reopens when it was open before session tracking was disabled.
-- Preserved v1.3.1 Performance settings visibility and v1.3.0 performance controls.
-- No tracking, sorting, launcher, action bar button, Blizzard frame, import/export, backup, or minimap changes.
-
-v1.3.1 Performance Options Visibility Fix
-
-- Fixed the Options sidebar so the new Performance page appears as its own category.
-- The Performance page now exposes Enable session tracking and Enable action bar as intended.
-- Preserved the v1.3.0 performance controls and behavior.
-- No tracking, session calculation, launcher, action bar button, Blizzard frame, or saved-data behavior changes.
-
-v1.3.0 Performance Controls
-
-- Added a dedicated Performance page in EmberLedger Settings.
-- Added Enable session tracking. When off, EmberLedger skips most session loot and bag processing and closes the Session window.
-- Added Enable action bar. When off, EmberLedger hides the utility action bar and skips action bar refresh work.
-- Removed routine Settings refresh work from the launcher ticker path. Settings now refresh when opened or when options change.
-- Added short tooltips explaining what each Performance option disables.
-- Preserved core profession, concentration, Imbued Mulch, launcher, sorting, hidden/pinned character, and window behavior.
-- No seed flyout, minimap button, import/export tools, backup tools, or major UI rewrite was added.
-
-v1.2.3 Window Visibility Toggle Fix
-
-- Fixed main tracking window close behavior so closing the window turns off the Show tracking window option.
-- Fixed standalone Session window close behavior so closing the window turns off the Show session window option.
-- Re-enabling either option in EmberLedger Settings now shows the matching window again.
-- Preserved the v1.2.2 performance refresh throttling.
-- No tracking, sorting, session calculation, launcher, action bar, or Blizzard frame behavior changes.
-
-v1.2.2 Performance Hotfix
-------------------------
-Reduced unnecessary background UI refresh work.
-
-Changes:
-- Reduced once-per-second refresh work while the main tracking panel is hidden.
-- Reduced once-per-second refresh work while the standalone Session window is hidden.
-- Limited ticker-driven action bar refreshes to cases where the main panel action bar is visible.
-- Added a fresh Session window refresh when the Session window is shown so hidden-window throttling does not leave stale text.
-- Preserved launcher updates, manual refreshes, and event-driven tracking/session updates.
-- No tracking logic, sorting, saved-variable migration, session calculation, launcher behavior, action bar behavior, or Blizzard frame behavior changes.
-
-v1.2.1
-- Performed release cleanup and code inspection after the v1.2.0 hidden-character and Options polish pass.
-- Removed a harmless duplicate Launcher Session Time toggle refresh call from the Options panel refresh routine.
-- Updated version metadata and documentation for the v1.2.1 cleanup release.
-- No tracking, sorting, session, launcher, action bar, Blizzard frame, seed flyout, minimap, import/export, backup, or saved-variable migration behavior changes were added.
-
-v1.2.0
-- Added hidden-character management polish in Options.
-- Renamed the hidden-character reset control to "Unhide All" for clearer wording.
-- Added a hidden-character count to the Maintenance / Resets page.
-- Added hover tooltips to Maintenance / Resets buttons.
-- Lightly reorganized Options section titles for clearer scanning.
-- No tracking, session, launcher, action bar, Blizzard frame, import/export, backup, minimap, or seed flyout changes were added.
-
-v1.1.0
-- Added clearer empty-state messages for new installs, Attention Only view, and fully hidden character lists.
-- Added passive first-use guidance in the main tracking window when no characters have been tracked yet.
-- Kept launcher tooltip behavior unchanged.
-- No tracking, session, action bar, Blizzard frame, import/export, backup, or saved-variable migration changes.
-
-v1.0.8
-- Renamed the Blizzard AddOns entry button from "Open EmberLedger Options" to "Open EmberLedger Settings" for clearer wording.
-- Lightly tuned several Options tooltip lines for consistency and readability.
-- Did not add a standalone-options note to the Blizzard AddOns panel.
-- Did not touch Blizzard frame closing, hiding, or protected UI behavior.
-- No tracking, session, launcher, action bar, saved-variable migration, minimap, import, backup, or seed flyout changes were added.
-
-v1.0.7
-- Hotfix: removed the Blizzard Options frame-hiding behavior that could leave Blizzard UI windows hidden after opening EmberLedger Options from the AddOns panel.
-- The Blizzard AddOns entry now opens EmberLedger Options without attempting to close or hide Blizzard settings frames.
-- Preserved v1.0.6 Options tooltip consistency changes.
-
-v1.0.6
-- Added concise hover tooltips to all Options menu checkboxes.
-- Standardized tooltip coverage across General, Tracking, Launcher, Session, and Action Bar pages.
-- No tracking, session, launcher, action bar, saved-variable migration, minimap, import, backup, or seed flyout changes were added.
-
-v1.0.5
-- Hotfixed the Blizzard Options close behavior from v1.0.4 to avoid protected Blizzard close paths that could trigger ADDON_ACTION_FORBIDDEN errors.
-- This experimental Blizzard Options hiding approach was later removed in v1.0.7 after testing showed broader Blizzard UI side effects.
-- No tracking, session, launcher, action bar, saved-variable migration, minimap, import, backup, or seed flyout changes were added.
-
-v1.0.4
-- Opening EmberLedger Options from Blizzard AddOns/Options now closes the Blizzard options window first to prevent overlapping panels.
-- Added a dedicated ShowSettingsPanel helper so the Blizzard Options button opens EmberLedger Options without accidentally toggling an already-open panel closed.
-- Preserved the standalone /el settings toggle behavior.
-- No tracking, session, launcher, action bar, saved-variable migration, minimap, import, backup, or seed flyout changes were added.
-
-v1.0.3
-- Fixed an Options tooltip error caused by passing tooltip title wrapping as the wrong argument to GameTooltip:SetText.
-- Preserved the v1.0.2 current-character row highlight behavior.
-
-v1.0.2
-- Added a subtle current-character row highlight to the main tracking table so the logged-in character is easier to find.
-- Added a General Options toggle for the current-character highlight.
-- Added a tooltip line showing when a row is the current character.
-- Preserved existing sorting, tracking, session, launcher, action bar, and saved-variable behavior.
-- No seed flyout, minimap button, import tools, backup tools, saved-variable migration, or large UI rewrite was added.
-
-v1.0.1
-- Added /el help as a lightweight in-game slash command reference.
-- Added clarification tooltips for the standalone Session window option and launcher session display toggles.
-- Added clarification tooltip text for action bar visibility so button options are clearer without changing secure button behavior.
-- Cleaned README and changelog wording for the first post-1.0 patch release.
-- Preserved v1.0.0 tracking, session, launcher, action bar, and saved-variable behavior.
-- No seed flyout, minimap button, import tools, backup tools, saved-variable migration, or large UI rewrite was added.
-
-v1.0.0
-- Promoted EmberLedger from the final v0.24.13 Beta cleanup baseline to the first stable 1.0 release.
-- Updated addon metadata, internal fallback version text, and saved-variable version metadata for v1.0.0.
-- Preserved the current tested feature set: profession tracking, concentration tracking, Imbued Mulch readiness, session tracking, launcher customization, action bar button options, pinned characters, and Options polish.
-- No seed flyout, minimap button, import tools, backup tools, or large behavior rewrites were added in this release.
-
-v0.24.13 Beta
-- Performed a pre-1.0 cleanup and code inspection pass.
-- Confirmed legacy saved-variable cleanup is single-pass during database initialization.
-- Added explicit normalization for Action Bar button option defaults and pruned unknown stale action-button keys.
-- Added Options frame position defaults to the saved-variable defaults.
-- Aligned internal database version metadata with the current package version.
-- Updated action bar seed labels to use the full Resilient Seed item names consistently.
-- No feature scope changes, no seed flyout, no minimap button, and no import/backup tools.
-
-v0.24.12 Beta
-- Session window status/empty-state text can now wrap to two lines when the window is scaled down.
-- Preserved normal single-line item rows for actual session loot entries.
-- No action bar, secure button, minimap, import, backup, or seed flyout changes.
-
-
-v0.24.11 Beta
-- Fixed launcher session display independence.
-- Toggling the standalone Session window no longer hides Session rate, Session total, or Session time from the launcher display.
-- Launcher session lines remain controlled only by the Launcher display options.
-
-v0.24.10 Beta
-- Changed the Maintenance options tab icon to the Engineering icon so it no longer duplicates the General tab icon.
-- No action bar behavior changes.
-- No secure button changes.
-- No seed flyout added.
-
-v0.24.9 Beta
-- Added a cogwheel-style icon for the Maintenance options tab.
-- Improved Tracking options spacing to prevent long checkbox labels from bleeding into the next checkbox.
-- No action bar behavior, secure button, seed flyout, minimap, import, or backup changes.
-
-v0.24.8 Beta
-- Renamed the Options sidebar category from Actions to Action Bar so the category matches the action bar controls.
-- Moved reset tools into a separate Maintenance category to keep resets separate from action bar configuration.
-- Renamed action bar seed checkboxes to use the full Resilient Seed item names.
-- Renamed the Parcel Signal checkbox to Interdimensional Parcel for clearer labeling.
-- Kept action bar button behavior, button order, secure action attributes, minimap, import, backup, and seed flyout behavior unchanged.
-
-v0.24.7 Beta
-- Registered the EmberLedger Options window with WoW's UISpecialFrames list so pressing Esc closes it.
-- Added duplicate-registration protection for the Options frame Esc-close registration.
-- Kept action bar logic, secure button attributes, layout, minimap, import, and backup behavior unchanged.
-
-v0.24.6 Beta
-- Tightened the main tracking window auto-height calculation so the action bar is no longer double-counted in the bottom spacing.
-- Reduced the main tracking window action bar bottom offset slightly to remove extra blank space while preserving button layout.
-- Increased the Action Bar Buttons options container height so the seed checkboxes fit cleanly inside the section.
-
-v0.24.5 Beta
-- Added Action Bar Buttons options so each convenience button can be individually enabled or disabled.
-- Added separate General and Seeds groups for action bar button visibility.
-- Kept all action bar buttons enabled by default to preserve existing v0.24.4 behavior.
-- Did not add the abandoned seed flyout or change secure action button behavior.
-
-v0.24.4 Beta
-- Refreshed action bar visibility on BAG_UPDATE_DELAYED so item-based buttons update more reliably when seed, mulch, or other action-bar items enter or leave bags.
-- Kept the v0.24.3 action bar structure unchanged and did not add the abandoned seed flyout.
-
-v0.24.3 Beta
-- Expanded action bar visibility so spell and ability buttons are hidden unless the current character knows the matching spell.
-- Added Midnight seed buttons for Glowing Resilient Seed, Wild Resilient Seed, and Primal Resilient Seed.
-- Added Overload Herb and Overload Ore buttons with support for Midnight and Khaz Algar variants.
-- Added expansion-zone gating for expansion-specific gathering actions so Khaz Algar actions hide outside Khaz Algar and Midnight actions hide outside Midnight zones.
-- Refreshed action bar visibility on zone and spellbook changes while deferring secure button changes during combat.
-
-v0.24.2 Beta
-- Added Green Thumb to the action bar as a Herbalism utility spell button.
-- Included support for both known Green Thumb spell variants where available.
-- Tightened spell action availability so spell buttons are hidden when the current character does not know the spell.
-
-v0.24.1 Beta
-- Adjusted dashboard display ordering for characters with only one concentration-tracked profession.
-- If a character has two known professions but only one has concentration data, the concentration profession is promoted into P1 / Conc 1 for display.
-- The second known profession remains visible in P2 / Conc 2 when the secondary columns are shown.
-- This is display-only and does not change stored profession slot data.
-- Kept concentration, Imbued Mulch, session, pinning, and reset behavior unchanged.
-
-v0.24.0 Beta
-- Added profession identity tracking separate from concentration tracking.
-- Characters now store their primary professions from GetProfessions, even when those professions do not use concentration.
-- P1/P2 columns now prefer known character professions, with concentration values attached when matching data exists.
-- Characters with gathering or other non-concentration professions can now show their professions instead of N/A.
-- Updated row tooltips to show Known Professions and clarify when concentration is not tracked for a profession.
-- Added /el professions and /el refresh professions to manually refresh current-character profession identity.
-- Kept existing concentration, Imbued Mulch, session, pinning, and reset behavior intact.
-
-EmberLedger v0.23.0 Beta
-
-## v0.23.0 Beta
-- Standardized window border color and opacity across Launcher, Tracking, Session, and Options.
-- Refined row striping, hover overlays, and pinned-row highlights for a cleaner final visual style.
-- Improved tracking and session empty-state text.
-- Clarified row tooltip instructions for pinning, hiding, and resetting character data.
-- No minimap, import, backup, or major new system was added.
-
-EmberLedger v0.22.0 Beta
-- Added reset and maintenance cleanup tools without adding import or backup features.
-- Moved reset actions into the Options > Actions page for easier access.
-- Added confirmation prompts for Reset Windows, Reset Session, Reset Hidden, and Reset Pinned actions.
-- Added Reset Pinned to clear all pinned character markers without deleting character data.
-- Kept the v0.21.0 pinning behavior, Alt-click interaction, and pinned row visuals unchanged.
-- Added slash command aliases for reset windows/layout, reset session, reset hidden, and reset pinned.
-
-## v0.21.0 Beta
-- Cleaned up pinning terminology across the Options panel, tooltips, sorting labels, and internal helper paths.
-- Added pinned-character helper functions while preserving the old favoriteCharacters saved-variable key for upgrade compatibility.
-- Added a showPinnedFirst display setting and synchronized it with the legacy showFavoritesFirst value so existing user settings continue to work.
-- Kept Alt-left-click pinning, pinned-row background glow, and pinned-first sorting behavior unchanged.
-- No minimap, import, or backup feature was added.
-
-## v0.20.1 Beta
-- Removed the Next Mulch field from the Profession Tracking header summary ticker.
-- The summary ticker now displays only Ready, Soon, and Mulch counts.
-- This reduces ticker width and prevents layout problems when the tracking window is scaled smaller.
-- No Imbued Mulch tracking logic, launcher mulch line behavior, tooltips, or table column behavior was intentionally changed.
-
-## v0.20.0 Beta
-- Refined the pinned-row visual treatment after the v0.19.2 background glow change.
-- Softened pinned-row glow opacity so pinned rows are visible without looking muddy or distorted.
-- Reduced the gold left accent opacity for a cleaner pinned state.
-- Inset pinned and hover row overlays slightly to preserve row borders and table spacing.
-- Reduced hover highlight intensity so hover feedback does not overpower pinned rows.
-- Updated tooltip language to consistently describe Alt-click pinning.
-- Updated addon metadata for v0.20.0 Beta.
-
-## v0.19.2 Beta
-
-- Replaced the pinned-character text shadow with a row-level gold background glow.
-- Added a thin gold left accent on pinned rows.
-- Kept Alt-left-click pinning and existing saved pin data intact.
-- Updated addon metadata for v0.19.2 Beta.
-
-## v0.19.1 Beta
-
-- Removed the visible favorite/star indicator from character rows.
-- Added Alt-left-click on a character row/name to pin or unpin that character.
-- Added a subtle gold shadow/glow to pinned character names.
-- Renamed the option label from Show favorites first to Show pinned first.
-- Kept the existing saved pin data intact for users upgrading from v0.18.0 or v0.19.0.
-
-## v0.19.0 Beta
-
-Polish and stability pass. The previously discussed minimap feature was intentionally skipped.
-
-- Cleaned stale favorite and hidden-character saved-variable flags when old character data no longer exists.
-- Added safer saved-variable table normalization for characters, resources, concentration data, and mulch data.
-- Hardened favorite, hidden-character, sorting, row tooltip, and mulch-summary paths against nil saved-variable edge cases.
-- Kept the v0.18.0 favorites/pinning feature as the current baseline.
-- Updated README and addon metadata for v0.19.0 Beta.
-
-## v0.18.0 Beta
-
-- Added character favorites/pinning in the Profession Tracking table.
-- Added a star button beside each character row to pin or unpin that character.
-- Pinned characters sort above unpinned characters while preserving the active table sort inside each group.
-- Added Options > General toggle: Show favorites first.
-- Removed a character from favorites automatically when that character data is reset.
-- Updated README and addon metadata for v0.18.0 Beta.
-
-## v0.17.7 Beta
-
-- Hid the “Profession Tracking” subtitle in Compact Mode to reduce header crowding.
-- Shifted the Compact Mode tracking header/table upward slightly.
-- Kept Normal Mode subtitle behavior unchanged.
-- Updated README and addon metadata for v0.17.7 Beta.
-
-## v0.17.6 Beta
-
-### Changed
-- Hid the tracking summary ticker in Compact Mode to prevent header crowding and text overflow.
-- Reduced Compact Mode top spacing so the table starts higher in the tracking window.
-- Reduced bottom padding below the action icon bar in both Normal and Compact modes.
-- Updated addon metadata and saved-variable version for v0.17.6 Beta.
-
-### Unchanged
-- Profession detection, concentration tracking, mulch tracking, session tracking, and secure action buttons were not intentionally changed.
-
-## v0.17.5 Beta
-Session window width alignment.
-
-Changed:
-- Reduced the standalone Session window minimum/default width to better match the adaptive Profession Tracking window.
-- Tightened Session metric spacing and Pause/Start, Reset, and close button placement for the smaller layout.
-- Preserved session tracking behavior, pricing, loot rows, and secure action button handling.
-- Updated README and addon metadata.
-
-## v0.17.4 Beta
-Tracking table width tuning.
-
-Changed:
-- Shrunk the Mulch column for both Normal and Compact Mode.
-- Tightened the Character column when realm display is hidden, while preserving enough space for standard WoW character names.
-- Reduced tracking window auto-width calculations so the icon-only profession display makes the whole window smaller.
-- Updated README and addon metadata.
-
-## v0.17.3 Beta
-Main window scale isolation fix.
-
-Changed:
-- Main window scale now affects only the main tracking window.
-- Options panel is always parented to UIParent and kept at 100% scale.
-- Main window scale continues to default to 100%.
-- Updated README and addon metadata.
-
-## v0.17.2 Beta
-- Changed profession columns to icon-only display to reduce table width.
-- Shrank Prof 1 and Prof 2 column widths for both Normal and Compact Mode.
-- Kept profession abbreviation text as fallback when no icon can be matched.
-- Updated README and addon metadata.
-
-## v0.17.1 Beta
-- Fixed profession icon rendering by replacing inline font texture tags with dedicated icon textures inside Prof 1 and Prof 2 cells.
-- Anchored profession icons to the left side of the profession cell with the abbreviation beside them.
-- Added text-only fallback behavior when a profession icon cannot be matched.
-- Improved profession-name fallback matching for icon lookup.
-- Updated README and package metadata.
-
-## v0.17.0 Beta
-- Added profession icons beside Prof 1 and Prof 2 values in the Profession Tracking window.
-- Profession icons are matched from the stored profession ID when available, with a name fallback for common professions.
-- Kept the current text abbreviation beside each icon for readability.
-- Adjusted Normal and Compact profession column widths to fit icon plus text cleanly.
-- Updated addon metadata and saved-variable version for v0.17.0 Beta.
-
-## v0.16.1 Beta
-- Compact Mode now reduces tracking window width as well as row height.
-- Added Compact Mode column widths for Character, Prof 1, Conc 1, Prof 2, Conc 2, and Mulch.
-- Tracking window auto-width now recalculates from the active Normal or Compact column definitions.
-- Normal Mode column widths remain unchanged.
-- Updated addon metadata and saved-variable version for v0.16.1 Beta.
-
-## v0.16.0 Beta
-- Added Compact Mode for the Profession Tracking window.
-- Added Options > General toggle: Compact tracking rows.
-- Compact Mode reduces row height and switches tracking row text to a smaller font.
-- Tracking window auto-height now recalculates based on Normal or Compact row height.
-- Updated addon metadata and saved-variable version for v0.16.0 Beta.
-
-## v0.15.0 Beta
-- Added expanded tracking-row tooltips for character, concentration, and Imbued Mulch details.
-- Character tooltip details now include realm, class, last seen, and exact last-seen time when available.
-- Concentration tooltip details now include tracked profession names, abbreviations, current/max concentration, percentage, estimated full time, and last update when available.
-- Imbued Mulch tooltip details now include ready state, remaining time, exact ready time, item name, bag count, and last update when available.
-- Updated addon metadata and saved-variable version for v0.15.0 Beta.
-
-## v0.14.2 Beta
-
-Header Summary Strip color polish.
-
-- Next Mulch character names now use the same class-colored styling as the Character column.
-- The summary field still shows the next available Imbued Mulch character and countdown, or Ready when available.
-- Updated README documentation.
-- No profession detection, concentration tracking, mulch tracking, session tracking, launcher behavior, or secure action button code was intentionally changed.
-
-## v0.14.1 Beta
-
-Header Summary Strip refinement.
-
-- Changed the final summary field from Next to Next Mulch.
-- Next Mulch now shows only the next available Imbued Mulch character and countdown.
-- If an Imbued Mulch is already available, the summary shows Ready.
-- Concentration remains represented by the Ready and Soon counts only.
-- Updated README documentation.
-- No profession detection, concentration tracking, mulch tracking, session tracking, launcher behavior, or secure action button code was intentionally changed.
-
-## v0.14.0 Beta
-
-Tracking window summary and options placement update.
-
-- Moved the Attention Only view toggle from Options > Tracking to Options > General.
-- Added the Header Summary Strip to the existing information area below the main tracking window header.
-- Summary now displays: Ready, Soon, Mulch, and Next.
-- Ready uses the configured concentration ready threshold.
-- Soon identifies visible characters approaching the configured threshold.
-- Next shows the closest visible concentration or Imbued Mulch item needing attention.
-- Updated README documentation.
-- No profession detection, concentration tracking, mulch tracking, session tracking, launcher behavior, or secure action button code was intentionally changed.
-
-## v0.13.0 Beta
-
-### Added
-
-- Added Options > Tracking toggle: Attention Only view.
-- Attention Only view filters the Profession Tracking table to characters with concentration at or above the ready threshold or Imbued Mulch ready.
-- Full table mode remains the default.
-
-### Changed
-
-- Tracking window auto-height now recalculates from the filtered visible row count when Attention Only view is enabled.
-- Empty table text now changes to "No characters need attention." while Attention Only view is active.
-
-### Guardrails
-
-- No profession detection, concentration tracking, Imbued Mulch tracking, session tracking, launcher behavior, or secure action button behavior was intentionally changed.
+### Session History Filters
+
+- Added Today filter support to Session Stats
+- Added custom Session Stats display dropdown
+- Improved Session Stats filtering and display behavior
 
 ---
 
+## v1.12.x
 
-## v0.12.4 Beta
+### Crafted Item Tracking
 
-### Changed
-
-- Removed manual resizing from the main Profession Tracking window.
-- The tracking window now auto-sizes horizontally from the currently visible columns.
-- The tracking window now auto-sizes vertically from the visible character count.
-- Visible tracking rows are capped at 20 characters before mousewheel scrolling is used.
-- Reset Windows now resets position while the tracking window size remains content-driven.
-
-### Guardrails
-
-- The tracking window remains draggable.
-- No profession detection, concentration tracking, Imbued Mulch tracking, session tracking, launcher behavior, or secure action button behavior was intentionally changed.
+- Added optional crafted item tracking support
+- Added crafted item tracking safeguards and warnings
+- Added combat-safe deferred refresh handling
+- Improved session tracking robustness
+- Additional performance optimization and polish
 
 ---
 
+## v1.11.x
 
-## v0.12.3 Beta
+### Session Stats Expansion
 
-### Added
-
-- Added Options > Tracking toggle: Show character realm.
-- Added saved setting display.showCharacterRealm with default enabled behavior for existing users.
-
-### Changed
-
-- Character names can now display as Name only instead of Name-Realm when realm display is disabled.
-- Character column minimum and natural widths shrink when realm display is disabled.
-- Tracking window minimum and maximum width bounds now recalculate from the shorter Character column.
-- Character sorting uses the same display name style currently shown in the table.
-
-### Guardrails
-
-- No profession detection, concentration tracking, Imbued Mulch tracking, session tracking, or secure action button behavior was intentionally changed.
+- Added Session Stats mode
+- Added lifetime statistics
+- Added aggregate session stat cards
+- Added Moxie split-column support
+- Added minimap integration and launcher support
 
 ---
 
-## v0.12.2 Beta
+## v1.10.x
 
-- Fixed tracking window minimum width so the table can no longer be shrunk until character names, concentration values, and mulch timers visibly clip.
-- Increased readable minimum widths for Character, Conc, and Mulch columns.
-- Kept the dynamic maximum width behavior from v0.12.1 so the window still cannot expand into large unused horizontal space.
-- No changes to profession detection, concentration tracking, mulch tracking, session tracking, or secure action buttons.
+### Minimap & Launcher Integration
 
-## v0.12.1 Beta
-
-### Changed
-
-- Added a dynamic maximum width for the main Profession Tracking window based on the currently visible columns.
-- Prevented the tracking window from expanding into large empty horizontal space when only a small set of columns is visible.
-- Kept the maximum width responsive to Prof 2 / Conc 2 visibility so the window can still expand when secondary profession data exists.
-- Updated manual resize handling, resize bounds, and size clamping to use the same dynamic width limits.
-- Bumped addon metadata and saved-variable version to v0.12.1 Beta.
-
-### Guardrails
-
-- No profession detection, concentration tracking, Imbued Mulch tracking, session tracking, launcher behavior, or secure action button behavior was intentionally changed.
+- Added minimap button support
+- Added LibDataBroker integration
+- Added fallback minimap button support
+- Improved launcher behavior and tooltip handling
 
 ---
 
-## v0.12.0 Beta
+## v1.0.0
 
-### Added
+### Initial Public Release
 
-- Added multi-profession concentration display in the main tracking table.
-- Added Prof 1, Conc 1, Prof 2, and Conc 2 column definitions.
-- Added Options > Tracking toggles for Prof 1, Conc 1, Prof 2, Conc 2, and Imbued Mulch.
-- Added automatic hiding for secondary profession/concentration columns when no visible character has a second concentration profession.
-
-### Changed
-
-- Reworked tracking-table row rendering so each character can display up to two concentration professions on one row.
-- Updated tracking-column sorting to support Prof 1, Conc 1, Prof 2, and Conc 2.
-- Updated tracking-window minimum width calculation so it can expand safely when secondary columns are visible.
-- Migrated older Prof and Concentration column settings into the new Prof 1 and Conc 1 settings.
-- Bumped addon metadata and saved-variable version to v0.12.0 Beta.
-
-### Guardrails
-
-- Character remains always visible.
-- EmberLedger still prevents Character-only mode by keeping at least one optional tracking column enabled.
-- Secondary columns are allow/hide controls and do not force blank columns when no secondary profession data exists.
-- No session tracking, Imbued Mulch tracking, launcher behavior, or secure action button behavior was intentionally changed.
-
----
-
-## v0.11.1 Beta
-
-### Changed
-
-- Bumped addon metadata and saved-variable version to v0.11.1 Beta.
-- Cleaned leftover character-collapse layout paths that were no longer reachable after the tracking window redesign.
-- Tightened tracking-window autosize logic so the active table layout remains the single source of truth.
-- Updated fallback version labels in the Options panel and launcher canvas.
-
-### Guardrails
-
-- No profession detection, concentration tracking, Imbued Mulch tracking, session tracking, launcher behavior, or secure action button behavior was intentionally changed.
-- Multi-profession concentration display was intentionally left for the next feature pass.
-
----
-
-## v0.11.0 Beta
-
-### Added
-
-- Added Tracking window column customization under Options > Tracking.
-- Added toggles for Show Prof column, Show Concentration column, and Show Imbued Mulch column.
-- Added saved settings for visible tracking columns.
-- Added quiet chat notifications when a tracking column is turned on or off.
-
-### Changed
-
-- Reworked the Profession Tracking table layout so visible columns reflow instead of leaving blank gaps.
-- Character remains always visible while Prof, Conc, and Mulch can be hidden individually.
-- Profession Tracking minimum width now adjusts based on the visible columns.
-- Sorting falls back to Character if the active sort column is hidden.
-
-### Guardrails
-
-- EmberLedger prevents Character-only mode by keeping the last optional column enabled.
-- No profession detection, concentration tracking, Imbued Mulch tracking, session tracking, launcher behavior, or secure action button behavior was intentionally changed.
-
----
-
-## v0.10.4 Beta
-
-### Changed
-
-- Reworked options panel slider rows so the setting label, slider, and current value are aligned inline.
-- Removed visible slider min/max labels to reduce clutter and prevent overlap.
-- Made the options panel draggable independently of the main EmberLedger window.
-- Options panel now opens centered on screen instead of anchored to the main window.
-- Reset Windows now also resets the options panel placement.
-
-### Unchanged
-
-- No tracking, session, action button, saved-variable, profession, or pricing behavior changed.
-
----
-
-## v0.10.3 Beta
-
-### Changed
-
-- Fixed options panel slider rows so labels, values, min/max labels, and slider tracks remain inside their shaded sections.
-- Increased affected section heights to prevent controls from spilling below section boundaries.
-- Improved slider alignment and visual separation in the Display options page.
-
-### Unchanged
-
-- No tracking, profession, session, action button, layout window, or saved-variable behavior changed.
-
----
-
-EmberLedger Changelog
-====================
-
-## v0.10.1 Beta
-
-Options panel category navigation fix.
-
-Changes:
-- Made the left-side options category menu functional.
-- Clicking General, Display, Launcher, Session, Tracking, or Actions now shows only that module's settings.
-- Reduced the oversized all-options view by presenting one settings category at a time.
-- Added selected-category visual highlighting in the sidebar.
-- Moved action/reset controls into the proper Actions category.
-- Updated addon metadata to v0.10.1 Beta.
-
-# EmberLedger Changelog
-
-## v0.10.2 Beta
-
-### Fixed
-
-- Fixed options panel sliders extending beyond the right edge of the options frame.
-- Slider row widths now calculate from the containing section instead of using an oversized fixed width.
-- Slider tracks reserve room for their value labels so controls stay inside the panel boundaries.
-
-### Unchanged
-
-- No profession tracking, session tracking, sorting, action button, saved variable, or gameplay behavior was changed.
-
-
-## v0.10.0 Beta
-
-### Release Focus
-
-Settings and options panel modernization.
-
-### Added
-
-- Added Blizzard AddOns settings integration so EmberLedger can be found from the default AddOns settings list.
-- Added an EmberLedger AddOns canvas with an Open EmberLedger Options button.
-- Added a redesigned EmberLedger Options panel with a more professional addon-style layout.
-- Added checkbox-style controls for on/off options.
-- Added slider-style controls for opacity, scale, and concentration threshold settings.
-- Added grouped settings sections for General, Appearance, Scale, Profession Threshold, Launcher Display, Session Tracking, Actions, and Information.
-
-### Changed
-
-- Reworked the options panel away from dense rows of small toggle buttons.
-- Opacity and scale are now controlled by sliders instead of plus/minus buttons.
-- Session material filters now use checkboxes.
-- Launcher display options now use checkboxes.
-- Window visibility and lock controls now use checkboxes.
-- Updated addon metadata to v0.10.0 Beta.
-
-### Notes
-
-- This update focuses only on settings and options UX polish.
-- No profession tracking, session tracking, sorting, pricing, or action button logic was intentionally changed.
-
----
-
-## v0.9.6 Beta
-
-### Added
-
-- Added a Needs Attention summary to the launcher tooltip.
-- Added detailed launcher tooltip sections for concentration-ready characters.
-- Added detailed launcher tooltip sections for Imbued Mulch-ready characters.
-- Added next Imbued Mulch timing to the Profession Tracking ready-count strip.
-
-### Changed
-
-- The Profession Tracking summary strip now shows `Conc Ready`, `Mulch Ready`, and `Next Mulch` instead of session rate.
-- Launcher tooltip is now more useful for quick alt checks without adding more launcher text.
-
-### Deferred
-
-- Attention-only view was intentionally not added yet. It may be added later as an optional display mode.
-
-### Documentation
-
-- Updated README for v0.9.6 Beta.
-- Updated CHANGELOG for v0.9.6 Beta.
-
----
-
-## v0.9.5.1 Beta
-
-### Added
-
-- Added quiet chat notifications for meaningful on/off toggles.
-- Toggle notifications now cover launcher display toggles, window display toggles, session material filters, action bar visibility, and window locking.
-- Added a Print Chat fallback button to the session summary dialog.
-
-### Changed
-
-- Copy Summary dialog now clearly explains that users must press Ctrl+C to copy the highlighted text.
-- The Copy Summary OK button is now treated as a close button, since WoW cannot copy text to the clipboard automatically.
-- Opacity, scale, and concentration threshold adjustments do not produce toggle notifications.
-
-### Documentation
-
-- Updated README for v0.9.5.1 Beta.
-- Updated CHANGELOG for v0.9.5.1 Beta.
-
----
-
-## v0.9.5 Beta
-
-### Added
-
-- Added a ready-count summary strip to the Profession Tracking window.
-- Added session material filter toggles for herbs, ore, cloth, leather/skins, enchanting materials, fish, and other profession materials.
-- Added pricing source display in the Options panel.
-- Added Copy Summary action for the current session.
-
-### Changed
-
-- Session filtering is now user-configurable from the Options panel.
-- Session item visibility updates immediately when material filters are toggled.
-- Existing bag baseline is refreshed when material filters change to avoid counting already-held items as new session loot.
-
-### Documentation
-
-- Updated README for v0.9.5 Beta.
-- Updated CHANGELOG for v0.9.5 Beta.
-
----
-
-EmberLedger Changelog
-=====================
-
-v0.9.4 Beta
-------------
-Small concentration color cleanup patch.
-
-Changes:
-- Kept the stepped concentration text gradient introduced in v0.9.3.
-- Removed unused concentration bar fill handling because EmberLedger does not currently display a concentration bar.
-- Concentration color is now applied only to the visible concentration value text.
-- No layout, sorting, profession detection, saved variable, or spacing behavior was changed.
-
-v0.9.3 Beta
-------------
-Focused concentration readability update.
-
-Changes:
-- Updated concentration color behavior so values remain darker before the configured ready threshold.
-- Concentration now uses darker red, darker amber, muted olive/yellow, and restrained dark green before reaching ready.
-- Bright saturated green is now reserved for the ready state at 100% of the effective threshold.
-- No layout, sorting, profession detection, saved variable, or spacing behavior was changed.
-
-v0.9.2 Beta
-------------
-Final pre-test polish and cleanup pass.
-
-Changes:
-- Bumped addon metadata and database version to v0.9.2 Beta.
-- Replaced duplicate UI sizing constants with the centralized UI constants table so future layout changes are safer.
-- Added database normalization for opacity, scale, threshold, saved window sizes, and stale collapse state.
-- Improved Lock Windows so the options button now visibly shows Lock: On or Lock: Off.
-- Updated /el lock and /el unlock to control the global window lock instead of only the launcher.
-- Renamed the launcher Gold/hr display toggle to Session rate for clarity.
-- Renamed Reset Positions to Reset Windows in the options panel.
-- Improved Reset Windows so it resets the launcher, tracking window, session window, and visible options panel placement together.
-- Removed one more path where old collapse state could survive and affect modern two-window layouts.
-- Re-reviewed secure action button handling and left the protected-action safeguards intact.
-
-v0.9.1 Layout Refactor Preview
--------------------------------
-Small layout polish pass after the v0.9.0 cleanup preview.
-
-Changes:
-- Matched the standalone Session window default/minimum width to the Profession Tracking window minimum width for a cleaner stacked layout.
-- Added a one-time migration that pulls old default Session widths down to the compact matched width while preserving intentionally wider user settings.
-- Renamed the Options panel display toggles for clarity: Profession became Tracking Window, Session became Session Window, and Convenience became Action Bar.
-- Kept the existing v0.9.0 layout refresh foundation and stable feature set intact.
-
-v0.9.0 Layout Refactor Preview
----------------------------------
-- Began the layout cleanup pass before adding new features.
-- Added a central RefreshLayout() pipeline hook for launcher, main window, session window, action bar, and options refreshes.
-- Added separate Session window scale support in settings.
-- Renamed Window scale to Main window scale.
-- Added Lock windows setting. Shift-drag can still move windows while locked.
-- Renamed Reset Position to Reset Positions.
-- Tightened and expanded the options panel to prepare for the new two-window layout.
-- Updated database versioning to v0.9.0 cleanup level.
-- Preserved existing session, profession, launcher, action button, and window-state behavior.
-
-v0.8.4 Refactor Preview
-- Reduced the main window close button size so it fits more cleanly in the header.
-- Reduced the standalone Session window close button size and tightened Pause/Reset spacing.
-- Shifted the Logout button closer to the right edge of the convenience bar to reduce wasted space while avoiding the resize grip.
-- Updated addon metadata for v0.8.4.
-
-v0.8.3 Refactor Preview
-- Moved the Session window close button into the Session header beside Pause and Reset.
-- Renamed the Session window title to EmberLedger Session.
-- Restyled the main EmberLedger header to match the darker Session header treatment.
-- Moved the main Options and Close controls into the main header bar.
-- Added a smaller Profession Tracking subtitle below the main header.
-- Updated README and addon metadata for v0.8.3.
-
-v0.8.2 Refactor Preview
------------------------
-Focused cleanup for the standalone-window layout and dynamic concentration coloring.
-
-Changes:
-- Characters display toggle now fully hides the character table and resizes the main EmberLedger window to the visible convenience/action bar instead of leaving a large blank area.
-- Removed the internal Characters collapse button from the main window. Character visibility is now handled from Options.
-- Removed the internal Session collapse button from the standalone Session window. Session visibility is now handled by the Session window close button and Options.
-- Cleared stale saved collapse states during migration so old settings cannot force blank layouts after reload.
-- Tightened the main-window minimum height logic so it is based on visible content.
-- Forced concentration row colors to refresh immediately when the concentration threshold is changed.
-- Updated database versioning for the v0.8.2 layout cleanup.
-
-v0.8.1 Refactor Preview
------------------------
-Focused UI and behavior refinements after the standalone session-window split.
-
-Changes:
-- Tightened launcher auto-sizing so hidden launcher lines no longer leave extra empty space.
-- Added a Session window opacity option to the settings panel.
-- Centered the standalone session-window metrics above the loot feed.
-- Prevented the Session visibility toggle from resizing or relayouting the main EmberLedger window.
-- Renamed settings headings to clarify launcher and window display toggles.
-- Updated concentration color scaling so the gradient reaches green at the configured concentration alert threshold instead of always scaling to 1000.
-
-v0.8.0 Refactor Preview
------------------------
-Architecture and layout refactor.
-
-Changes:
-- Moved the session tracker into its own independent window.
-- The main EmberLedger window now focuses on character readiness, concentration, Imbued Mulch, and convenience buttons.
-- The session window can be opened and closed independently from the main window.
-- The launcher opens both the main window and session window by default.
-- Added /el main to toggle the main EmberLedger window.
-- /el session now toggles the standalone session window.
-- Each window remembers its own open/closed state and position.
-- Updated database versioning and migration cleanup for the session-window refactor.
-- Kept the existing session loot feed, four-row display, and mousewheel scrolling behavior.
-
-Testing Focus:
-- Test opening/closing the main and session windows independently.
-- Test that the launcher opens both windows cleanly.
-- Test that both windows remember position and open/closed state after reload/logout.
-- Test session tracking, pause/reset, and loot feed scrolling in the new standalone session window.
-
-v0.7.4 Release Candidate
-------------------------
-Session list visual refinement.
-
-Changes:
-- Adjusted the expanded Session section height so exactly four full loot rows are visible.
-- Fixed the session loot clip area so it no longer shows a partially clipped fifth row.
-- Mousewheel scrolling over the session loot list remains supported for additional entries.
-- Tightened the Session panel vertical spacing.
-- Reduced the gap above the session loot list.
-- Reduced the empty padding below the four visible loot rows.
-
-v0.7.1 Release Candidate
-------------------------
-Release-candidate cleanup pass.
-
-Changes:
-- Added database versioning and a one-time cleanup migration for old development-era SavedVariables.
-- Removed legacy saved fields such as old sort mode, detached panel state, stored launcher sizing, and obsolete session aggregate fields.
-- Centralized core UI sizing constants to reduce future layout drift.
-- Added /el debug for optional troubleshooting output.
-- Added combat-safe action bar refresh handling so convenience-button visibility/layout updates are deferred until combat ends.
-- Updated README testing notes and slash command list.
-
-v0.7.0 Beta
------------
-Beta release candidate for testing.
-
-Highlights:
-- Polished Blizzard-inspired visual style.
-- Compact launcher with configurable displayed lines.
-- Main window remembers open/closed state between logins.
-- Concentration alert threshold is configurable.
-- Concentration alert line hides when no characters meet the threshold.
-- Imbued Mulch readiness counts and timers are capability-gated.
-- Characters without tracked concentration or confirmed Imbued Mulch are hidden from the main dashboard.
-- Session tracking starts automatically and resets on login/reload.
-- Session tracker records session time, total value, gold per hour, and gathered items.
-- Session list shows item icons and supports mousewheel scrolling without a visible scrollbar.
-- Existing bag contents are baselined so they are not counted as new session loot.
-- Gathered item filtering is based on profession-material logic to avoid useless items such as vendor vials.
-- Added settings for opacity, launcher opacity, window scale, concentration threshold, launcher lines, and section visibility.
-- Added optional convenience action buttons for supported items/spells.
+- Initial public release of EmberLedger

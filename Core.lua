@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.15.4"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.17.2"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -39,9 +39,28 @@ EL.UI_CONSTANTS = {
     SESSION_MIN_W = 320,
     SESSION_EXPANDED_H = 182,
     SESSION_COLLAPSED_H = 36,
+    SESSION_WINDOW_PAD = 6,
     ACTION_BAR_H = 36,
     SESSION_VISIBLE_ITEM_ROWS = 4,
     SESSION_ITEM_ROW_H = 18,
+    SESSION_HISTORY_ROWS = 8,
+    SESSION_STATS_CARD_W = 205,
+    SESSION_STATS_CARD_H = 54,
+    SESSION_STATS_CARD_LEFT = 16,
+    SESSION_STATS_CARD_TOP = -70,
+    SESSION_STATS_CARD_STEP_X = 219,
+    SESSION_STATS_CARD_STEP_Y = 70,
+    SESSION_BAG_CARD_W = 205,
+    SESSION_BAG_CARD_H = 44,
+    SESSION_BAG_CARD_LEFT = 16,
+    SESSION_BAG_CARD_TOP = -58,
+    SESSION_BAG_CARD_STEP_X = 219,
+    SESSION_TOTAL_CARD_W = 205,
+    SESSION_TOTAL_CARD_H = 36,
+    SESSION_TOTAL_CARD_LEFT = 14,
+    SESSION_TOTAL_CARD_TOP = -34,
+    SESSION_TOTAL_CARD_STEP_X = 219,
+    SESSION_TOTAL_CARD_STEP_Y = 46,
     PANEL_DEFAULT_VISIBLE_ROWS = 12,
     PANEL_EXPANDED_MIN_H = 300,
     PANEL_MAX_W = 900,
@@ -503,7 +522,7 @@ function EL:NormalizeDatabaseSettings()
         settings.display.showPinnedFirst = settings.display.showFavoritesFirst
         if settings.display.showPinnedFirst == nil then settings.display.showPinnedFirst = true end
     end
-    -- Legacy v0.18-v0.20 migration: read showFavoritesFirst once, then remove the old key.
+    -- Legacy migration: read showFavoritesFirst once, then remove the old key.
     settings.display.showFavoritesFirst = nil
     settings.display.showProfession1Column = settings.display.showProfession1Column ~= false
     settings.display.showConcentration1Column = settings.display.showConcentration1Column ~= false
@@ -665,7 +684,7 @@ function EL:EnsureDB()
     -- redundant and could produce inconsistent state when migrations alter
     -- settings keys that normalization also reads.
 
-    -- v0.8.2: internal collapse controls were removed when the character and
+    -- Legacy migration: internal collapse controls were removed when the character and
     -- session modules became independently toggled/windows. Clear old collapse
     -- state so stale SavedVariables cannot create blank panels after reload.
     local uiRefactorVersion = tonumber(self.db.uiRefactorVersion) or 0
@@ -678,7 +697,7 @@ function EL:EnsureDB()
         self.db.uiRefactorVersion = 820
     end
 
-    -- v0.4.20: clear older Imbued Mulch capability flags that were based on
+    -- Legacy migration: clear older Imbued Mulch capability flags that were based on
     -- generic Herbalism or stale saved data. Capability is now only trusted
     -- when it was confirmed by the stricter v2 check in Modules/Mulch.lua.
     local mulchVersion = tonumber(self.db.mulchCapabilityVersion) or 0
@@ -696,7 +715,7 @@ function EL:EnsureDB()
         self.db.mulchCapabilityVersion = 2
     end
 
-    -- v0.4.25: normalize launcher opacity default to 50% for the redesigned launcher/settings panel.
+    -- Legacy migration: normalize launcher opacity default to 50% for the redesigned launcher/settings panel.
     local uiOptionsVersion = tonumber(self.db.uiOptionsVersion) or 0
     if uiOptionsVersion < 425 then
         self.db.settings = self.db.settings or {}
@@ -705,9 +724,9 @@ function EL:EnsureDB()
         self.db.uiOptionsVersion = 425
     end
 
-    -- v0.9.1: align standalone Session window width with the minimum Profession Tracking window width.
+    -- Legacy migration: align standalone Session window width with the minimum Profession Tracking window width.
     -- Preserve intentionally wider user values, but pull old default-width saves down to the cleaner compact width.
-    -- v0.17.6/17.7: compact tracking layout; session width tightened further.
+    -- Legacy migration: compact tracking layout; session width tightened further.
     -- Capture the raw version ONCE so both blocks compare against the pre-migration value,
     -- not the mutated key written by the first block.
     local rawSessionWidthVersion = tonumber(self.db.sessionWidthVersion) or 0
@@ -721,9 +740,9 @@ function EL:EnsureDB()
         self.db.sessionWidthVersion = 910
     end
 
-    -- v0.17.6: compact tracking layout hides the summary ticker and trims bottom padding.
+    -- Legacy migration: compact tracking layout hides the summary ticker and trims bottom padding.
 
-    -- v0.17.7: compact tracking layout also hides the subtitle and tightens top padding.
+    -- Legacy migration: compact tracking layout also hides the subtitle and tightens top padding.
     if rawSessionWidthVersion < 1750 then
         self.db.settings = self.db.settings or {}
         self.db.settings.session = self.db.settings.session or {}
@@ -734,8 +753,8 @@ function EL:EnsureDB()
         self.db.sessionWidthVersion = 1750
     end
 
-    -- v0.19.0+: polish pass. Remove stale hidden/pinned character flags and normalize table containers after the v0.18 pinning update.
-    -- v0.20.0: UI-only refinement pass. Existing favoriteCharacters saved key remains as a backward-compatible storage key for pinned character data.
+    -- Legacy migration: remove stale hidden/pinned character flags and normalize table containers after the pinning update.
+    -- Legacy migration: existing favoriteCharacters saved key remains as a backward-compatible storage key for pinned character data.
     local polishVersion = tonumber(self.db.polishVersion) or 0
     if polishVersion < 1900 then
         CleanupSavedCharacterFlags(self.db)
@@ -802,6 +821,81 @@ function EL:ForEachModule(fn)
             end
         end
     end
+end
+
+EL.REQUIRED_MODULES = {
+    concentration = { registered = true },
+    mulch = { registered = true },
+    session = { registered = true },
+    Minimap = { registered = true },
+    SessionWindow = {
+        registered = true,
+        functions = {
+            "RefreshSessionView",
+            "RefreshSessionStatsView",
+            "RefreshBagSummaryView",
+            "CreateSessionWindow",
+            "LayoutSessionWindow",
+            "ShowSessionWindowFromSavedState",
+            "ToggleSessionWindow",
+        },
+    },
+    Styling = {
+        functions = {
+            "StyleBlizzardButton",
+        },
+        styleFunctions = {
+            "AddBackdrop",
+            "AddInnerBorder",
+            "ApplyFrameOpacity",
+        },
+    },
+    ActionBar = {
+        functions = {
+            "CreateActionBar",
+            "UpdateActionBar",
+        },
+    },
+}
+
+function EL:VerifyModuleInitialization(context, releaseWarning)
+    local debug = self.db and self.db.settings and self.db.settings.debug
+    local ok = true
+    local messages = {}
+    local required = self.REQUIRED_MODULES or {}
+    local label = "Module check" .. (context and (" [" .. tostring(context) .. "]") or "")
+
+    for name, spec in pairs(required) do
+        if spec.registered and not (self.modules and self.modules[name]) then
+            ok = false
+            table.insert(messages, "missing registered module " .. tostring(name))
+        end
+        for _, fnName in ipairs(spec.functions or {}) do
+            if type(self[fnName]) ~= "function" then
+                ok = false
+                table.insert(messages, "missing function " .. tostring(fnName))
+            end
+        end
+        for _, fnName in ipairs(spec.styleFunctions or {}) do
+            if not (self.Style and type(self.Style[fnName]) == "function") then
+                ok = false
+                table.insert(messages, "missing style helper " .. tostring(fnName))
+            end
+        end
+    end
+
+    if not ok and self.Print then
+        if debug then
+            for _, msg in ipairs(messages) do
+                self:Print(label .. ": " .. tostring(msg))
+            end
+        elseif releaseWarning and not self._moduleInitWarningShown then
+            self._moduleInitWarningShown = true
+            self:Print("One or more EmberLedger modules did not initialize cleanly. Enable debug mode for details, then /reload.")
+        end
+    end
+
+    return ok
 end
 
 function EL:MakeResourceKey(charKey, resourceKey)
@@ -928,7 +1022,7 @@ function EL:GetProfessionEntriesForCharacter(charKey)
         return out
     end
 
-    -- Compatibility fallback for older characters that have concentration data but have not logged in since v0.24.0.
+    -- Compatibility fallback for older characters that have concentration data but have not logged in since profession identity tracking was added.
     return self:GetConcentrationEntriesForCharacter(charKey)
 end
 
@@ -1203,7 +1297,7 @@ end
 
 function EL:SetCharacterPinned(charKey, pinned)
     if not (self.db and self.db.settings and charKey) then return end
-    -- Storage key remains favoriteCharacters for upgrade compatibility with v0.18-v0.20 saved variables.
+    -- Storage key remains favoriteCharacters for upgrade compatibility with older saved variables.
     self.db.settings.favoriteCharacters = self.db.settings.favoriteCharacters or {}
     self.db.settings.favoriteCharacters[charKey] = pinned and true or nil
 end
@@ -1234,7 +1328,7 @@ function EL:ResetPinnedCharacters()
     return count
 end
 
--- Backward-compatible aliases for v0.18-v0.20 code paths and saved-variable wording.
+-- Backward-compatible aliases for older code paths and saved-variable wording.
 function EL:IsCharacterFavorite(charKey) return self:IsCharacterPinned(charKey) end
 function EL:SetCharacterFavorite(charKey, favorite) return self:SetCharacterPinned(charKey, favorite) end
 function EL:ToggleCharacterFavorite(charKey) return self:ToggleCharacterPinned(charKey) end
@@ -1781,7 +1875,7 @@ end
 
 function EL:HasImbuedMulchAccess(data)
     if type(data) ~= "table" then return false end
-    -- v0.4.20: only trust the stricter confirmation written by Modules/Mulch.lua.
+    -- Legacy compatibility: only trust the stricter confirmation written by Modules/Mulch.lua.
     -- Older saved values could mark generic Herbalism characters as mulch-ready.
     return data.confirmedImbuedMulchAccess == true and tonumber(data.confirmationVersion) == 2
 end
@@ -2883,7 +2977,9 @@ EL.frame:SetScript("OnEvent", function(_, event, ...)
         EL:GetCurrentCharacter()
         if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
         EL:ForEachModule("OnLoad")
+        if EL.VerifyModuleInitialization then EL:VerifyModuleInitialization("after OnLoad") end
         if EL.CreateUI then EL:CreateUI() end
+        if EL.VerifyModuleInitialization then EL:VerifyModuleInitialization("after CreateUI", true) end
         EL:ForEachModule("Refresh")
         EL:RequestUpdate()
     elseif event == "PLAYER_REGEN_ENABLED" then

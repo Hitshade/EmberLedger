@@ -110,10 +110,7 @@ local function ApplyTrackingTextStyle(row)
 end
 
 local function ColorTextByRGB(text, r, g, b)
-    r = math.max(0, math.min(1, tonumber(r) or 1))
-    g = math.max(0, math.min(1, tonumber(g) or 1))
-    b = math.max(0, math.min(1, tonumber(b) or 1))
-    return string.format("|cff%02x%02x%02x%s|r", math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5), tostring(text or ""))
+    return EL.Style:ColorTextByRGB(text, r, g, b)
 end
 
 local function SetFramePointFromDB(frame, pos)
@@ -130,19 +127,7 @@ local function SaveFramePoint(frame, pos)
 end
 
 local function AddBackdrop(frame, alpha, borderAlpha)
-    if not frame or not frame.SetBackdrop then return end
-    frame:SetBackdrop({
-        bgFile = "Interface/Tooltips/UI-Tooltip-Background",
-        edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-        tile = true,
-        tileSize = 16,
-        edgeSize = 12,
-        insets = { left = 3, right = 3, top = 3, bottom = 3 },
-    })
-    -- Reverted from the grey-stone experiment: keep the cleaner dark backdrop,
-    -- while using Blizzard templates for buttons and scrollbars.
-    frame:SetBackdropColor(EL_BG_R, EL_BG_G, EL_BG_B, alpha or 0.55)
-    frame:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, borderAlpha or 0.55)
+    return EL.Style:AddBackdrop(frame, alpha, borderAlpha)
 end
 
 local function GetPanelOpacity()
@@ -164,73 +149,23 @@ local function GetSessionOpacity()
 end
 
 local function ApplyFrameOpacity(frame, alpha)
-    if frame and frame.SetBackdropColor then
-        frame:SetBackdropColor(EL_BG_R, EL_BG_G, EL_BG_B, alpha or 0.55)
-    end
+    return EL.Style:ApplyFrameOpacity(frame, alpha)
 end
 
 local function AddInnerBorder(frame)
-    if not frame or frame.innerBorder then return end
-    frame.innerBorder = frame:CreateTexture(nil, "BORDER")
-    frame.innerBorder:SetPoint("TOPLEFT", 4, -4)
-    frame.innerBorder:SetPoint("BOTTOMRIGHT", -4, 4)
-    frame.innerBorder:SetColorTexture(1.00, 0.78, 0.28, 0.090)
+    return EL.Style:AddInnerBorder(frame)
 end
 
 local function AddHeaderAccent(frame)
-    if not frame or frame._emberHeaderAccent then return end
-    frame._emberHeaderAccent = true
-    frame.accentTop = frame:CreateTexture(nil, "BORDER")
-    frame.accentTop:SetHeight(1)
-    frame.accentTop:SetPoint("TOPLEFT", 3, -2)
-    frame.accentTop:SetPoint("TOPRIGHT", -3, -2)
-    frame.accentTop:SetColorTexture(1.00, 0.78, 0.28, 0.34)
-    frame.accentBottom = frame:CreateTexture(nil, "BORDER")
-    frame.accentBottom:SetHeight(1)
-    frame.accentBottom:SetPoint("BOTTOMLEFT", 3, 2)
-    frame.accentBottom:SetPoint("BOTTOMRIGHT", -3, 2)
-    frame.accentBottom:SetColorTexture(0.00, 0.00, 0.00, 0.50)
+    return EL.Style:AddHeaderAccent(frame)
 end
 
 local function StyleScrollBar(scrollFrame)
-    -- Hide the visual scrollbar entirely while preserving normal mousewheel
-    -- scrolling on the ScrollFrame/content area. The gutter is also reclaimed
-    -- in LayoutPanel by anchoring the scroll frame closer to the right edge.
-    if not scrollFrame then return end
-    local name = scrollFrame:GetName()
-    local bar = scrollFrame.ScrollBar or (name and _G[name .. "ScrollBar"])
-    if bar then
-        bar:Hide()
-        if bar.SetAlpha then bar:SetAlpha(0) end
-        if bar.EnableMouse then bar:EnableMouse(false) end
-    end
-    if name then
-        for _, suffix in ipairs({"ScrollUpButton", "ScrollDownButton", "ScrollBarTop", "ScrollBarBottom", "ScrollBarMiddle", "ThumbTexture"}) do
-            local region = _G[name .. suffix]
-            if region then
-                if region.Hide then region:Hide() end
-                if region.SetAlpha then region:SetAlpha(0) end
-                if region.EnableMouse then region:EnableMouse(false) end
-            end
-        end
-    end
-end
-
-local function ClearButtonTexture(button, getterName)
-    if not button or not button[getterName] then return end
-    local texture = button[getterName](button)
-    if texture then
-        texture:SetTexture(nil)
-        texture:SetAlpha(0)
-    end
+    return EL.Style:StyleScrollBar(scrollFrame)
 end
 
 local function DisableButtonArt(button)
-    if not button then return end
-    ClearButtonTexture(button, "GetNormalTexture")
-    ClearButtonTexture(button, "GetPushedTexture")
-    ClearButtonTexture(button, "GetHighlightTexture")
-    ClearButtonTexture(button, "GetDisabledTexture")
+    return EL.Style:DisableButtonArt(button)
 end
 
 local function GetCurrentPanelMinHeight(panel)
@@ -765,17 +700,7 @@ function EL:RefreshLayout(reason)
 end
 
 local function StyleBlizzardButton(button)
-    if not button then return end
-    if button.SetNormalFontObject then button:SetNormalFontObject(GameFontNormalSmall) end
-    if button.SetHighlightFontObject then button:SetHighlightFontObject(GameFontHighlightSmall) end
-    if button.SetDisabledFontObject then button:SetDisabledFontObject(GameFontDisableSmall) end
-    local fs = button.GetFontString and button:GetFontString()
-    if fs then
-        fs:ClearAllPoints()
-        fs:SetPoint("CENTER", button, "CENTER", 0, 1)
-        fs:SetJustifyH("CENTER")
-        if fs.SetWordWrap then fs:SetWordWrap(false) end
-    end
+    return EL.Style:StyleBlizzardButton(button)
 end
 
 local function AddSoftDivider(parent, x, yTop, yBottom)
@@ -1516,7 +1441,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.15.4"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.17.2"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -2098,7 +2023,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.15.4"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.17.2"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -2127,19 +2052,7 @@ function EL:RegisterBlizzardSettings()
 end
 
 
-local SESSION_HISTORY_ROWS = 8
-
-local SESSION_HISTORY_ICON_SIZE = 18
-local function SessionHistoryIcon(path)
-    return "|T" .. tostring(path or "Interface\\Icons\\INV_Misc_QuestionMark") .. ":" .. SESSION_HISTORY_ICON_SIZE .. ":" .. SESSION_HISTORY_ICON_SIZE .. ":0:0|t"
-end
-
-local function FormatSessionHistoryMoneyText(silver)
-    if EL and EL.FormatMoneyText then
-        return EL:FormatMoneyText(silver)
-    end
-    return tostring(silver or 0)
-end
+local SESSION_HISTORY_ROWS = UIC.SESSION_HISTORY_ROWS or 8
 
 function EL:CreateSessionHistoryWindow()
     if self.sessionHistoryWindow then return end
@@ -2438,10 +2351,22 @@ function EL:CreateSessionHistoryWindow()
     frame.statsNote:SetJustifyH("LEFT")
     frame.statsNote:SetTextColor(0.74, 0.74, 0.70)
 
+    -- Session history layout constants. These preserve the existing visual layout
+    -- while making the remaining UI-owned frame creation easier to adjust later.
+    local STATS_CARD_W, STATS_CARD_H = UIC.SESSION_STATS_CARD_W or 205, UIC.SESSION_STATS_CARD_H or 54
+    local STATS_CARD_LEFT, STATS_CARD_TOP = UIC.SESSION_STATS_CARD_LEFT or 16, UIC.SESSION_STATS_CARD_TOP or -70
+    local STATS_CARD_STEP_X, STATS_CARD_STEP_Y = UIC.SESSION_STATS_CARD_STEP_X or 219, UIC.SESSION_STATS_CARD_STEP_Y or 70
+    local BAG_CARD_W, BAG_CARD_H = UIC.SESSION_BAG_CARD_W or 205, UIC.SESSION_BAG_CARD_H or 44
+    local BAG_CARD_LEFT, BAG_CARD_TOP = UIC.SESSION_BAG_CARD_LEFT or 16, UIC.SESSION_BAG_CARD_TOP or -58
+    local BAG_CARD_STEP_X = UIC.SESSION_BAG_CARD_STEP_X or 219
+    local TOTAL_CARD_W, TOTAL_CARD_H = UIC.SESSION_TOTAL_CARD_W or 205, UIC.SESSION_TOTAL_CARD_H or 36
+    local TOTAL_CARD_LEFT, TOTAL_CARD_TOP = UIC.SESSION_TOTAL_CARD_LEFT or 14, UIC.SESSION_TOTAL_CARD_TOP or -34
+    local TOTAL_CARD_STEP_X, TOTAL_CARD_STEP_Y = UIC.SESSION_TOTAL_CARD_STEP_X or 219, UIC.SESSION_TOTAL_CARD_STEP_Y or 46
+
     local function MakeStatsCard(icon, label, col, row)
-        local cardW, cardH = 205, 54
-        local x = 16 + ((col - 1) * 219)
-        local y = -70 - ((row - 1) * 70)
+        local cardW, cardH = STATS_CARD_W, STATS_CARD_H
+        local x = STATS_CARD_LEFT + ((col - 1) * STATS_CARD_STEP_X)
+        local y = STATS_CARD_TOP - ((row - 1) * STATS_CARD_STEP_Y)
         local card = CreateFrame("Frame", nil, frame.statsPanel, "BackdropTemplate")
         card:SetPoint("TOPLEFT", frame.statsPanel, "TOPLEFT", x, y)
         card:SetSize(cardW, cardH)
@@ -2451,7 +2376,7 @@ function EL:CreateSessionHistoryWindow()
 
         local iconText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         iconText:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -7)
-        iconText:SetText(SessionHistoryIcon(icon))
+        iconText:SetText(EL:SessionHistoryIcon(icon))
 
         local labelText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         labelText:SetPoint("TOPLEFT", card, "TOPLEFT", 34, -7)
@@ -2501,10 +2426,10 @@ function EL:CreateSessionHistoryWindow()
     frame.bagNote:SetText("Read-only estimate of currently held tracked materials. This does not change session history or lifetime stats.")
 
     local function MakeBagCard(icon, label, col)
-        local cardW, cardH = 205, 44
-        local x = 16 + ((col - 1) * 219)
+        local cardW, cardH = BAG_CARD_W, BAG_CARD_H
+        local x = BAG_CARD_LEFT + ((col - 1) * BAG_CARD_STEP_X)
         local card = CreateFrame("Frame", nil, frame.bagPanel, "BackdropTemplate")
-        card:SetPoint("TOPLEFT", frame.bagPanel, "TOPLEFT", x, -58)
+        card:SetPoint("TOPLEFT", frame.bagPanel, "TOPLEFT", x, BAG_CARD_TOP)
         card:SetSize(cardW, cardH)
         AddBackdrop(card, 0.94, 0.68)
         if card.SetBackdropColor then card:SetBackdropColor(0.014, 0.012, 0.028, 0.94) end
@@ -2512,7 +2437,7 @@ function EL:CreateSessionHistoryWindow()
 
         local iconText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         iconText:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -6)
-        iconText:SetText(SessionHistoryIcon(icon))
+        iconText:SetText(EL:SessionHistoryIcon(icon))
 
         local labelText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         labelText:SetPoint("TOPLEFT", card, "TOPLEFT", 34, -6)
@@ -2612,9 +2537,9 @@ function EL:CreateSessionHistoryWindow()
     frame.totalsTitle:SetTextColor(1.00, 0.82, 0.24)
 
     local function MakeTotalCard(icon, label, col, row)
-        local cardW, cardH = 205, 36
-        local x = 14 + ((col - 1) * 219)
-        local y = -34 - ((row - 1) * 46)
+        local cardW, cardH = TOTAL_CARD_W, TOTAL_CARD_H
+        local x = TOTAL_CARD_LEFT + ((col - 1) * TOTAL_CARD_STEP_X)
+        local y = TOTAL_CARD_TOP - ((row - 1) * TOTAL_CARD_STEP_Y)
         local card = CreateFrame("Frame", nil, frame.totals, "BackdropTemplate")
         card:SetPoint("TOPLEFT", frame.totals, "TOPLEFT", x, y)
         card:SetSize(cardW, cardH)
@@ -2624,7 +2549,7 @@ function EL:CreateSessionHistoryWindow()
 
         local iconText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         iconText:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -6)
-        iconText:SetText(SessionHistoryIcon(icon))
+        iconText:SetText(EL:SessionHistoryIcon(icon))
 
         local labelText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         labelText:SetPoint("TOPLEFT", card, "TOPLEFT", 34, -6)
@@ -2648,55 +2573,21 @@ function EL:CreateSessionHistoryWindow()
     frame.totalNet = MakeTotalCard("Interface\\Icons\\INV_Misc_Coin_17", "Net Total", 3, 2)
 end
 
-local function GetSessionHistoryCapText()
-    local maxEntries = (EL.GetSessionHistoryMaxEntries and EL:GetSessionHistoryMaxEntries()) or 500
-    return "max " .. tostring(maxEntries)
-end
-
-local function FormatSessionHistoryRange(displayMode)
-    local now = time()
-    if displayMode == "today" then
-        local startTime = (EL.GetTodayStartTime and EL:GetTodayStartTime(now)) or (now - 86400)
-        return string.format("Today: since %s", date("%I:%M %p", startTime))
-    elseif displayMode == "week" then
-        local startTime = (EL.GetWeeklyResetStartTime and EL:GetWeeklyResetStartTime(now)) or (now - (7 * 86400))
-        return string.format("This Week: since %s", date("%b %d, %Y %I:%M %p", startTime))
+function EL:WarnMissingSessionWindowHelper(name)
+    if not name then return end
+    self._missingSessionWindowHelperWarnings = self._missingSessionWindowHelperWarnings or {}
+    if self._missingSessionWindowHelperWarnings[name] then return end
+    self._missingSessionWindowHelperWarnings[name] = true
+    if self.db and self.db.settings and self.db.settings.debug and self.Print then
+        self:Print("SessionWindow helper missing: " .. tostring(name))
     end
-    local startTime = now - (30 * 86400)
-    return string.format("Last 30 Days (%s): %s  |  %s", GetSessionHistoryCapText(), date("%b %d, %Y", startTime), date("%b %d, %Y", now))
-end
-
-
-local function GetSessionStatsRangeLabel(range)
-    if range == "today" then return "Today" end
-    if range == "week" then return "This Week" end
-    if range == "lifetime" then return "Lifetime" end
-    return "30 Days"
-end
-
-local function GetSessionStatsRangeTitle(range)
-    return GetSessionStatsRangeLabel(range)
-end
-
-local function FormatSessionStatsRange(range)
-    local now = time()
-    if range == "today" then
-        return "Today: since local midnight"
-    elseif range == "week" then
-        local startTime = (EL.GetWeeklyResetStartTime and EL:GetWeeklyResetStartTime(now)) or (now - (7 * 86400))
-        return string.format("This Week: since %s", date("%b %d, %Y %I:%M %p", startTime))
-    elseif range == "lifetime" then
-        return "Lifetime: retained history backfill plus all future saved sessions"
-    end
-    local startTime = now - (30 * 86400)
-    return string.format("Last 30 Days: %s  |  %s", date("%b %d, %Y", startTime), date("%b %d, %Y", now))
 end
 
 function EL:RefreshSessionHistoryWindow()
     local frame = self.sessionHistoryWindow
     if not frame then return end
     local displayMode = (self.GetSessionHistoryDisplayMode and self:GetSessionHistoryDisplayMode()) or "30"
-    local displayLabel = displayMode == "today" and "Today" or (displayMode == "week" and "This Week" or ("30 days (" .. GetSessionHistoryCapText() .. ")"))
+    local displayLabel = displayMode == "today" and "Today" or (displayMode == "week" and "This Week" or ("30 days (" .. EL:GetSessionHistoryCapText() .. ")"))
     local enabled = (self.IsSessionHistoryEnabled and self:IsSessionHistoryEnabled()) or false
     if frame.displayRange and frame.displayRange.selectedText then frame.displayRange.selectedText:SetText(displayLabel) end
 
@@ -2719,80 +2610,18 @@ function EL:RefreshSessionHistoryWindow()
     for key, btn in pairs(frame.statsRangeButtons or {}) do
         btn:SetShown(statsMode)
         if btn:GetFontString() then
-            local label = GetSessionStatsRangeLabel(key)
+            local label = EL:GetSessionStatsRangeLabel(key)
             btn:SetText((frame.statsRange or "30") == key and ("* " .. label) or label)
         end
     end
 
-    if bagMode then
-        local summary = (self.GetCurrentBagSummaryLines and self:GetCurrentBagSummaryLines()) or { lines = {}, totalSilver = 0, totalQuantity = 0 }
-        local session = (self.GetSessionDB and self:GetSessionDB()) or {}
-        local sessionTotal = tonumber(session.totalSilver) or 0
-        local bagTotal = tonumber(summary.totalSilver) or 0
-        local projected = sessionTotal + bagTotal
-        if frame.info then
-            frame.info:SetText("Read-only current inventory value for tracked materials. This does not add to session history, lifetime stats, or realized gold/hour.")
-        end
-        if frame.bagValue then frame.bagValue:SetText(FormatSessionHistoryMoneyText(bagTotal)) end
-        if frame.bagProjected then frame.bagProjected:SetText(FormatSessionHistoryMoneyText(projected)) end
-        if frame.bagQuantity then frame.bagQuantity:SetText(tostring(tonumber(summary.totalQuantity) or 0)) end
-        if frame.bagFootnote then
-            frame.bagFootnote:SetText("Projected Total = current active session total plus currently held tracked bag value. It is an estimate for decision-making, not accounting or profit/loss tracking.")
-        end
-        local lines = summary.lines or {}
-        for i, row in ipairs(frame.bagRows or {}) do
-            local entry = lines[i]
-            if entry then
-                row:Show()
-                local icon = entry.icon or "Interface\\Icons\\INV_Misc_QuestionMark"
-                row.texts[1]:SetText(SessionHistoryIcon(icon) .. " " .. tostring(entry.name or ("item:" .. tostring(entry.itemID))))
-                row.texts[2]:SetText(tostring(tonumber(entry.quantity) or 0))
-                row.texts[3]:SetText(FormatSessionHistoryMoneyText(tonumber(entry.unitPrice) or 0))
-                row.texts[4]:SetText(FormatSessionHistoryMoneyText(tonumber(entry.totalSilver) or 0))
-                row.texts[4]:SetTextColor(0.55, 1.00, 0.36)
-                row.texts[1]:SetTextColor(0.90, 0.91, 0.92)
-                row.texts[2]:SetTextColor(0.90, 0.91, 0.92)
-                row.texts[3]:SetTextColor(0.90, 0.91, 0.92)
-            else
-                row:Show()
-                if i == 1 then
-                    row.texts[1]:SetText("No currently held tracked materials found.")
-                    row.texts[1]:SetTextColor(0.68, 0.68, 0.64)
-                    row.texts[2]:SetText("")
-                    row.texts[3]:SetText("")
-                    row.texts[4]:SetText("")
-                else
-                    for _, fs in ipairs(row.texts or {}) do fs:SetText(""); fs:SetTextColor(0.88, 0.90, 0.92) end
-                end
-            end
-        end
-        return
-    end
-
-    if statsMode then
-        local range = frame.statsRange or "30"
-        local stats = (self.GetSessionAggregateStats and self:GetSessionAggregateStats(range)) or {}
-        if frame.info then
-            frame.info:SetText("Quick aggregated totals across saved EmberLedger sessions. Lifetime uses compact aggregate counters so raw history can remain lightweight.")
-        end
-        if frame.statsTitle then frame.statsTitle:SetText("Session Stats (" .. GetSessionStatsRangeTitle(range) .. ")") end
-        if frame.statsNote then frame.statsNote:SetText(FormatSessionStatsRange(range)) end
-        if frame.statGold then
-            frame.statGold:SetText(FormatSessionHistoryMoneyText(tonumber(stats.totalSilver) or 0))
-            local total = tonumber(stats.totalSilver) or 0
-            frame.statGold:SetTextColor(total < 0 and 1.00 or 0.55, total < 0 and 0.34 or 1.00, total < 0 and 0.28 or 0.36)
-        end
-        if frame.statTime then frame.statTime:SetText(self:FormatDuration(tonumber(stats.duration) or 0)) end
-        if frame.statRate then frame.statRate:SetText(self:FormatMoneyRateText(tonumber(stats.goldPerHourSilver) or 0) .. "/hr") end
-        if frame.statSessions then frame.statSessions:SetText(tostring(tonumber(stats.sessions) or 0)) end
-        if frame.statItems then frame.statItems:SetText(tostring(tonumber(stats.items) or 0)) end
-        if frame.statRaw then frame.statRaw:SetText(FormatSessionHistoryMoneyText(tonumber(stats.rawGoldGainedSilver) or 0)) end
-        if frame.statsFootnote then
-            if range == "lifetime" then
-                frame.statsFootnote:SetText("Lifetime totals begin with retained session history that existed when v1.11.0 first loaded, then continue from future saved sessions. Reset Lifetime in Options clears only these aggregate counters.")
-            else
-                frame.statsFootnote:SetText("Today, This Week, and 30 Days are calculated from compact daily/weekly aggregates. The Sessions list still keeps up to 30 days, capped at " .. tostring((self.GetSessionHistoryMaxEntries and self:GetSessionHistoryMaxEntries()) or 500) .. " entries. Current active sessions appear after they are saved by reset, logout, or reload.")
-            end
+    -- Non-history tabs are delegated to SessionWindow.lua so the tab routing
+    -- stays small and all extracted refresh paths are easy to verify.
+    if bagMode or statsMode then
+        if self.RefreshSessionView then
+            self:RefreshSessionView(frame, viewMode)
+        elseif self.WarnMissingSessionWindowHelper then
+            self:WarnMissingSessionWindowHelper("RefreshSessionView")
         end
         return
     end
@@ -2833,7 +2662,7 @@ function EL:RefreshSessionHistoryWindow()
             local cr, cg, cb = self:GetClassColor(classFile)
             row.texts[2]:SetTextColor(cr, cg, cb)
             row.texts[3]:SetText(self:FormatDuration(tonumber(entry.duration) or 0))
-            row.texts[4]:SetText(FormatSessionHistoryMoneyText(tonumber(entry.totalSilver) or 0))
+            row.texts[4]:SetText(EL:FormatSessionHistoryMoneyText(tonumber(entry.totalSilver) or 0))
             row.texts[5]:SetText(self:FormatMoneyRateText(tonumber(entry.goldPerHourSilver) or 0) .. "/hr")
             if (tonumber(entry.totalSilver) or 0) < 0 then
                 row.texts[4]:SetTextColor(1.00, 0.34, 0.28)
@@ -2852,15 +2681,15 @@ function EL:RefreshSessionHistoryWindow()
         local scopeText = displayMode == "today" and "Showing today's saved sessions." or (displayMode == "week" and "Showing sessions since weekly reset." or "Showing last 30 days.")
         frame.info:SetText(scopeText .. " Saved summaries are retained up to 30 days, capped at " .. tostring((self.GetSessionHistoryMaxEntries and self:GetSessionHistoryMaxEntries()) or 500) .. " entries for the visible list. Stats use compact aggregates. " .. (enabled and "Sessions save on reset and logout/reload." or "Session history is currently disabled."))
     end
-    if frame.rangeText then frame.rangeText:SetText(FormatSessionHistoryRange(displayMode)) end
+    if frame.rangeText then frame.rangeText:SetText(EL:FormatSessionHistoryRange(displayMode)) end
     if frame.totalsTitle then frame.totalsTitle:SetText("Sessions Total (" .. displayLabel .. ")") end
     if frame.totalSessions then frame.totalSessions:SetText(tostring(#list) .. (enabled and "" or " (off)")) end
     if frame.totalDuration then frame.totalDuration:SetText(self:FormatDuration(totals.duration)) end
-    if frame.totalItems then frame.totalItems:SetText(FormatSessionHistoryMoneyText(totals.item)) end
-    if frame.totalRaw then frame.totalRaw:SetText(FormatSessionHistoryMoneyText(totals.raw)) end
-    if frame.totalSpent then frame.totalSpent:SetText(FormatSessionHistoryMoneyText(-(totals.spent))) end
+    if frame.totalItems then frame.totalItems:SetText(EL:FormatSessionHistoryMoneyText(totals.item)) end
+    if frame.totalRaw then frame.totalRaw:SetText(EL:FormatSessionHistoryMoneyText(totals.raw)) end
+    if frame.totalSpent then frame.totalSpent:SetText(EL:FormatSessionHistoryMoneyText(-(totals.spent))) end
     if frame.totalNet then
-        frame.totalNet:SetText(FormatSessionHistoryMoneyText(totals.total))
+        frame.totalNet:SetText(EL:FormatSessionHistoryMoneyText(totals.total))
         frame.totalNet:SetTextColor(totals.total < 0 and 1.00 or 0.55, totals.total < 0 and 0.34 or 1.00, totals.total < 0 and 0.28 or 0.36)
     end
 end
@@ -3000,550 +2829,6 @@ function EL:CreateMainButton()
     SetFramePointFromDB(button, s)
 end
 
-
-local function GetItemIconByIDOrName(itemID, itemName, fallback)
-    if itemID and GetItemInfoInstant then
-        local _, _, _, _, icon = GetItemInfoInstant(itemID)
-        if icon then return icon end
-    end
-    if itemName and GetItemInfoInstant then
-        local _, _, _, _, icon = GetItemInfoInstant(itemName)
-        if icon then return icon end
-    end
-    return fallback or "Interface\\Icons\\INV_Misc_QuestionMark"
-end
-
-local function GetSpellIconSafe(spellID, spellName, fallback)
-    if C_Spell and C_Spell.GetSpellInfo then
-        local ok, info = pcall(C_Spell.GetSpellInfo, spellID or spellName)
-        if ok and info and info.iconID then return info.iconID end
-    end
-    if GetSpellInfo then
-        local ok, _, _, icon = pcall(GetSpellInfo, spellID or spellName)
-        if ok and icon then return icon end
-    end
-    return fallback or "Interface\\Icons\\INV_Misc_QuestionMark"
-end
-
-local function GetToyIconSafe(itemID, itemName, fallback)
-    if itemID and C_ToyBox and C_ToyBox.GetToyInfo then
-        local ok, _, name, icon = pcall(C_ToyBox.GetToyInfo, itemID)
-        if ok and icon then return icon end
-    end
-    return GetItemIconByIDOrName(itemID, itemName, fallback)
-end
-
-
-local ACTION_ZONE_GROUPS = {
-    khazAlgar = {
-        ["Khaz Algar"] = true,
-        ["Isle of Dorn"] = true,
-        ["Dornogal"] = true,
-        ["The Ringing Deeps"] = true,
-        ["Hallowfall"] = true,
-        ["Azj-Kahet"] = true,
-        ["City of Threads"] = true,
-    },
-    midnight = {
-        ["Midnight"] = true,
-        ["Quel'Thalas"] = true,
-        ["Eversong Woods"] = true,
-        ["Silvermoon City"] = true,
-        ["Zul'Aman"] = true,
-        ["Harandar"] = true,
-        ["Voidstorm"] = true,
-    },
-}
-
-local function IsActionZoneAllowed(zoneGroup)
-    if not zoneGroup then return true end
-    local allowed = ACTION_ZONE_GROUPS[zoneGroup]
-    if not allowed then return true end
-    if not C_Map or not C_Map.GetBestMapForUnit or not C_Map.GetMapInfo then return true end
-
-    local ok, mapID = pcall(C_Map.GetBestMapForUnit, "player")
-    if not ok or not mapID then return true end
-
-    local checked = 0
-    while mapID and checked < 8 do
-        local okInfo, info = pcall(C_Map.GetMapInfo, mapID)
-        if okInfo and info then
-            if info.name and allowed[info.name] then return true end
-            mapID = info.parentMapID
-        else
-            break
-        end
-        checked = checked + 1
-    end
-
-    return false
-end
-
-local function IsActionVariantZoneAllowed(variant, info)
-    local zoneGroup = variant and variant.zoneGroup or info and info.zoneGroup
-    return IsActionZoneAllowed(zoneGroup)
-end
-
-local ResolveActionSpell
-
-local function GetActionIcon(info)
-    if info.kind == "spell" then
-        local resolved = ResolveActionSpell and ResolveActionSpell(info)
-        if resolved then return GetSpellIconSafe(resolved.spellID, resolved.name, resolved.fallback or info.fallback) end
-        return GetSpellIconSafe(info.spellID, info.name, info.fallback)
-    elseif info.kind == "toy" then
-        return GetToyIconSafe(info.itemID, info.name, info.fallback)
-    else
-        return GetItemIconByIDOrName(info.itemID, info.name, info.fallback)
-    end
-end
-
-local function GetItemCountSafe(itemID, itemName)
-    local item = itemID or itemName
-    if not item then return 0 end
-    if C_Item and C_Item.GetItemCount then
-        local ok, count = pcall(C_Item.GetItemCount, item, false, false, false, true)
-        if ok and tonumber(count) then return tonumber(count) end
-        ok, count = pcall(C_Item.GetItemCount, item)
-        if ok and tonumber(count) then return tonumber(count) end
-    end
-    if GetItemCount then
-        local ok, count = pcall(GetItemCount, item, false, false, true)
-        if ok and tonumber(count) then return tonumber(count) end
-        ok, count = pcall(GetItemCount, item)
-        if ok and tonumber(count) then return tonumber(count) end
-    end
-    return 0
-end
-
-local function PlayerHasToySafe(itemID)
-    if not itemID then return false end
-    if C_ToyBox and C_ToyBox.PlayerHasToy then
-        local ok, hasToy = pcall(C_ToyBox.PlayerHasToy, itemID)
-        if ok then return hasToy and true or false end
-    end
-    if PlayerHasToy then
-        local ok, hasToy = pcall(PlayerHasToy, itemID)
-        if ok then return hasToy and true or false end
-    end
-    return false
-end
-
-local function PlayerKnowsSpellSafe(spellID, spellName)
-    if spellID then
-        if IsPlayerSpell then
-            local ok, known = pcall(IsPlayerSpell, spellID)
-            if ok and known then return true end
-        end
-        if C_SpellBook and C_SpellBook.IsSpellKnown then
-            local ok, known = pcall(C_SpellBook.IsSpellKnown, spellID)
-            if ok and known then return true end
-        end
-        if C_SpellBook and C_SpellBook.IsSpellKnownOrOverridesKnown then
-            local ok, known = pcall(C_SpellBook.IsSpellKnownOrOverridesKnown, spellID)
-            if ok and known then return true end
-        end
-    end
-    if spellName and GetSpellInfo then
-        local ok, name = pcall(GetSpellInfo, spellName)
-        if ok and name then return true end
-    end
-    return false
-end
-
-local ResolveActionSpell = function(info)
-    if not info then return nil end
-
-    if info.spellVariants then
-        for _, variant in ipairs(info.spellVariants) do
-            local spellID = variant.spellID
-            local spellName = variant.name or info.name
-            if IsActionVariantZoneAllowed(variant, info) and PlayerKnowsSpellSafe(spellID, spellName) then
-                return {
-                    spellID = spellID,
-                    name = spellName,
-                    label = variant.label or info.label or spellName,
-                    zoneGroup = variant.zoneGroup or info.zoneGroup,
-                    fallback = variant.fallback or info.fallback,
-                }
-            end
-        end
-        return nil
-    end
-
-    if not IsActionZoneAllowed(info.zoneGroup) then return nil end
-    if info.spellID and PlayerKnowsSpellSafe(info.spellID, info.name) then
-        return { spellID = info.spellID, name = info.name, label = info.label or info.name, zoneGroup = info.zoneGroup, fallback = info.fallback }
-    end
-    if info.spellIDs then
-        for _, spellID in ipairs(info.spellIDs) do
-            if PlayerKnowsSpellSafe(spellID, info.name) then
-                return { spellID = spellID, name = info.name, label = info.label or info.name, zoneGroup = info.zoneGroup, fallback = info.fallback }
-            end
-        end
-    end
-    if info.name and PlayerKnowsSpellSafe(nil, info.name) then
-        return { spellID = nil, name = info.name, label = info.label or info.name, zoneGroup = info.zoneGroup, fallback = info.fallback }
-    end
-    return nil
-end
-
-local function ResolveKnownSpellID(info)
-    local resolved = ResolveActionSpell(info)
-    return resolved and (resolved.spellID or resolved.name) or nil
-end
-
-local function GetActionAvailable(info)
-    if info.kind == "toy" then
-        return PlayerHasToySafe(info.itemID)
-    elseif info.kind == "spell" then
-        return ResolveActionSpell(info) ~= nil
-    else
-        if info.zoneGroup and not IsActionZoneAllowed(info.zoneGroup) then return false end
-        return GetItemCountSafe(info.itemID, info.name) > 0
-    end
-end
-
-local function GetActionCooldownSafe(info)
-    if not info then return 0, 0, 0 end
-    if info.kind == "spell" then
-        local spell = ResolveKnownSpellID(info)
-        if not spell then return 0, 0, 0 end
-        if C_Spell and C_Spell.GetSpellCooldown then
-            local ok, cd = pcall(C_Spell.GetSpellCooldown, spell)
-            if ok and cd then
-                return cd.startTime or 0, cd.duration or 0, cd.isEnabled and 1 or 0
-            end
-        end
-        if GetSpellCooldown then
-            local ok, start, duration, enable = pcall(GetSpellCooldown, spell)
-            if ok and start then return start or 0, duration or 0, enable or 0 end
-        end
-        return 0, 0, 0
-    elseif info.kind == "toy" then
-        if info.itemID and C_ToyBox and C_ToyBox.GetToyCooldown then
-            local ok, start, duration, enable = pcall(C_ToyBox.GetToyCooldown, info.itemID)
-            if ok and start then return start or 0, duration or 0, enable or 0 end
-        end
-        if info.itemID and C_Item and C_Item.GetItemCooldown then
-            local ok, start, duration, enable = pcall(C_Item.GetItemCooldown, info.itemID)
-            if ok and start then return start or 0, duration or 0, enable or 0 end
-        end
-        if info.itemID and GetItemCooldown then
-            local ok, start, duration, enable = pcall(GetItemCooldown, info.itemID)
-            if ok and start then return start or 0, duration or 0, enable or 0 end
-        end
-        return 0, 0, 0
-    else
-        local item = info.itemID or info.name
-        if not item then return 0, 0, 0 end
-        if C_Container and C_Container.GetItemCooldown then
-            local ok, start, duration, enable = pcall(C_Container.GetItemCooldown, item)
-            if ok and start then return start or 0, duration or 0, enable or 0 end
-        end
-        if C_Item and C_Item.GetItemCooldown then
-            local ok, start, duration, enable = pcall(C_Item.GetItemCooldown, item)
-            if ok and start then return start or 0, duration or 0, enable or 0 end
-        end
-        if GetItemCooldown then
-            local ok, start, duration, enable = pcall(GetItemCooldown, item)
-            if ok and start then return start or 0, duration or 0, enable or 0 end
-        end
-        return 0, 0, 0
-    end
-end
-
-
-local function SetSpellButtonAttributes(button, info)
-    if not button or not info or info.kind ~= "spell" then return end
-    local resolved = ResolveActionSpell(info)
-    local spellName = (resolved and resolved.name) or info.name or info.label or ""
-    local macrotext = "/cast " .. tostring(spellName)
-    button:SetAttribute("type", "macro")
-    button:SetAttribute("type1", "macro")
-    button:SetAttribute("macrotext", macrotext)
-    button:SetAttribute("macrotext1", macrotext)
-    button.resolvedSpell = resolved
-end
-
-local function MakeIconActionButton(parent, info)
-    -- Secure action buttons must not call UseItemByName or Logout directly.
-    -- This mirrors the working MulchTracker pattern, with explicit left-click
-    -- attributes added for compatibility with action button handling.
-    local name = "EmberLedgerActionButton_" .. tostring(info.key or math.random(100000))
-    local b = CreateFrame("Button", name, parent, "SecureActionButtonTemplate")
-    b:SetSize(26, 26)
-    b:RegisterForClicks("AnyUp", "AnyDown")
-    b:EnableMouse(true)
-
-    if info.kind == "item" then
-        local itemRef = info.itemID and ("item:" .. tostring(info.itemID)) or tostring(info.name or info.label or "")
-        b:SetAttribute("type", "item")
-        b:SetAttribute("type1", "item")
-        b:SetAttribute("item", itemRef)
-        b:SetAttribute("item1", itemRef)
-    elseif info.kind == "toy" then
-        local macrotext = info.name and ("/use " .. tostring(info.name)) or (info.itemID and ("/use item:" .. tostring(info.itemID)) or "")
-        b:SetAttribute("type", "macro")
-        b:SetAttribute("type1", "macro")
-        b:SetAttribute("macrotext", macrotext)
-        b:SetAttribute("macrotext1", macrotext)
-    elseif info.kind == "spell" then
-        SetSpellButtonAttributes(b, info)
-    else
-        local macrotext = "/use " .. tostring(info.name or info.label or "")
-        b:SetAttribute("type", "macro")
-        b:SetAttribute("type1", "macro")
-        b:SetAttribute("macrotext", macrotext)
-        b:SetAttribute("macrotext1", macrotext)
-    end
-
-    b.actionInfo = info
-    b.actionKey = info.key
-    b.actionLabel = info.label or info.name
-    b.hideWhenMissing = info.hideWhenMissing and true or false
-
-    b.bg = b:CreateTexture(nil, "BACKGROUND")
-    b.bg:SetAllPoints()
-    b.bg:SetColorTexture(0, 0, 0, 0.42)
-
-    b.icon = b:CreateTexture(nil, "ARTWORK")
-    b.icon:SetPoint("TOPLEFT", 3, -3)
-    b.icon:SetPoint("BOTTOMRIGHT", -3, 3)
-    b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    b.icon:SetTexture(GetActionIcon(info))
-
-    b.border = CreateFrame("Frame", nil, b, "BackdropTemplate")
-    b.border:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
-    b.border:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, 0)
-    b.border:EnableMouse(false)
-    b.border:SetBackdrop({
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        edgeSize = 12,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
-    })
-    b.border:SetBackdropBorderColor(0.62, 0.50, 0.25, 0.78)
-
-    b.cooldown = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
-    b.cooldown:SetAllPoints(b.icon)
-    b.cooldown:EnableMouse(false)
-    if b.cooldown.SetHideCountdownNumbers then
-        b.cooldown:SetHideCountdownNumbers(true)
-    end
-
-    b.cooldownText = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    b.cooldownText:SetPoint("CENTER", b.icon, "CENTER", 0, 0)
-    b.cooldownText:SetFontObject("GameFontHighlightSmall")
-    b.cooldownText:SetTextColor(1, 0.92, 0.72)
-    b.cooldownText:SetShadowOffset(1, -1)
-    b.cooldownText:SetText("")
-
-    b.highlight = b:CreateTexture(nil, "HIGHLIGHT")
-    b.highlight:SetAllPoints(b.icon)
-    b.highlight:SetColorTexture(1, 0.82, 0.35, 0.16)
-
-    b:SetScript("OnEnter", function(self)
-        local inf = self.actionInfo or {}
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        if inf.kind == "spell" then
-            local resolved = self.resolvedSpell or ResolveActionSpell(inf)
-            if resolved and resolved.spellID and GameTooltip.SetSpellByID then
-                GameTooltip:SetSpellByID(resolved.spellID)
-            else
-                GameTooltip:SetText((resolved and resolved.label) or self.actionLabel or "Spell", 1, 0.82, 0.24)
-            end
-            if inf.zoneGroup then
-                GameTooltip:AddLine(" ")
-                GameTooltip:AddLine("Hidden outside the matching expansion zones.", 0.72, 0.72, 0.72)
-            end
-        elseif inf.kind == "toy" then
-            if inf.itemID then GameTooltip:SetItemByID(inf.itemID) else GameTooltip:SetText(self.actionLabel or "Toy", 1, 0.82, 0.24) end
-        else
-            if inf.itemID then GameTooltip:SetHyperlink("item:" .. tostring(inf.itemID)) else GameTooltip:SetText(self.actionLabel or "Item", 1, 0.82, 0.24) end
-            local count = GetItemCountSafe(inf.itemID, inf.name)
-            GameTooltip:AddLine(" ")
-            GameTooltip:AddDoubleLine("Available", tostring(count or 0), 0.72, 0.72, 0.72, 1, 1, 1)
-        end
-        GameTooltip:Show()
-    end)
-    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    return b
-end
-
-local function MakeLogoutButton(parent)
-    -- Visible Blizzard button with a secure child owning the actual hardware click.
-    -- This matches the MulchTracker pattern and avoids protected Logout() calls.
-    local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    button:SetSize(72, 28)
-    button:SetText("Logout")
-    StyleBlizzardButton(button)
-
-    local secure = CreateFrame("Button", "EmberLedgerSecureLogoutButton", button, "SecureActionButtonTemplate")
-    secure:SetAllPoints(button)
-    secure:SetFrameLevel((button:GetFrameLevel() or 1) + 10)
-    secure:EnableMouse(true)
-    secure:RegisterForClicks("AnyUp", "AnyDown")
-    secure:SetAttribute("type", "macro")
-    secure:SetAttribute("type1", "macro")
-    secure:SetAttribute("macrotext", "/logout")
-    secure:SetAttribute("macrotext1", "/logout")
-
-    secure:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("Logout", 1, 0.82, 0.24)
-        GameTooltip:AddLine("Secure logout button.", 0.72, 0.72, 0.72)
-        GameTooltip:Show()
-    end)
-    secure:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-    button.secure = secure
-    return button
-end
-
-local ACTION_ITEM_BUTTONS = {
-    { key = "mulch", kind = "item", label = "Imbued Mulch", name = "Imbued Mulch", itemID = EL.IMBUED_MULCH_ITEM_ID, fallback = "Interface\\Icons\\INV_Misc_Herb_01", hideWhenMissing = false },
-    { key = "seed", kind = "item", label = "Resilient Seed", name = "Resilient Seed", itemID = 237497, fallback = "Interface\\Icons\\INV_Misc_Herb_06", zoneGroup = "midnight", hideWhenMissing = true },
-    { key = "glowingSeed", kind = "item", label = "Glowing Resilient Seed", name = "Glowing Resilient Seed", itemID = 237498, fallback = "Interface\\Icons\\INV_Misc_Herb_06", zoneGroup = "midnight", hideWhenMissing = true },
-    { key = "wildSeed", kind = "item", label = "Wild Resilient Seed", name = "Wild Resilient Seed", itemID = 237499, fallback = "Interface\\Icons\\INV_Misc_Herb_06", zoneGroup = "midnight", hideWhenMissing = true },
-    { key = "primalSeed", kind = "item", label = "Primal Resilient Seed", name = "Primal Resilient Seed", itemID = 237500, fallback = "Interface\\Icons\\INV_Misc_Herb_06", zoneGroup = "midnight", hideWhenMissing = true },
-    {
-        key = "greenThumb",
-        kind = "spell",
-        label = "Green Thumb",
-        name = "Green Thumb",
-        spellID = 439871,
-        fallback = "Interface\\Icons\\INV_Misc_Herb_07",
-        hideWhenMissing = true,
-        spellVariants = {
-            { spellID = 1221172, name = "Green Thumb", label = "Green Thumb", zoneGroup = "midnight" },
-            { spellID = 439871, name = "Green Thumb", label = "Green Thumb", zoneGroup = "khazAlgar" },
-        },
-    },
-    {
-        key = "overloadHerb",
-        kind = "spell",
-        label = "Overload Herb",
-        name = "Overload Infused Herb",
-        spellID = 1223014,
-        fallback = "Interface\\Icons\\INV_Misc_Herb_07",
-        hideWhenMissing = true,
-        spellVariants = {
-            { spellID = 1223014, name = "Overload Infused Herb", label = "Overload Herb", zoneGroup = "midnight" },
-            { spellID = 423395, name = "Overload Empowered Herb", label = "Overload Herb", zoneGroup = "khazAlgar" },
-        },
-    },
-    {
-        key = "overloadOre",
-        kind = "spell",
-        label = "Overload Ore",
-        name = "Overload Infused Deposit",
-        spellID = 1225392,
-        fallback = "Interface\\Icons\\INV_Ore_Bismuth",
-        hideWhenMissing = true,
-        spellVariants = {
-            { spellID = 1225392, name = "Overload Infused Deposit", label = "Overload Ore", zoneGroup = "midnight" },
-            { spellID = 423394, name = "Overload Empowered Deposit", label = "Overload Ore", zoneGroup = "khazAlgar" },
-        },
-    },
-    { key = "parcel", kind = "toy", label = "Interdimensional Parcel Signal", name = "Interdimensional Parcel Signal", itemID = 264695, fallback = "Interface\\Icons\\INV_Misc_EngGizmos_27", hideWhenMissing = true },
-    { key = "bank", kind = "spell", label = "Warband Bank Distance Inhibitor", name = "Warband Bank Distance Inhibitor", spellID = 460905, spellIDs = { 460905, 465226, 460925 }, fallback = "Interface\\Icons\\INV_Engineering_90_WormholeGenerator_PortalBlue", hideWhenMissing = true },
-}
-
-function EL:CreateActionBar(parent)
-    local bar = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    parent.actionBar = bar
-    bar:SetHeight(ACTION_BAR_H)
-    AddBackdrop(bar, 0.18, 0.18)
-    if bar.SetBackdropColor then bar:SetBackdropColor(EL_BG_R, EL_BG_G, EL_BG_B, 0.30) end
-
-    bar.itemButtons = {}
-    local last
-    for _, info in ipairs(ACTION_ITEM_BUTTONS) do
-        local b = MakeIconActionButton(bar, info)
-        bar.itemButtons[info.key] = b
-        if last then
-            b:SetPoint("LEFT", last, "RIGHT", 3, 0)
-        else
-            b:SetPoint("LEFT", bar, "LEFT", 6, 0)
-        end
-        last = b
-    end
-
-    bar.logout = MakeLogoutButton(bar)
-    bar.logout:SetPoint("RIGHT", bar, "RIGHT", -34, 0)
-
-    if self:IsActionBarEnabled() then self:RequestActionBarRefresh() end
-end
-
-function EL:UpdateActionBar()
-    if self:IsCombatLocked() then
-        if self.QueueCombatDeferredWork then self:QueueCombatDeferredWork("actionBar") end
-        return
-    end
-    if self.IsActionBarEnabled and not self:IsActionBarEnabled() then
-        local bar = self.panel and self.panel.actionBar
-        if bar then bar:Hide() end
-        return
-    end
-    local bar = self.panel and self.panel.actionBar
-    if not bar or not bar.itemButtons then return end
-    local locked = false
-
-    local lastVisible
-    for _, info in ipairs(ACTION_ITEM_BUTTONS) do
-        local b = bar.itemButtons[info.key]
-        if b then
-            local actionButtons = self.db and self.db.settings and self.db.settings.panel and self.db.settings.panel.actionButtons
-            local enabled = (not actionButtons) or actionButtons[info.key] ~= false
-            local available = GetActionAvailable(info)
-            local show = enabled and ((not b.hideWhenMissing) or available)
-            if not locked then
-                if info.kind == "spell" then SetSpellButtonAttributes(b, info) end
-                b:SetShown(show)
-            elseif info.kind == "spell" then
-                b.resolvedSpell = ResolveActionSpell(info)
-            end
-            if show or (locked and b:IsShown()) then
-                if not locked then
-                    b:ClearAllPoints()
-                    if lastVisible then
-                        b:SetPoint("LEFT", lastVisible, "RIGHT", 3, 0)
-                    else
-                        b:SetPoint("LEFT", bar, "LEFT", 6, 0)
-                    end
-                    lastVisible = b
-                end
-
-                if b.icon then
-                    if not locked and info.kind == "spell" then b.icon:SetTexture(GetActionIcon(info)) end
-                    b.icon:SetDesaturated(not available)
-                    b.icon:SetAlpha(available and 1 or 0.38)
-                end
-                -- Do not Enable/Disable secure action buttons during refresh.
-                -- Availability is represented visually, while the secure macro action
-                -- remains untouched unless attributes need an out-of-combat update.
-
-                local start, duration, enable = GetActionCooldownSafe(info)
-                if b.cooldown and CooldownFrame_Set then
-                    if start and duration and duration > 1 then
-                        CooldownFrame_Set(b.cooldown, start, duration, enable)
-                    else
-                        CooldownFrame_Set(b.cooldown, 0, 0, 0)
-                    end
-                elseif b.cooldown and b.cooldown.SetCooldown then
-                    b.cooldown:SetCooldown(start or 0, duration or 0)
-                end
-                if b.cooldownText then
-                    local remaining = 0
-                    if start and duration and duration > 1 then
-                        remaining = math.max(0, (start + duration) - GetTime())
-                    end
-                    b.cooldownText:SetText(FormatActionCooldownText(remaining))
-                end
-            end
-        end
-    end
-end
 
 function EL:CreateSessionPanel(parent)
     local session = CreateFrame("Frame", nil, parent, "BackdropTemplate")
@@ -3789,135 +3074,6 @@ function EL:RefreshSessionPanel()
 end
 
 
-function EL:LayoutSessionWindow()
-    local w = self.sessionWindow
-    if not w or not w.sessionPanel then return end
-    local settings = self.db and self.db.settings and self.db.settings.session or {}
-    local height = math.max(150, SESSION_EXPANDED_H + 16)
-    local trackingWidth = (self.GetTrackingPanelMaxWidth and self:GetTrackingPanelMaxWidth()) or SESSION_MIN_W
-    local savedWidth = tonumber(settings.width) or trackingWidth
-    -- The Session window is not manually resizable, so keep it visually aligned
-    -- with the current adaptive tracking window instead of preserving the older
-    -- wide default width forever.
-    local width = math.max(SESSION_MIN_W, math.min(savedWidth, trackingWidth))
-    settings.width = width
-    w:SetSize(width, height)
-    ApplyFrameOpacity(w, GetSessionOpacity())
-    if w.SetBackdropBorderColor then w:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, BORDER_ALPHA_STRONG) end
-    w.sessionPanel:ClearAllPoints()
-    w.sessionPanel:SetPoint("TOPLEFT", w, "TOPLEFT", 6, -6)
-    w.sessionPanel:SetPoint("BOTTOMRIGHT", w, "BOTTOMRIGHT", -6, 6)
-    w.sessionPanel:SetHeight(height - 12)
-    ApplyFrameOpacity(w.sessionPanel, math.max(0.20, GetSessionOpacity() - 0.09))
-    if w.sessionPanel.metrics then
-        local contentW = math.max(1, width - 20)
-        local gap = 8
-        local blockW = math.max(62, math.floor((contentW - (gap * 2)) / 3))
-        local totalW = (blockW * 3) + (gap * 2)
-        local startX = math.floor((contentW - totalW) / 2)
-        w.sessionPanel.metricTime:ClearAllPoints()
-        w.sessionPanel.metricTime:SetPoint("TOPLEFT", w.sessionPanel.metrics, "TOPLEFT", startX, 0)
-        w.sessionPanel.metricTime:SetSize(blockW, 38)
-        w.sessionPanel.metricValue:ClearAllPoints()
-        w.sessionPanel.metricValue:SetPoint("LEFT", w.sessionPanel.metricTime, "RIGHT", gap, 0)
-        w.sessionPanel.metricValue:SetSize(blockW, 38)
-        w.sessionPanel.metricRate:ClearAllPoints()
-        w.sessionPanel.metricRate:SetPoint("LEFT", w.sessionPanel.metricValue, "RIGHT", gap, 0)
-        w.sessionPanel.metricRate:SetSize(blockW, 38)
-        if w.sessionPanel.metricDiv1 then
-            w.sessionPanel.metricDiv1:ClearAllPoints()
-            w.sessionPanel.metricDiv1:SetPoint("TOP", w.sessionPanel.metrics, "TOPLEFT", startX + blockW + math.floor(gap / 2), 0)
-            w.sessionPanel.metricDiv1:SetPoint("BOTTOM", w.sessionPanel.metrics, "BOTTOMLEFT", startX + blockW + math.floor(gap / 2), 6)
-        end
-        if w.sessionPanel.metricDiv2 then
-            w.sessionPanel.metricDiv2:ClearAllPoints()
-            w.sessionPanel.metricDiv2:SetPoint("TOP", w.sessionPanel.metrics, "TOPLEFT", startX + (blockW * 2) + gap + math.floor(gap / 2), 0)
-            w.sessionPanel.metricDiv2:SetPoint("BOTTOM", w.sessionPanel.metrics, "BOTTOMLEFT", startX + (blockW * 2) + gap + math.floor(gap / 2), 6)
-        end
-    end
-    if self.RefreshSessionPanel then self:RefreshSessionPanel() end
-end
-
-function EL:CreateSessionWindow()
-    if self.sessionWindow then return end
-    local s = self.db.settings.session
-    local frame = CreateFrame("Frame", "EmberLedgerSessionWindow", UIParent, "BackdropTemplate")
-    self.sessionWindow = frame
-    frame:SetSize(math.max(SESSION_MIN_W, tonumber(s.width) or SESSION_MIN_W), math.max(150, tonumber(s.height) or 180))
-    frame:SetMovable(true)
-    frame:EnableMouse(true)
-    frame:RegisterForDrag("LeftButton")
-    frame:SetClampedToScreen(true)
-    AddBackdrop(frame, GetSessionOpacity(), 0.58)
-    AddInnerBorder(frame)
-    frame:Hide()
-    frame:SetScript("OnShow", function(self)
-        BringEmberWindowToFront(self)
-        if EL.db and EL.db.settings and EL.db.settings.session then
-            EL.db.settings.session.windowOpen = true
-            EL.db.settings.session.shown = true
-        end
-        if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
-        if EL.RefreshUpdateTicker then EL:RefreshUpdateTicker() end
-    end)
-    frame:SetScript("OnHide", function()
-        if EL.db and EL.db.settings and EL.db.settings.session then
-            EL.db.settings.session.windowOpen = false
-            if not EL._suppressSessionWindowHideSetting then
-                EL.db.settings.session.shown = false
-            end
-        end
-        if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
-        if EL.RefreshUpdateTicker then EL:RefreshUpdateTicker() end
-    end)
-    frame:SetScript("OnMouseDown", function(self)
-        BringEmberWindowToFront(self)
-    end)
-    frame:SetScript("OnDragStart", function(self) if not (EL.db.settings.lockWindows == true) or IsShiftKeyDown() then BringEmberWindowToFront(self); self:StartMoving() end end)
-    frame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        SaveFramePoint(self, EL.db.settings.session)
-    end)
-
-    self:CreateSessionPanel(frame)
-    frame.close = CreateFrame("Button", nil, frame.sessionPanel.header, "UIPanelCloseButton")
-    frame.close:SetSize(18, 18)
-    frame.close:SetPoint("RIGHT", frame.sessionPanel.header, "RIGHT", -5, 0)
-    frame.close:SetFrameLevel((frame.sessionPanel.header:GetFrameLevel() or 1) + 10)
-    frame.close:SetScript("OnClick", function() frame:Hide() end)
-
-    if frame.sessionPanel and frame.sessionPanel.title then
-        frame.sessionPanel.title:ClearAllPoints()
-        frame.sessionPanel.title:SetPoint("LEFT", frame.sessionPanel.header, "LEFT", 10, 0)
-        frame.sessionPanel.title:SetPoint("RIGHT", frame.close, "LEFT", -8, 0)
-    end
-
-    SetFramePointFromDB(frame, s)
-    frame:SetScale(math.max(PANEL_MIN_SCALE, math.min(PANEL_MAX_SCALE, tonumber(s.scale) or 1)))
-    self:LayoutSessionWindow()
-end
-
-function EL:ShowSessionWindowFromSavedState()
-    if not self.sessionWindow then return end
-    if self.db and self.db.settings and self.db.settings.session and self.db.settings.session.shown == false then return end
-    SetFramePointFromDB(self.sessionWindow, self.db.settings.session)
-    self:LayoutSessionWindow()
-    if self.RefreshSessionPanel then self:RefreshSessionPanel() end
-    self.sessionWindow:Show()
-    BringEmberWindowToFront(self.sessionWindow)
-    if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
-end
-
-function EL:ToggleSessionWindow()
-    if not self.sessionWindow then return end
-    if self.sessionWindow:IsShown() then
-        self.sessionWindow:Hide()
-        if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
-    else
-        self:ShowSessionWindowFromSavedState()
-    end
-end
-
 function EL:CreatePanel()
     local s = self.db.settings.panel
     local panel = CreateFrame("Frame", "EmberLedgerPanel", UIParent, "BackdropTemplate")
@@ -4027,7 +3183,7 @@ function EL:CreatePanel()
     end)
     panel.settings:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- Scale controls moved to the Options panel in v0.4.24.
+    -- Scale controls live in the Options panel.
     panel.scaleDown = nil
     panel.scaleUp = nil
 
