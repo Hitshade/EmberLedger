@@ -1,3 +1,35 @@
+v1.15.3
+- Reworked Performance guidance with a top-level read-first warning.
+- Added setting-specific guidance for session tracking, action bar performance, and session history cap.
+- Clarified that the default session history cap is enough for nearly everyone because stats use compact aggregates.
+- README title/version updated only.
+
+v1.15.2
+- Added window stacking polish so clicked or newly shown EmberLedger windows come to the front cleanly.
+- Updated the Performance warning for Session History Cap to clarify that even very active players usually do not need to increase the default.
+
+v1.15.1
+- Added defensive non-negative guards to aggregate item value, raw gold, and gold spent buckets.
+- Cleaned up the Session History Cap slider value formatter to avoid redundant rounding.
+
+v1.15.0
+- Added compact daily and weekly aggregate session stats.
+- Today, This Week, and 30 Days stats no longer depend only on raw saved session rows.
+- Raw session history still keeps up to 30 days, capped by the configurable session history limit.
+- Backfilled aggregate stats from retained session history for existing users.
+- Updated Stats/Sessions guidance text to clarify compact aggregates vs visible saved summaries.
+
+v1.14.2
+- Moved Session History Cap lower in Performance options.
+- Added a red Warning label and firm guidance explaining that very large history caps may increase SavedVariables size and affect login/logout performance for heavy users.
+- Updated tooltip wording for the history cap.
+
+v1.14.1
+- Added a configurable Session History cap in Performance Options.
+- Session history still keeps up to 30 days, but now also prunes to the configured maximum entry count.
+- Default cap is 500 entries, adjustable from 50 to 3000.
+- Updated Stats/Sessions wording to show the 30-day view with the active max-entry cap.
+
 v1.14.0
 - Hardened tracking-column toggles so they always mutate the live saved settings table.
 - Preserved the non-mutating tracking-column read path added in the previous cleanup pass.

@@ -900,6 +900,23 @@ local function SetSettingsTooltip(widget, title, lines)
 end
 
 
+local function BringEmberWindowToFront(frame)
+    if not frame then return end
+    if EL then
+        EL._emberWindowFrontLevel = (tonumber(EL._emberWindowFrontLevel) or 100) + 10
+        if EL._emberWindowFrontLevel > 900 then
+            EL._emberWindowFrontLevel = 110
+        end
+        local currentStrata = frame.GetFrameStrata and frame:GetFrameStrata()
+        if frame.SetFrameStrata and currentStrata ~= "DIALOG" then frame:SetFrameStrata("HIGH") end
+        if frame.SetFrameLevel then frame:SetFrameLevel(EL._emberWindowFrontLevel) end
+    end
+end
+
+function EL:BringWindowToFront(frame)
+    BringEmberWindowToFront(frame)
+end
+
 local function HideSessionHistoryDisplayDropdown()
     if EL and EL.sessionHistoryDisplayDropdown then
         EL.sessionHistoryDisplayDropdown:Hide()
@@ -912,7 +929,7 @@ local function ShowSessionHistoryDisplayDropdown(anchor)
     local options = {
         { mode = "today", text = "Today" },
         { mode = "week", text = "This Week" },
-        { mode = "30", text = "30 days" },
+        { mode = "30", text = "30 days (" .. ((EL.GetSessionHistoryMaxEntries and EL:GetSessionHistoryMaxEntries()) or 500) .. " max)" },
     }
 
     local menu = EL.sessionHistoryDisplayDropdown
@@ -1110,7 +1127,10 @@ function EL:CreateSettingsPanel(parent)
     else
         f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     end
-    f:SetScript("OnDragStart", function(self) if not (EL.db.settings.lockWindows == true) or IsShiftKeyDown() then self:StartMoving() end end)
+    f:SetScript("OnMouseDown", function(self)
+        BringEmberWindowToFront(self)
+    end)
+    f:SetScript("OnDragStart", function(self) if not (EL.db.settings.lockWindows == true) or IsShiftKeyDown() then BringEmberWindowToFront(self); self:StartMoving() end end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         EL.db.settings.options = EL.db.settings.options or {}
@@ -1404,15 +1424,54 @@ function EL:CreateSettingsPanel(parent)
     SetSettingsTooltip(f.actionWildSeedButton, "Wild Resilient Seed button", {"Allows this seed button to appear on the action bar when available."})
     SetSettingsTooltip(f.actionPrimalSeedButton, "Primal Resilient Seed button", {"Allows this seed button to appear on the action bar when available."})
 
-    f.performanceSection = MakeSettingsSection(f, "Performance", contentX, -42, contentW, 124)
+    f.performanceSection = MakeSettingsSection(f, "Performance", contentX, -42, contentW, 334)
+    f.performanceWarningTitle = f.performanceSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.performanceWarningTitle:SetPoint("TOPLEFT", 12, -36)
+    f.performanceWarningTitle:SetText("Warning: read first")
+    f.performanceWarningTitle:SetTextColor(1.00, 0.22, 0.18)
+
+    f.performanceWarningText = f.performanceSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.performanceWarningText:SetPoint("TOPLEFT", 12, -56)
+    f.performanceWarningText:SetWidth(contentW - 24)
+    f.performanceWarningText:SetJustifyH("LEFT")
+    f.performanceWarningText:SetTextColor(0.88, 0.84, 0.74)
+    f.performanceWarningText:SetText("The defaults are recommended for nearly everyone. These controls are only for reducing background work or limiting visible session-log size if you understand the tradeoff.")
+
     f.enableSessionTracking = MakeSettingsCheck(f.performanceSection, "Enable session tracking", function() EL:TogglePerformanceSetting("sessionTracking") end)
-    f.enableSessionTracking:SetPoint("TOPLEFT", 12, -36)
+    f.enableSessionTracking:SetPoint("TOPLEFT", 12, -106)
+    f.sessionTrackingTip = f.performanceSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.sessionTrackingTip:SetPoint("TOPLEFT", 34, -130)
+    f.sessionTrackingTip:SetWidth(contentW - 46)
+    f.sessionTrackingTip:SetJustifyH("LEFT")
+    f.sessionTrackingTip:SetTextColor(0.76, 0.74, 0.66)
+    f.sessionTrackingTip:SetText("Leave this on for gold/hour, item value, session history, stats, and bag summaries. Turn it off only if you do not want EmberLedger tracking session activity.")
+
     f.enableActionBar = MakeSettingsCheck(f.performanceSection, "Enable action bar", function() EL:TogglePerformanceSetting("actionBar") end)
-    f.enableActionBar:SetPoint("TOPLEFT", 12, -64)
-    SetSettingsTooltip(f.enableSessionTracking, "Enable session tracking", {"Tracks session time, gathered items, and session value.", "Turn off to stop most background loot and bag processing."})
+    f.enableActionBar:SetPoint("TOPLEFT", 12, -172)
+    f.actionBarTip = f.performanceSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.actionBarTip:SetPoint("TOPLEFT", 34, -196)
+    f.actionBarTip:SetWidth(contentW - 46)
+    f.actionBarTip:SetJustifyH("LEFT")
+    f.actionBarTip:SetTextColor(0.76, 0.74, 0.66)
+    f.actionBarTip:SetText("Disable this if you do not use EmberLedger's utility buttons or want to skip action-bar refresh work. This does not affect profession tracking.")
+
+    f.historyCapTip = f.performanceSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.historyCapTip:SetPoint("TOPLEFT", 12, -246)
+    f.historyCapTip:SetWidth(contentW - 24)
+    f.historyCapTip:SetJustifyH("LEFT")
+    f.historyCapTip:SetTextColor(0.88, 0.84, 0.74)
+    f.historyCapTip:SetText("Session history cap: 500 is already enough for almost everyone, including extreme players, because stats use compact aggregates. Increase this only if you specifically want a deeper visible Sessions list and do not mind larger SavedVariables.")
+
+    SetSettingsTooltip(f.enableSessionTracking, "Enable session tracking", {"Tracks session time, gathered items, session value, bag summaries, and recent/lifetime stats.", "Turn off to stop most background loot and bag processing."})
     SetSettingsTooltip(f.enableActionBar, "Enable action bar", {"Allows EmberLedger utility buttons in the main window.", "Turn off to hide the bar and skip action bar refresh work."})
 
-    f.maintenanceSection = MakeSettingsSection(f, "Maintenance / Resets", contentX, -372, contentW, 184)
+    f.historyMaxEntriesSlider = MakeSettingsSlider(f.performanceSection, "Session history cap", 50, 3000, 50, function(v) return string.format("%d entries", v) end, function(v)
+        if EL.SetSessionHistoryMaxEntries then EL:SetSessionHistoryMaxEntries(v) end
+    end)
+    f.historyMaxEntriesSlider:SetPoint("TOPLEFT", f.performanceSection, "TOPLEFT", 12, -294)
+    SetSettingsTooltip(f.historyMaxEntriesSlider, "Session history cap", {"Limits the visible saved session list after the 30-day retention filter is applied.", "Default: 500. Stats remain accurate through compact aggregates even when old visible list entries are pruned."})
+
+    f.maintenanceSection = MakeSettingsSection(f, "Maintenance / Resets", contentX, -438, contentW, 184)
     f.hiddenStatus = f.maintenanceSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.hiddenStatus:SetPoint("TOPLEFT", 12, -36)
     f.hiddenStatus:SetWidth(contentW - 24)
@@ -1440,7 +1499,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.14.0"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.15.3"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -1544,6 +1603,7 @@ function EL:RefreshSettingsPanel()
     SetSliderValue(f.moxieThresholdSlider, tonumber(alerts.moxieThreshold) or 600)
     SetSliderValue(f.scaleSlider, math.floor(((self.db.settings.panel and tonumber(self.db.settings.panel.scale)) or 1) * 100 + 0.5))
     SetSliderValue(f.sessionScaleSlider, math.floor(((self.db.settings.session and tonumber(self.db.settings.session.scale)) or 1) * 100 + 0.5))
+    SetSliderValue(f.historyMaxEntriesSlider, (self.GetSessionHistoryMaxEntries and self:GetSessionHistoryMaxEntries()) or 500)
     local function setToggle(btn, on)
         if not btn then return end
         if btn.SetChecked then btn:SetChecked(on and true or false) end
@@ -1594,7 +1654,7 @@ function EL:RefreshSettingsPanel()
         if btn and btn.SetAlpha then btn:SetAlpha(actionControlsAlpha) end
     end
     local sessionControlsAlpha = (performanceSettings.sessionTracking ~= false) and 1.0 or 0.45
-    for _, btn in ipairs({ f.toggleSessionSection, f.filterHerbs, f.filterOre, f.filterCloth, f.filterLeather, f.filterEnchanting, f.filterFish, f.filterOther, f.trackRawGoldGains, f.trackGoldSpent, f.countTrustedMailRewards, f.countCraftedItems, f.toggleSessionHistory, f.resetSession }) do
+    for _, btn in ipairs({ f.toggleSessionSection, f.filterHerbs, f.filterOre, f.filterCloth, f.filterLeather, f.filterEnchanting, f.filterFish, f.filterOther, f.trackRawGoldGains, f.trackGoldSpent, f.countTrustedMailRewards, f.countCraftedItems, f.toggleSessionHistory, f.resetSession, f.historyMaxEntriesSlider }) do
         if btn and btn.SetAlpha then btn:SetAlpha(sessionControlsAlpha) end
     end
     setToggle(f.filterHerbs, sessionSettings.trackHerbs ~= false)
@@ -1642,6 +1702,7 @@ function EL:ShowSettingsPanel()
         self.settingsPanel:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     end
     self.settingsPanel:Show()
+    BringEmberWindowToFront(self.settingsPanel)
     self:SelectSettingsPage(self.settingsPanel.currentPage or "General")
     self:RefreshSettingsPanel()
 end
@@ -2020,7 +2081,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.13.1"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.15.3"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -2073,9 +2134,11 @@ function EL:CreateSessionHistoryWindow()
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetClampedToScreen(true)
+    frame:SetScript("OnShow", function(self) BringEmberWindowToFront(self) end)
+    frame:SetScript("OnMouseDown", function(self) BringEmberWindowToFront(self) end)
     AddBackdrop(frame, GetPanelOpacity(), 0.55)
     AddInnerBorder(frame)
-    frame:SetScript("OnDragStart", function(self) self:StartMoving() end)
+    frame:SetScript("OnDragStart", function(self) BringEmberWindowToFront(self); self:StartMoving() end)
     frame:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
     frame:Hide()
 
@@ -2172,12 +2235,12 @@ function EL:CreateSessionHistoryWindow()
 
     frame.rangeText = frame.rangeBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     frame.rangeText:SetPoint("LEFT", frame.rangeIcon, "RIGHT", 10, 0)
-    frame.rangeText:SetPoint("RIGHT", frame.rangeBox, "RIGHT", -250, 0)
+    frame.rangeText:SetPoint("RIGHT", frame.rangeBox, "RIGHT", -300, 0)
     frame.rangeText:SetJustifyH("LEFT")
     frame.rangeText:SetTextColor(1.00, 0.82, 0.24)
 
     frame.displayRange = CreateFrame("Button", nil, frame.rangeBox, "BackdropTemplate")
-    frame.displayRange:SetSize(150, 24)
+    frame.displayRange:SetSize(190, 24)
     frame.displayRange:SetPoint("RIGHT", frame.rangeBox, "RIGHT", -12, 0)
     AddBackdrop(frame.displayRange, 0.86, 0.70)
     if frame.displayRange.SetBackdropColor then frame.displayRange:SetBackdropColor(0.020, 0.016, 0.030, 0.92) end
@@ -2568,6 +2631,11 @@ function EL:CreateSessionHistoryWindow()
     frame.totalNet = MakeTotalCard("Interface\\Icons\\INV_Misc_Coin_17", "Net Total", 3, 2)
 end
 
+local function GetSessionHistoryCapText()
+    local maxEntries = (EL.GetSessionHistoryMaxEntries and EL:GetSessionHistoryMaxEntries()) or 500
+    return "max " .. tostring(maxEntries)
+end
+
 local function FormatSessionHistoryRange(displayMode)
     local now = time()
     if displayMode == "today" then
@@ -2578,7 +2646,7 @@ local function FormatSessionHistoryRange(displayMode)
         return string.format("This Week: since %s", date("%b %d, %Y %I:%M %p", startTime))
     end
     local startTime = now - (30 * 86400)
-    return string.format("Last 30 Days: %s  |  %s", date("%b %d, %Y", startTime), date("%b %d, %Y", now))
+    return string.format("Last 30 Days (%s): %s  |  %s", GetSessionHistoryCapText(), date("%b %d, %Y", startTime), date("%b %d, %Y", now))
 end
 
 
@@ -2587,6 +2655,10 @@ local function GetSessionStatsRangeLabel(range)
     if range == "week" then return "This Week" end
     if range == "lifetime" then return "Lifetime" end
     return "30 Days"
+end
+
+local function GetSessionStatsRangeTitle(range)
+    return GetSessionStatsRangeLabel(range)
 end
 
 local function FormatSessionStatsRange(range)
@@ -2607,7 +2679,7 @@ function EL:RefreshSessionHistoryWindow()
     local frame = self.sessionHistoryWindow
     if not frame then return end
     local displayMode = (self.GetSessionHistoryDisplayMode and self:GetSessionHistoryDisplayMode()) or "30"
-    local displayLabel = displayMode == "today" and "Today" or (displayMode == "week" and "This Week" or "30 days")
+    local displayLabel = displayMode == "today" and "Today" or (displayMode == "week" and "This Week" or ("30 days (" .. GetSessionHistoryCapText() .. ")"))
     local enabled = (self.IsSessionHistoryEnabled and self:IsSessionHistoryEnabled()) or false
     if frame.displayRange and frame.displayRange.selectedText then frame.displayRange.selectedText:SetText(displayLabel) end
 
@@ -2686,7 +2758,7 @@ function EL:RefreshSessionHistoryWindow()
         if frame.info then
             frame.info:SetText("Quick aggregated totals across saved EmberLedger sessions. Lifetime uses compact aggregate counters so raw history can remain lightweight.")
         end
-        if frame.statsTitle then frame.statsTitle:SetText("Session Stats (" .. GetSessionStatsRangeLabel(range) .. ")") end
+        if frame.statsTitle then frame.statsTitle:SetText("Session Stats (" .. GetSessionStatsRangeTitle(range) .. ")") end
         if frame.statsNote then frame.statsNote:SetText(FormatSessionStatsRange(range)) end
         if frame.statGold then
             frame.statGold:SetText(FormatSessionHistoryMoneyText(tonumber(stats.totalSilver) or 0))
@@ -2702,7 +2774,7 @@ function EL:RefreshSessionHistoryWindow()
             if range == "lifetime" then
                 frame.statsFootnote:SetText("Lifetime totals begin with retained session history that existed when v1.11.0 first loaded, then continue from future saved sessions. Reset Lifetime in Options clears only these aggregate counters.")
             else
-                frame.statsFootnote:SetText("Today, This Week, and 30 Days are calculated from retained session history. Current active sessions appear after they are saved by reset, logout, or reload.")
+                frame.statsFootnote:SetText("Today, This Week, and 30 Days are calculated from compact daily/weekly aggregates. The Sessions list still keeps up to 30 days, capped at " .. tostring((self.GetSessionHistoryMaxEntries and self:GetSessionHistoryMaxEntries()) or 500) .. " entries. Current active sessions appear after they are saved by reset, logout, or reload.")
             end
         end
         return
@@ -2761,7 +2833,7 @@ function EL:RefreshSessionHistoryWindow()
     end
     if frame.info then
         local scopeText = displayMode == "today" and "Showing today's saved sessions." or (displayMode == "week" and "Showing sessions since weekly reset." or "Showing last 30 days.")
-        frame.info:SetText(scopeText .. " Saved summaries are retained up to 30 days. " .. (enabled and "Sessions save on reset and logout/reload." or "Session history is currently disabled."))
+        frame.info:SetText(scopeText .. " Saved summaries are retained up to 30 days, capped at " .. tostring((self.GetSessionHistoryMaxEntries and self:GetSessionHistoryMaxEntries()) or 500) .. " entries for the visible list. Stats use compact aggregates. " .. (enabled and "Sessions save on reset and logout/reload." or "Session history is currently disabled."))
     end
     if frame.rangeText then frame.rangeText:SetText(FormatSessionHistoryRange(displayMode)) end
     if frame.totalsTitle then frame.totalsTitle:SetText("Sessions Total (" .. displayLabel .. ")") end
@@ -2783,6 +2855,7 @@ function EL:ToggleSessionHistoryWindow()
     else
         self:RefreshSessionHistoryWindow()
         self.sessionHistoryWindow:Show()
+        BringEmberWindowToFront(self.sessionHistoryWindow)
     end
 end
 
@@ -3761,7 +3834,8 @@ function EL:CreateSessionWindow()
     AddBackdrop(frame, GetSessionOpacity(), 0.58)
     AddInnerBorder(frame)
     frame:Hide()
-    frame:SetScript("OnShow", function()
+    frame:SetScript("OnShow", function(self)
+        BringEmberWindowToFront(self)
         if EL.db and EL.db.settings and EL.db.settings.session then
             EL.db.settings.session.windowOpen = true
             EL.db.settings.session.shown = true
@@ -3779,7 +3853,10 @@ function EL:CreateSessionWindow()
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
         if EL.RefreshUpdateTicker then EL:RefreshUpdateTicker() end
     end)
-    frame:SetScript("OnDragStart", function(self) if not (EL.db.settings.lockWindows == true) or IsShiftKeyDown() then self:StartMoving() end end)
+    frame:SetScript("OnMouseDown", function(self)
+        BringEmberWindowToFront(self)
+    end)
+    frame:SetScript("OnDragStart", function(self) if not (EL.db.settings.lockWindows == true) or IsShiftKeyDown() then BringEmberWindowToFront(self); self:StartMoving() end end)
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         SaveFramePoint(self, EL.db.settings.session)
@@ -3810,6 +3887,7 @@ function EL:ShowSessionWindowFromSavedState()
     self:LayoutSessionWindow()
     if self.RefreshSessionPanel then self:RefreshSessionPanel() end
     self.sessionWindow:Show()
+    BringEmberWindowToFront(self.sessionWindow)
     if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
 end
 
@@ -3840,7 +3918,8 @@ function EL:CreatePanel()
     if panel.SetBackdropBorderColor then panel:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, BORDER_ALPHA_STRONG) end
     AddInnerBorder(panel)
     panel:Hide()
-    panel:SetScript("OnShow", function()
+    panel:SetScript("OnShow", function(self)
+        BringEmberWindowToFront(self)
         if EL.db and EL.db.settings and EL.db.settings.panel then
             EL.db.settings.panel.windowOpen = true
             EL.db.settings.panel.charactersShown = true
@@ -3860,7 +3939,10 @@ function EL:CreatePanel()
     end)
     panel:SetScale(math.max(PANEL_MIN_SCALE, math.min(PANEL_MAX_SCALE, tonumber(s.scale) or 1)))
 
-    panel:SetScript("OnDragStart", function(self) if not (EL.db.settings.lockWindows == true) or IsShiftKeyDown() then self:StartMoving() end end)
+    panel:SetScript("OnMouseDown", function(self)
+        BringEmberWindowToFront(self)
+    end)
+    panel:SetScript("OnDragStart", function(self) if not (EL.db.settings.lockWindows == true) or IsShiftKeyDown() then BringEmberWindowToFront(self); self:StartMoving() end end)
     panel:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         EL.db.settings.panel.detached = true
@@ -4899,6 +4981,7 @@ function EL:ShowPanelFromSavedState()
     self:ApplyPanelScale()
     self:RefreshPanel()
     self.panel:Show()
+    BringEmberWindowToFront(self.panel)
     if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
 end
 

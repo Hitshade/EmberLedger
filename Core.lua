@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.14.0"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.15.3"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -50,7 +50,7 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 11316
+EL.DB_VERSION = 11500
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -105,6 +105,11 @@ local defaults = {
             duration = 0,
             sessions = 0,
             items = 0,
+            backfilledFromHistory = false,
+        },
+        history = {
+            daily = {},
+            weekly = {},
             backfilledFromHistory = false,
         },
     },
@@ -171,6 +176,7 @@ local defaults = {
             historyRetentionDays = 30,
             historyDisplayDays = 30,
             historyDisplayMode = "30",
+            historyMaxEntries = 500,
         },
         alerts = {
             concentrationThreshold = 360,
@@ -438,6 +444,11 @@ function EL:NormalizeDatabaseSettings()
     lifetime.backfilledFromHistory = lifetime.backfilledFromHistory == true
     lifetime._normalized = true
 
+    self.db.stats.history = type(self.db.stats.history) == "table" and self.db.stats.history or {}
+    self.db.stats.history.daily = type(self.db.stats.history.daily) == "table" and self.db.stats.history.daily or {}
+    self.db.stats.history.weekly = type(self.db.stats.history.weekly) == "table" and self.db.stats.history.weekly or {}
+    self.db.stats.history.backfilledFromHistory = self.db.stats.history.backfilledFromHistory == true
+
     settings.display = settings.display or {}
     settings.alerts = settings.alerts or {}
     settings.panel = settings.panel or {}
@@ -547,6 +558,7 @@ function EL:NormalizeDatabaseSettings()
     normalizeBool(settings.session, "countTrustedMailRewards", true)
     normalizeBool(settings.session, "countCraftedItems", false)
     normalizeBool(settings.session, "sessionHistoryEnabled", true)
+    settings.session.historyMaxEntries = math.floor(ClampNumber(settings.session.historyMaxEntries, 50, 3000, 500))
     settings.session.historyRetentionDays = 30
     if settings.session.historyDisplayMode ~= "today" and settings.session.historyDisplayMode ~= "week" and settings.session.historyDisplayMode ~= "30" then
         local oldDays = tonumber(settings.session.historyDisplayDays) or 30
@@ -732,6 +744,7 @@ function EL:EnsureDB()
 
     self:NormalizeDatabaseSettings()
     if self.BackfillLifetimeSessionStatsFromHistory then self:BackfillLifetimeSessionStatsFromHistory() end
+    if self.BackfillSessionAggregateStatsFromHistory then self:BackfillSessionAggregateStatsFromHistory() end
     return EmberLedgerDB
 end
 
@@ -2122,6 +2135,22 @@ function EL:GetSessionHistoryRetentionDays()
     return 30
 end
 
+
+function EL:GetSessionHistoryMaxEntries()
+    local session = self.db and self.db.settings and self.db.settings.session or {}
+    return math.floor(ClampNumber(session.historyMaxEntries, 50, 3000, 500))
+end
+
+function EL:SetSessionHistoryMaxEntries(entries)
+    self.db = self.db or {}
+    self.db.settings = self.db.settings or {}
+    self.db.settings.session = self.db.settings.session or {}
+    self.db.settings.session.historyMaxEntries = math.floor(ClampNumber(entries, 50, 3000, 500))
+    if self.PruneSessionHistory then self:PruneSessionHistory() end
+    if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+    if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
+end
+
 function EL:SetSessionHistoryRetentionDays(days)
     -- Deprecated compatibility shim. Older builds exposed retention choices,
     -- but current EmberLedger keeps retention fixed at 30 days.
@@ -2225,7 +2254,16 @@ function EL:PruneSessionHistory()
         end
     end
     table.sort(kept, SortSessionHistoryNewestFirst)
+    local maxEntries = self.GetSessionHistoryMaxEntries and self:GetSessionHistoryMaxEntries() or 500
+    if #kept > maxEntries then
+        local capped = {}
+        for i = 1, maxEntries do
+            capped[i] = kept[i]
+        end
+        kept = capped
+    end
     self.db.sessionHistory = kept
+    if self.PruneSessionAggregateStats then self:PruneSessionAggregateStats() end
 end
 
 function EL:GetSessionHistoryList()
@@ -2299,6 +2337,9 @@ function EL:SaveCurrentSessionHistory(reason)
     local replaced = false
     for i, old in ipairs(self.db.sessionHistory) do
         if type(old) == "table" and old.id == id then
+            if self.RemoveSessionHistoryEntryFromAggregateStats then
+                self:RemoveSessionHistoryEntryFromAggregateStats(old)
+            end
             if old.countedInLifetime == true then
                 entry.countedInLifetime = true
             end
@@ -2311,6 +2352,9 @@ function EL:SaveCurrentSessionHistory(reason)
     if self.AddSessionHistoryEntryToLifetimeStats then
         self:AddSessionHistoryEntryToLifetimeStats(entry)
     end
+    if self.AddSessionHistoryEntryToAggregateStats then
+        self:AddSessionHistoryEntryToAggregateStats(entry)
+    end
     s.historySaved = true
     self:PruneSessionHistory()
     if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
@@ -2321,6 +2365,12 @@ end
 function EL:ResetSessionHistory()
     if not self.db then return end
     self.db.sessionHistory = {}
+    self.db.stats = type(self.db.stats) == "table" and self.db.stats or {}
+    self.db.stats.history = {
+        daily = {},
+        weekly = {},
+        backfilledFromHistory = true,
+    }
     if self.RefreshSessionHistoryWindow then self:RefreshSessionHistoryWindow() end
     self:Print("Session history cleared.")
 end
@@ -2402,6 +2452,117 @@ function EL:ResetLifetimeSessionStats()
     self:Print("Lifetime session stats reset.")
 end
 
+
+local function AddEntryValuesToAggregateBucket(bucket, entry, sign)
+    if type(bucket) ~= "table" or type(entry) ~= "table" then return end
+    sign = sign or 1
+    bucket.duration = math.max(0, (tonumber(bucket.duration) or 0) + (math.max(0, tonumber(entry.duration) or 0) * sign))
+    bucket.itemValueSilver = math.max(0, (tonumber(bucket.itemValueSilver) or 0) + ((tonumber(entry.itemValueSilver) or 0) * sign))
+    bucket.rawGoldGainedSilver = math.max(0, (tonumber(bucket.rawGoldGainedSilver) or 0) + ((tonumber(entry.rawGoldGainedSilver) or 0) * sign))
+    bucket.goldSpentSilver = math.max(0, (tonumber(bucket.goldSpentSilver) or 0) + ((tonumber(entry.goldSpentSilver) or 0) * sign))
+    bucket.totalSilver = (tonumber(bucket.totalSilver) or 0) + ((tonumber(entry.totalSilver) or 0) * sign)
+    bucket.sessions = math.max(0, (tonumber(bucket.sessions) or 0) + sign)
+    bucket.items = math.max(0, (tonumber(bucket.items) or 0) + ((math.max(0, tonumber(entry.trackedItemQty) or tonumber(entry.items) or 0)) * sign))
+end
+
+function EL:GetSessionAggregateDateKey(timestamp)
+    local t = date("*t", tonumber(timestamp) or time())
+    return string.format("%04d-%02d-%02d", tonumber(t.year) or 1970, tonumber(t.month) or 1, tonumber(t.day) or 1)
+end
+
+function EL:GetSessionAggregateWeekKey(timestamp)
+    timestamp = tonumber(timestamp) or time()
+    local start = (self.GetWeeklyResetStartTime and self:GetWeeklyResetStartTime(timestamp)) or (timestamp - (7 * 86400))
+    local t = date("*t", start)
+    return string.format("%04d-%02d-%02d", tonumber(t.year) or 1970, tonumber(t.month) or 1, tonumber(t.day) or 1)
+end
+
+function EL:GetSessionHistoryAggregateStats()
+    self.db = self.db or {}
+    self.db.stats = type(self.db.stats) == "table" and self.db.stats or {}
+    self.db.stats.history = type(self.db.stats.history) == "table" and self.db.stats.history or {}
+    local stats = self.db.stats.history
+    stats.daily = type(stats.daily) == "table" and stats.daily or {}
+    stats.weekly = type(stats.weekly) == "table" and stats.weekly or {}
+    stats.backfilledFromHistory = stats.backfilledFromHistory == true
+    return stats
+end
+
+function EL:AddSessionHistoryEntryToAggregateStats(entry)
+    if type(entry) ~= "table" or entry.countedInAggregates == true then return false end
+    local total = tonumber(entry.totalSilver) or 0
+    local itemValue = tonumber(entry.itemValueSilver) or 0
+    local raw = tonumber(entry.rawGoldGainedSilver) or 0
+    local spent = tonumber(entry.goldSpentSilver) or 0
+    local itemQty = math.max(0, tonumber(entry.trackedItemQty) or tonumber(entry.items) or 0)
+    local meaningful = total ~= 0 or itemValue ~= 0 or raw ~= 0 or spent ~= 0 or itemQty > 0
+    if not meaningful then return false end
+
+    local stats = self:GetSessionHistoryAggregateStats()
+    local timestamp = tonumber(entry.timestamp) or time()
+    local dayKey = self:GetSessionAggregateDateKey(timestamp)
+    local weekKey = self:GetSessionAggregateWeekKey(timestamp)
+    stats.daily[dayKey] = type(stats.daily[dayKey]) == "table" and stats.daily[dayKey] or {}
+    stats.weekly[weekKey] = type(stats.weekly[weekKey]) == "table" and stats.weekly[weekKey] or {}
+    AddEntryValuesToAggregateBucket(stats.daily[dayKey], entry, 1)
+    AddEntryValuesToAggregateBucket(stats.weekly[weekKey], entry, 1)
+    entry.countedInAggregates = true
+    return true
+end
+
+function EL:RemoveSessionHistoryEntryFromAggregateStats(entry)
+    if type(entry) ~= "table" or entry.countedInAggregates ~= true then return false end
+    local stats = self:GetSessionHistoryAggregateStats()
+    local timestamp = tonumber(entry.timestamp) or time()
+    local dayKey = self:GetSessionAggregateDateKey(timestamp)
+    local weekKey = self:GetSessionAggregateWeekKey(timestamp)
+    if type(stats.daily[dayKey]) == "table" then AddEntryValuesToAggregateBucket(stats.daily[dayKey], entry, -1) end
+    if type(stats.weekly[weekKey]) == "table" then AddEntryValuesToAggregateBucket(stats.weekly[weekKey], entry, -1) end
+    entry.countedInAggregates = nil
+    return true
+end
+
+function EL:PruneSessionAggregateStats()
+    local stats = self:GetSessionHistoryAggregateStats()
+    local now = time()
+    local dailyCutoff = (self.GetSessionAggregateDateKey and self:GetSessionAggregateDateKey(now - (31 * 86400))) or ""
+    for key in pairs(stats.daily or {}) do
+        if tostring(key) < dailyCutoff then stats.daily[key] = nil end
+    end
+    local weeklyCutoff = (self.GetSessionAggregateWeekKey and self:GetSessionAggregateWeekKey(now - (42 * 86400))) or ""
+    for key in pairs(stats.weekly or {}) do
+        if tostring(key) < weeklyCutoff then stats.weekly[key] = nil end
+    end
+end
+
+function EL:BackfillSessionAggregateStatsFromHistory()
+    local stats = self:GetSessionHistoryAggregateStats()
+    if stats.backfilledFromHistory == true then return false end
+    stats.daily = {}
+    stats.weekly = {}
+    self.db.sessionHistory = type(self.db.sessionHistory) == "table" and self.db.sessionHistory or {}
+    for _, entry in ipairs(self.db.sessionHistory) do
+        if type(entry) == "table" then
+            entry.countedInAggregates = nil
+            self:AddSessionHistoryEntryToAggregateStats(entry)
+        end
+    end
+    stats.backfilledFromHistory = true
+    if self.PruneSessionAggregateStats then self:PruneSessionAggregateStats() end
+    return true
+end
+
+local function AddAggregateBucketToTotal(total, bucket)
+    if type(total) ~= "table" or type(bucket) ~= "table" then return end
+    total.duration = total.duration + (tonumber(bucket.duration) or 0)
+    total.itemValueSilver = total.itemValueSilver + (tonumber(bucket.itemValueSilver) or 0)
+    total.rawGoldGainedSilver = total.rawGoldGainedSilver + (tonumber(bucket.rawGoldGainedSilver) or 0)
+    total.goldSpentSilver = total.goldSpentSilver + (tonumber(bucket.goldSpentSilver) or 0)
+    total.totalSilver = total.totalSilver + (tonumber(bucket.totalSilver) or 0)
+    total.sessions = total.sessions + (tonumber(bucket.sessions) or 0)
+    total.items = total.items + (tonumber(bucket.items) or 0)
+end
+
 function EL:GetSessionAggregateStats(range)
     range = tostring(range or "30")
     if range == "lifetime" then
@@ -2419,31 +2580,30 @@ function EL:GetSessionAggregateStats(range)
         return total
     end
 
-    if self.PruneSessionHistory then self:PruneSessionHistory() end
+    if self.PruneSessionAggregateStats then self:PruneSessionAggregateStats() end
     local now = time()
-    local cutoff
-    if range == "today" then
-        local t = date("*t", now)
-        cutoff = time({ year = t.year, month = t.month, day = t.day, hour = 0, min = 0, sec = 0, isdst = t.isdst })
-    elseif range == "week" then
-        cutoff = (self.GetWeeklyResetStartTime and self:GetWeeklyResetStartTime(now)) or (now - (7 * 86400))
-    else
-        cutoff = now - (30 * 86400)
-        range = "30"
-    end
-
+    local stats = self:GetSessionHistoryAggregateStats()
     local total = { duration = 0, itemValueSilver = 0, rawGoldGainedSilver = 0, goldSpentSilver = 0, totalSilver = 0, sessions = 0, items = 0 }
-    for _, entry in ipairs(self.db and self.db.sessionHistory or {}) do
-        if type(entry) == "table" and (tonumber(entry.timestamp) or 0) >= cutoff then
-            total.duration = total.duration + (tonumber(entry.duration) or 0)
-            total.itemValueSilver = total.itemValueSilver + (tonumber(entry.itemValueSilver) or 0)
-            total.rawGoldGainedSilver = total.rawGoldGainedSilver + (tonumber(entry.rawGoldGainedSilver) or 0)
-            total.goldSpentSilver = total.goldSpentSilver + (tonumber(entry.goldSpentSilver) or 0)
-            total.totalSilver = total.totalSilver + (tonumber(entry.totalSilver) or 0)
-            total.sessions = total.sessions + 1
-            total.items = total.items + (tonumber(entry.trackedItemQty) or tonumber(entry.items) or 0)
+
+    if range == "today" then
+        local key = self:GetSessionAggregateDateKey(now)
+        AddAggregateBucketToTotal(total, stats.daily and stats.daily[key])
+    elseif range == "week" then
+        local key = self:GetSessionAggregateWeekKey(now)
+        AddAggregateBucketToTotal(total, stats.weekly and stats.weekly[key])
+    else
+        range = "30"
+        local cutoffKey = self:GetSessionAggregateDateKey(now - (30 * 86400))
+        for key, bucket in pairs(stats.daily or {}) do
+            if tostring(key) >= cutoffKey then
+                AddAggregateBucketToTotal(total, bucket)
+            end
         end
     end
+
+    total.sessions = math.max(0, math.floor(tonumber(total.sessions) or 0))
+    total.items = math.max(0, math.floor(tonumber(total.items) or 0))
+    total.duration = math.max(0, math.floor(tonumber(total.duration) or 0))
     total.goldPerHourSilver = total.duration > 0 and math.floor((total.totalSilver * 3600) / total.duration) or 0
     return total
 end
