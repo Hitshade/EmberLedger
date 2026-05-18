@@ -1,4 +1,4 @@
-# 🔥 EmberLedger v1.18.5
+# 🔥 EmberLedger v1.18.9
 
 **EmberLedger** is a lightweight World of Warcraft profession utility addon focused on helping players manage profession alts, concentration, Artisan Moxie, Imbued Mulch, and gathering sessions without unnecessary complexity or UI clutter.
 
@@ -210,24 +210,27 @@ If you manage multiple profession characters and want a faster way to check read
 
 ***
 
-# 🤖 AI-Assisted Development
+# 🤖 AI Disclosure
 
-EmberLedger was developed with significant AI-assisted iteration and refinement during development and testing.
+EmberLedger was developed with significant AI assistance and iterative manual refinement/testing.
 
-All major design decisions, feature direction, testing, and long-term scope management were still guided manually.
+AI-assisted development was used primarily to accelerate:
 
-***
+* Prototyping
+* UI iteration
+* Cleanup passes
+* Feature implementation
+* Code review support
+* Release-note preparation
 
-# ❤️ Feedback & Support
+All major systems, release decisions, performance passes, visual polish decisions, and user-facing workflow adjustments were manually reviewed and repeatedly tested during development.
 
-Bug reports, suggestions, and feedback are always appreciated.
+The addon has gone through multiple cleanup and optimization passes focused on:
 
-## 🔗 Links
+* Reducing unnecessary refresh work
+* Minimizing hidden UI processing
+* Avoiding protected Blizzard UI behavior
+* Keeping the addon lightweight and maintainable
+* Preserving readable source files for future maintenance
 
-### CurseForge
-
-[https://www.curseforge.com/wow/addons/emberledger](https://www.curseforge.com/wow/addons/emberledger)
-
-### GitHub
-
-[https://github.com/Hitshade/EmberLedger](https://github.com/Hitshade/EmberLedger)
+Performance, usability, and practical in-game behavior have remained the primary priorities throughout development.

@@ -1,15 +1,48 @@
 # EmberLedger Changelog
 
-## v1.18.5
+## v1.18.9
 
-- Polished Main Window column option sections for better spacing.
-- Tightened Next and Cooldown Readiness descriptions so the bottom of the page no longer feels cramped.
-- Moved the CD column checkbox closer to its explanation.
+- Centralized Profession Cooldown store initialization through a shared Core helper used by both database normalization and the cooldown module.
+- Added a small cooldown store pruning pass to remove stale character entries and obsolete cooldown keys.
+- Tightened cooldown display and tooltip calls with protected fallbacks so main tracker rows remain stable if a cooldown helper errors.
+- Expanded Session window layout constants for remaining safe metric and close-button values.
+- Added cleanup for the profession-name cache on logout.
+- Updated module verification context labels for clearer post-load diagnostics.
+- No feature or database schema changes.
+
+---
+
+## v1.18.8
+
+- Fixed Profession Cooldown store helper calls that could error during cooldown refresh or row tooltip generation.
+- Restored the local cooldown store initializer used by `RefreshCurrentProfessionCooldowns` and `GetProfessionCooldownEntriesForCharacter`.
+- No behavior or layout changes.
+
+---
+
+## v1.18.7
+
+- Added explicit profession cooldown store normalization for older SavedVariables before first scan.
+- Added a defensive cooldown sort fallback so the dashboard remains stable if cooldown helpers are unavailable.
+- Ran module initialization verification after module load with the same one-time release warning behavior used after UI creation.
+- Added a short Profession Cooldown module storage-scope comment.
+- No behavior or layout changes.
+
+---
+
+## v1.18.6
+
+- Fixed a cooldown scan error caused by protected/secret numeric values returned by WoW cooldown APIs.
+- Added safe numeric conversion guards to Profession Cooldown scanning and tooltip display paths.
+- Cleaned the duplicate v1.18.5 changelog heading.
 
 ---
 
 ## v1.18.5
 
+- Polished Main Window column option sections for better spacing.
+- Tightened Next and Cooldown Readiness descriptions so the bottom of the page no longer feels cramped.
+- Moved the CD column checkbox closer to its explanation.
 - Moved the CD column toggle into its own Cooldown Readiness Column section in Options.
 - Added a short Options description explaining what the CD column tracks.
 - Moved the Next column toggle into its own Options section.

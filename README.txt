@@ -1,4 +1,4 @@
-# 🔥 EmberLedger v1.18.5
+# 🔥 EmberLedger v1.18.9
 
 **EmberLedger** is a lightweight World of Warcraft profession utility addon focused on helping players manage profession alts, concentration, Artisan Moxie, Imbued Mulch, and gathering sessions without unnecessary complexity or UI clutter.
 

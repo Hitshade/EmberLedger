@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.18.5"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.18.9"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -61,6 +61,16 @@ EL.UI_CONSTANTS = {
     SESSION_TOTAL_CARD_TOP = -34,
     SESSION_TOTAL_CARD_STEP_X = 219,
     SESSION_TOTAL_CARD_STEP_Y = 46,
+    SESSION_WINDOW_MIN_H = 150,
+    SESSION_WINDOW_DEFAULT_H = 180,
+    SESSION_METRIC_CONTENT_PAD = 20,
+    SESSION_METRIC_GAP = 8,
+    SESSION_METRIC_MIN_W = 62,
+    SESSION_METRIC_H = 38,
+    SESSION_CLOSE_SIZE = 18,
+    SESSION_CLOSE_RIGHT_PAD = -5,
+    SESSION_TITLE_LEFT_PAD = 10,
+    SESSION_TITLE_RIGHT_PAD = -8,
     PANEL_DEFAULT_VISIBLE_ROWS = 12,
     PANEL_EXPANDED_MIN_H = 300,
     PANEL_MAX_W = 900,
@@ -443,6 +453,13 @@ local function FormatCompactDuration(seconds, showSecondsUnderHour)
     return "<1m"
 end
 
+function EL:EnsureProfessionCooldownStore()
+    if type(self.db) ~= "table" then return nil end
+    self.db.resources = type(self.db.resources) == "table" and self.db.resources or {}
+    self.db.resources.professionCooldowns = type(self.db.resources.professionCooldowns) == "table" and self.db.resources.professionCooldowns or {}
+    return self.db.resources.professionCooldowns
+end
+
 function EL:NormalizeDatabaseSettings()
     if type(self.db) ~= "table" or type(self.db.settings) ~= "table" then return end
     local settings = self.db.settings
@@ -451,7 +468,9 @@ function EL:NormalizeDatabaseSettings()
     self.db.resources.concentration = type(self.db.resources.concentration) == "table" and self.db.resources.concentration or {}
     self.db.resources.mulch = type(self.db.resources.mulch) == "table" and self.db.resources.mulch or {}
     self.db.resources.professions = type(self.db.resources.professions) == "table" and self.db.resources.professions or {}
-    self.db.resources.professionCooldowns = type(self.db.resources.professionCooldowns) == "table" and self.db.resources.professionCooldowns or {}
+    -- Profession cooldowns are account resources keyed by character. Keep the table present for older SavedVariables even before the first scan.
+    if self.EnsureProfessionCooldownStore then self:EnsureProfessionCooldownStore() end
+    self._hasCooldownColumnData = nil
     self.db.resources.moxie = type(self.db.resources.moxie) == "table" and self.db.resources.moxie or {}
     self.db.stats = type(self.db.stats) == "table" and self.db.stats or {}
     self.db.stats.lifetime = type(self.db.stats.lifetime) == "table" and self.db.stats.lifetime or {}
@@ -839,6 +858,9 @@ EL.REQUIRED_MODULES = {
             "RefreshCurrentProfessionCooldowns",
             "GetProfessionCooldownDisplayText",
             "AddProfessionCooldownTooltipLines",
+            "GetProfessionCooldownSortValue",
+            "HasProfessionCooldownColumnData",
+            "PruneProfessionCooldownStore",
         },
     },
     SessionWindow = {
@@ -1207,6 +1229,14 @@ function EL:GetCleanProfessionName(name)
     return clean
 end
 
+function EL:ClearProfessionNameCache()
+    if wipe then
+        wipe(cleanProfessionNameCache)
+    else
+        for key in pairs(cleanProfessionNameCache) do cleanProfessionNameCache[key] = nil end
+    end
+end
+
 function EL:GetProfessionAbbreviation(data)
     if not data then return "N/A" end
     -- Prefer the explicit abbreviation table keyed by profession ID so known
@@ -1518,7 +1548,13 @@ function EL:GetDashboardSortValue(entry, key, now, cache)
     elseif key == "mulch" then
         return self:GetMulchSortValue(charKey, now)
     elseif key == "cooldown" then
-        return self.GetProfessionCooldownSortValue and self:GetProfessionCooldownSortValue(charKey, cache and cache.profEntries) or nil
+        if type(self.GetProfessionCooldownSortValue) ~= "function" then return nil end
+        local ok, value = pcall(self.GetProfessionCooldownSortValue, self, charKey, cache and cache.profEntries)
+        if ok then return value end
+        if self.db and self.db.settings and self.db.settings.debug and self.Print then
+            self:Print("Cooldown sort unavailable: " .. tostring(value))
+        end
+        return nil
     end
     return tostring(self:GetCharacterDisplayName(char, charKey)):lower()
 end
@@ -2992,15 +3028,16 @@ EL.frame:SetScript("OnEvent", function(_, event, ...)
         EL:GetCurrentCharacter()
         if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
         EL:ForEachModule("OnLoad")
-        if EL.VerifyModuleInitialization then EL:VerifyModuleInitialization("after OnLoad") end
+        if EL.VerifyModuleInitialization then EL:VerifyModuleInitialization("PostLoad", true) end
         if EL.CreateUI then EL:CreateUI() end
-        if EL.VerifyModuleInitialization then EL:VerifyModuleInitialization("after CreateUI", true) end
+        if EL.VerifyModuleInitialization then EL:VerifyModuleInitialization("PostCreateUI", true) end
         EL:ForEachModule("Refresh")
         EL:RequestUpdate()
     elseif event == "PLAYER_REGEN_ENABLED" then
         if EL.FlushCombatDeferredWork then EL:FlushCombatDeferredWork() end
     elseif event == "PLAYER_LOGOUT" then
         if EL.SaveCurrentSessionHistory then EL:SaveCurrentSessionHistory("logout") end
+        if EL.ClearProfessionNameCache then EL:ClearProfessionNameCache() end
     else
         if event == "PLAYER_ENTERING_WORLD" then
             if C_Timer and C_Timer.After then

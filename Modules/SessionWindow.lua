@@ -23,6 +23,16 @@ local SESSION_EXPANDED_H = UIC.SESSION_EXPANDED_H or 182
 local SESSION_WINDOW_PAD = UIC.SESSION_WINDOW_PAD or 6
 local PANEL_MIN_SCALE = UIC.PANEL_MIN_SCALE or 0.6
 local PANEL_MAX_SCALE = UIC.PANEL_MAX_SCALE or 1.4
+local SESSION_WINDOW_MIN_H = UIC.SESSION_WINDOW_MIN_H or 150
+local SESSION_WINDOW_DEFAULT_H = UIC.SESSION_WINDOW_DEFAULT_H or 180
+local SESSION_METRIC_CONTENT_PAD = UIC.SESSION_METRIC_CONTENT_PAD or 20
+local SESSION_METRIC_GAP = UIC.SESSION_METRIC_GAP or 8
+local SESSION_METRIC_MIN_W = UIC.SESSION_METRIC_MIN_W or 62
+local SESSION_METRIC_H = UIC.SESSION_METRIC_H or 38
+local SESSION_CLOSE_SIZE = UIC.SESSION_CLOSE_SIZE or 18
+local SESSION_CLOSE_RIGHT_PAD = UIC.SESSION_CLOSE_RIGHT_PAD or -5
+local SESSION_TITLE_LEFT_PAD = UIC.SESSION_TITLE_LEFT_PAD or 10
+local SESSION_TITLE_RIGHT_PAD = UIC.SESSION_TITLE_RIGHT_PAD or -8
 local BORDER_R, BORDER_G, BORDER_B = 0.82, 0.66, 0.34
 local BORDER_ALPHA_STRONG = 0.78
 
@@ -233,7 +243,7 @@ function EL:LayoutSessionWindow()
     local w = self.sessionWindow
     if not w or not w.sessionPanel then return end
     local settings = self.db and self.db.settings and self.db.settings.session or {}
-    local height = math.max(150, SESSION_EXPANDED_H + 16)
+    local height = math.max(SESSION_WINDOW_MIN_H, SESSION_EXPANDED_H + 16)
     local trackingWidth = (self.GetTrackingPanelMaxWidth and self:GetTrackingPanelMaxWidth()) or SESSION_MIN_W
     local savedWidth = tonumber(settings.width) or trackingWidth
     -- The Session window is not manually resizable, so keep it visually aligned
@@ -250,20 +260,20 @@ function EL:LayoutSessionWindow()
     w.sessionPanel:SetHeight(height - (SESSION_WINDOW_PAD * 2))
     ApplyFrameOpacity(w.sessionPanel, math.max(0.20, GetSessionOpacity() - 0.09))
     if w.sessionPanel.metrics then
-        local contentW = math.max(1, width - 20)
-        local gap = 8
-        local blockW = math.max(62, math.floor((contentW - (gap * 2)) / 3))
+        local contentW = math.max(1, width - SESSION_METRIC_CONTENT_PAD)
+        local gap = SESSION_METRIC_GAP
+        local blockW = math.max(SESSION_METRIC_MIN_W, math.floor((contentW - (gap * 2)) / 3))
         local totalW = (blockW * 3) + (gap * 2)
         local startX = math.floor((contentW - totalW) / 2)
         w.sessionPanel.metricTime:ClearAllPoints()
         w.sessionPanel.metricTime:SetPoint("TOPLEFT", w.sessionPanel.metrics, "TOPLEFT", startX, 0)
-        w.sessionPanel.metricTime:SetSize(blockW, 38)
+        w.sessionPanel.metricTime:SetSize(blockW, SESSION_METRIC_H)
         w.sessionPanel.metricValue:ClearAllPoints()
         w.sessionPanel.metricValue:SetPoint("LEFT", w.sessionPanel.metricTime, "RIGHT", gap, 0)
-        w.sessionPanel.metricValue:SetSize(blockW, 38)
+        w.sessionPanel.metricValue:SetSize(blockW, SESSION_METRIC_H)
         w.sessionPanel.metricRate:ClearAllPoints()
         w.sessionPanel.metricRate:SetPoint("LEFT", w.sessionPanel.metricValue, "RIGHT", gap, 0)
-        w.sessionPanel.metricRate:SetSize(blockW, 38)
+        w.sessionPanel.metricRate:SetSize(blockW, SESSION_METRIC_H)
         if w.sessionPanel.metricDiv1 then
             w.sessionPanel.metricDiv1:ClearAllPoints()
             w.sessionPanel.metricDiv1:SetPoint("TOP", w.sessionPanel.metrics, "TOPLEFT", startX + blockW + math.floor(gap / 2), 0)
@@ -283,7 +293,7 @@ function EL:CreateSessionWindow()
     local s = self.db.settings.session
     local frame = CreateFrame("Frame", "EmberLedgerSessionWindow", UIParent, "BackdropTemplate")
     self.sessionWindow = frame
-    frame:SetSize(math.max(SESSION_MIN_W, tonumber(s.width) or SESSION_MIN_W), math.max(150, tonumber(s.height) or 180))
+    frame:SetSize(math.max(SESSION_MIN_W, tonumber(s.width) or SESSION_MIN_W), math.max(SESSION_WINDOW_MIN_H, tonumber(s.height) or SESSION_WINDOW_DEFAULT_H))
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
@@ -321,15 +331,15 @@ function EL:CreateSessionWindow()
 
     self:CreateSessionPanel(frame)
     frame.close = CreateFrame("Button", nil, frame.sessionPanel.header, "UIPanelCloseButton")
-    frame.close:SetSize(18, 18)
-    frame.close:SetPoint("RIGHT", frame.sessionPanel.header, "RIGHT", -5, 0)
+    frame.close:SetSize(SESSION_CLOSE_SIZE, SESSION_CLOSE_SIZE)
+    frame.close:SetPoint("RIGHT", frame.sessionPanel.header, "RIGHT", SESSION_CLOSE_RIGHT_PAD, 0)
     frame.close:SetFrameLevel((frame.sessionPanel.header:GetFrameLevel() or 1) + 10)
     frame.close:SetScript("OnClick", function() frame:Hide() end)
 
     if frame.sessionPanel and frame.sessionPanel.title then
         frame.sessionPanel.title:ClearAllPoints()
-        frame.sessionPanel.title:SetPoint("LEFT", frame.sessionPanel.header, "LEFT", 10, 0)
-        frame.sessionPanel.title:SetPoint("RIGHT", frame.close, "LEFT", -8, 0)
+        frame.sessionPanel.title:SetPoint("LEFT", frame.sessionPanel.header, "LEFT", SESSION_TITLE_LEFT_PAD, 0)
+        frame.sessionPanel.title:SetPoint("RIGHT", frame.close, "LEFT", SESSION_TITLE_RIGHT_PAD, 0)
     end
 
     SetFramePointFromDB(frame, s)

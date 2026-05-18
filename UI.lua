@@ -1467,7 +1467,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.18.5"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.18.9"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -2053,7 +2053,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.18.5"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.18.9"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -3878,8 +3878,13 @@ function EL:RefreshPanel()
         local profData2, concData2 = slots[2] and slots[2].prof or nil, slots[2] and slots[2].conc or nil
         local moxieEntries = self:GetMoxieEntriesForCharacter(charKey, profEntries)
         local cooldownValue, cooldownSummary = "-", nil
-        if self.GetProfessionCooldownDisplayText then
-            cooldownValue, cooldownSummary = self:GetProfessionCooldownDisplayText(charKey, profEntries)
+        if type(self.GetProfessionCooldownDisplayText) == "function" then
+            local ok, value, summary = pcall(self.GetProfessionCooldownDisplayText, self, charKey, profEntries)
+            if ok then
+                cooldownValue, cooldownSummary = value or "-", summary
+            elseif self.db and self.db.settings and self.db.settings.debug and self.Print then
+                self:Print("Cooldown display unavailable: " .. tostring(value))
+            end
         end
         local mulchData = self.db and self.db.resources and self.db.resources.mulch and self.db.resources.mulch[charKey]
         local profValue1 = "N/A"
@@ -4392,8 +4397,11 @@ function EL:ShowRowTooltip(row)
         GameTooltip:AddLine("No professions tracked yet.", 0.7, 0.7, 0.7)
     end
 
-    if self.AddProfessionCooldownTooltipLines then
-        self:AddProfessionCooldownTooltipLines(GameTooltip, row.charKey, row.profEntries)
+    if type(self.AddProfessionCooldownTooltipLines) == "function" then
+        local ok, err = pcall(self.AddProfessionCooldownTooltipLines, self, GameTooltip, row.charKey, row.profEntries)
+        if not ok and self.db and self.db.settings and self.db.settings.debug and self.Print then
+            self:Print("Cooldown tooltip unavailable: " .. tostring(err))
+        end
     end
 
     GameTooltip:AddLine(" ")

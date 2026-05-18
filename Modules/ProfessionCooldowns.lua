@@ -4,6 +4,8 @@ if not EL then return end
 -- Curated profession cooldown readiness tracking.
 -- Scope: compact alt-readiness signals for high-value profession cooldown crafts.
 -- Not intended to become recipe accounting, reagent tracking, or auction analysis.
+-- Stored data is lightweight per-character cooldown state and may be rebuilt from profession scans.
+-- Store setup is centralized through EL:EnsureProfessionCooldownStore so Core and this module share the same path.
 
 local module = {}
 
@@ -87,9 +89,11 @@ EL.PROFESSION_COOLDOWN_DEFS = EL.PROFESSION_COOLDOWN_DEFS or {
 
 local COOLDOWN_DEFS_BY_PROFESSION = {}
 local COOLDOWN_DEFS_BY_KEY = {}
+local VALID_COOLDOWN_DEF_KEYS = {}
 for _, def in ipairs(EL.PROFESSION_COOLDOWN_DEFS) do
     if def and def.key then
         COOLDOWN_DEFS_BY_KEY[def.key] = def
+            VALID_COOLDOWN_DEF_KEYS[def.key] = true
         if def.professionID then
             COOLDOWN_DEFS_BY_PROFESSION[def.professionID] = COOLDOWN_DEFS_BY_PROFESSION[def.professionID] or {}
             table.insert(COOLDOWN_DEFS_BY_PROFESSION[def.professionID], def)
@@ -106,6 +110,23 @@ local function SafeCall(fn, ...)
     local ok, a, b, c, d, e = pcall(fn, ...)
     if ok then return a, b, c, d, e end
     return nil
+end
+
+
+local function EnsureProfessionCooldownStore()
+    if EL.EnsureProfessionCooldownStore then
+        return EL:EnsureProfessionCooldownStore()
+    end
+    if not EL.db then return nil end
+    EL.db.resources = type(EL.db.resources) == "table" and EL.db.resources or {}
+    EL.db.resources.professionCooldowns = type(EL.db.resources.professionCooldowns) == "table" and EL.db.resources.professionCooldowns or {}
+    return EL.db.resources.professionCooldowns
+end
+
+local function SafeNumber(value, fallback)
+    local ok, n = pcall(tonumber, value)
+    if ok and n ~= nil then return n end
+    return fallback
 end
 
 local function GetSpellName(spellID)
@@ -144,18 +165,18 @@ local function GetSpellCooldownData(spellID)
     if C_Spell and C_Spell.GetSpellCooldown then
         local info = SafeCall(C_Spell.GetSpellCooldown, spellID)
         if type(info) == "table" then
-            startTime = tonumber(info.startTime or info.start or 0) or 0
-            duration = tonumber(info.duration or 0) or 0
+            startTime = SafeNumber(info.startTime or info.start, 0)
+            duration = SafeNumber(info.duration, 0)
             isEnabled = info.isEnabled == false and 0 or 1
-            modRate = tonumber(info.modRate or 1) or 1
+            modRate = SafeNumber(info.modRate, 1)
             return startTime, duration, isEnabled, modRate
         end
     end
     local a, b, c, d = SafeCall(GetSpellCooldown, spellID)
-    startTime = tonumber(a or 0) or 0
-    duration = tonumber(b or 0) or 0
-    isEnabled = c == nil and 1 or c
-    modRate = tonumber(d or 1) or 1
+    startTime = SafeNumber(a, 0)
+    duration = SafeNumber(b, 0)
+    isEnabled = SafeNumber(c, 1)
+    modRate = SafeNumber(d, 1)
     return startTime, duration, isEnabled, modRate
 end
 
@@ -163,18 +184,18 @@ local function GetSpellChargeData(spellID)
     if C_Spell and C_Spell.GetSpellCharges then
         local info = SafeCall(C_Spell.GetSpellCharges, spellID)
         if type(info) == "table" then
-            return tonumber(info.currentCharges), tonumber(info.maxCharges), tonumber(info.cooldownStartTime or info.startTime), tonumber(info.cooldownDuration or info.duration), tonumber(info.chargeModRate or info.modRate or 1)
+            return SafeNumber(info.currentCharges), SafeNumber(info.maxCharges), SafeNumber(info.cooldownStartTime or info.startTime), SafeNumber(info.cooldownDuration or info.duration), SafeNumber(info.chargeModRate or info.modRate, 1)
         end
     end
     local a, b, c, d, e = SafeCall(GetSpellCharges, spellID)
-    return tonumber(a), tonumber(b), tonumber(c), tonumber(d), tonumber(e or 1)
+    return SafeNumber(a), SafeNumber(b), SafeNumber(c), SafeNumber(d), SafeNumber(e, 1)
 end
 
 local function CharacterHasProfession(professions, professionID)
-    professionID = tonumber(professionID)
+    professionID = SafeNumber(professionID)
     if not professionID then return false end
     for _, prof in ipairs(professions or {}) do
-        local id = tonumber(prof and (prof.professionID or prof.skillLineID or prof.skillLine))
+        local id = SafeNumber(prof and (prof.professionID or prof.skillLineID or prof.skillLine))
         if id == professionID then return true end
     end
     return false
@@ -203,14 +224,14 @@ local function BuildCooldownRecord(def)
     local ready = false
     local remaining = 0
     if maxCharges and maxCharges > 0 then
-        currentCharges = math.max(0, math.min(maxCharges, tonumber(currentCharges) or 0))
+        currentCharges = math.max(0, math.min(maxCharges, SafeNumber(currentCharges, 0)))
         if currentCharges > 0 then ready = true end
         if currentCharges < maxCharges and chargeStart and chargeDuration and chargeDuration > 0 then
             remaining = math.max(0, (chargeStart + chargeDuration) - now)
         end
     else
-        duration = tonumber(duration) or 0
-        startTime = tonumber(startTime) or 0
+        duration = SafeNumber(duration, 0)
+        startTime = SafeNumber(startTime, 0)
         if isEnabled == 0 then
             ready = false
         elseif duration <= 1 or startTime <= 0 then
@@ -242,14 +263,35 @@ local function BuildCooldownRecord(def)
     }
 end
 
+function EL:PruneProfessionCooldownStore()
+    local store = EnsureProfessionCooldownStore()
+    if type(store) ~= "table" then return false end
+    local chars = self.db and self.db.characters or {}
+    for charKey, records in pairs(store) do
+        if type(charKey) == "string" and type(records) == "table" then
+            if type(chars) == "table" and not chars[charKey] then
+                store[charKey] = nil
+            else
+                for key in pairs(records) do
+                    if key ~= "_lastUpdated" and not VALID_COOLDOWN_DEF_KEYS[key] then
+                        records[key] = nil
+                    end
+                end
+            end
+        end
+    end
+    return true
+end
+
 function EL:GetProfessionCooldownDefinitionsForProfession(professionID)
-    return COOLDOWN_DEFS_BY_PROFESSION[tonumber(professionID)] or {}
+    return COOLDOWN_DEFS_BY_PROFESSION[SafeNumber(professionID)] or {}
 end
 
 function EL:RefreshCurrentProfessionCooldowns()
     self._hasCooldownColumnData = nil
-    if not (self.db and self.db.resources) then return false end
-    self.db.resources.professionCooldowns = type(self.db.resources.professionCooldowns) == "table" and self.db.resources.professionCooldowns or {}
+    local cooldownStore = EnsureProfessionCooldownStore()
+    if not cooldownStore then return false end
+    if self.PruneProfessionCooldownStore then self:PruneProfessionCooldownStore() end
 
     local char = self:GetCurrentCharacter()
     local charKey = char and char.key or (self.GetCharacterKey and self:GetCharacterKey())
@@ -286,14 +328,15 @@ function EL:RefreshCurrentProfessionCooldowns()
     end
 
     records._lastUpdated = Now()
-    self.db.resources.professionCooldowns[charKey] = records
+    cooldownStore[charKey] = records
     return true
 end
 
 function EL:GetProfessionCooldownEntriesForCharacter(charKey, professions)
     local results = {}
     if not charKey then return results end
-    local stored = self.db and self.db.resources and self.db.resources.professionCooldowns and self.db.resources.professionCooldowns[charKey]
+    local store = EnsureProfessionCooldownStore()
+    local stored = store and store[charKey]
     local included = {}
 
     if type(stored) == "table" then
@@ -318,7 +361,7 @@ function EL:GetProfessionCooldownEntriesForCharacter(charKey, professions)
     -- If a character has a supported profession but no scanned recipe data yet,
     -- include an Unknown placeholder so the tooltip explains why the CD column exists.
     for _, prof in ipairs(professions or self:GetProfessionEntriesForCharacter(charKey) or {}) do
-        local profID = tonumber(prof and (prof.professionID or prof.skillLineID or prof.skillLine))
+        local profID = SafeNumber(prof and (prof.professionID or prof.skillLineID or prof.skillLine))
         for _, def in ipairs(COOLDOWN_DEFS_BY_PROFESSION[profID] or {}) do
             if not included[def.key] then
                 table.insert(results, {
@@ -354,7 +397,7 @@ function EL:GetProfessionCooldownSummary(charKey, professions)
             ready = ready + 1
         else
             recovering = recovering + 1
-            local remaining = tonumber(entry.remaining) or 0
+            local remaining = SafeNumber(entry.remaining, 0)
             if remaining > 0 and (not nextRemaining or remaining < nextRemaining) then
                 nextRemaining = remaining
             end
@@ -372,7 +415,7 @@ function EL:GetProfessionCooldownSummary(charKey, professions)
 end
 
 local function FormatCooldownColumnTimer(seconds)
-    local secs = tonumber(seconds) or 0
+    local secs = SafeNumber(seconds, 0)
     if secs >= 3600 then
         return tostring(math.ceil(secs / 3600)) .. "h"
     end
@@ -454,20 +497,22 @@ function EL:AddProfessionCooldownTooltipLines(tooltip, charKey, professions)
         elseif entry.maxCharges and entry.maxCharges > 0 then
             local charges = tostring(entry.currentCharges or 0) .. "/" .. tostring(entry.maxCharges)
             local right = charges
-            if (tonumber(entry.currentCharges) or 0) <= 0 and (tonumber(entry.remaining) or 0) > 0 then
+            if (SafeNumber(entry.currentCharges, 0)) <= 0 and (SafeNumber(entry.remaining, 0)) > 0 then
                 right = (self.FormatCountdown and self:FormatCountdown(entry.remaining) or charges)
-            elseif (tonumber(entry.currentCharges) or 0) > 0 then
+            elseif (SafeNumber(entry.currentCharges, 0)) > 0 then
                 right = charges .. " ready"
             end
             tooltip:AddDoubleLine(label, right, 0.72, 0.72, 0.72, entry.ready and 0.35 or 1.00, entry.ready and 1.00 or 0.82, entry.ready and 0.45 or 0.32)
         else
-            local right = entry.ready and "READY" or ((tonumber(entry.remaining) or 0) > 0 and (self.FormatCountdown and self:FormatCountdown(entry.remaining) or tostring(entry.remaining)) or "Unknown")
+            local right = entry.ready and "READY" or ((SafeNumber(entry.remaining, 0)) > 0 and (self.FormatCountdown and self:FormatCountdown(entry.remaining) or tostring(entry.remaining)) or "Unknown")
             tooltip:AddDoubleLine(label, right, 0.72, 0.72, 0.72, entry.ready and 0.35 or 1.00, entry.ready and 1.00 or 0.82, entry.ready and 0.45 or 0.32)
         end
     end
 end
 
 function module:OnLoad()
+    if EL.EnsureProfessionCooldownStore then EL:EnsureProfessionCooldownStore() end
+    if EL.PruneProfessionCooldownStore then EL:PruneProfessionCooldownStore() end
     if EL.RefreshCurrentProfessionCooldowns then EL:RefreshCurrentProfessionCooldowns() end
 end
 
