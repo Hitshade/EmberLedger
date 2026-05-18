@@ -1,4 +1,4 @@
-# 🔥 EmberLedger v1.17.3
+# 🔥 EmberLedger v1.18.5
 
 **EmberLedger** is a lightweight World of Warcraft profession utility addon focused on helping players manage profession alts, concentration, Artisan Moxie, Imbued Mulch, and gathering sessions without unnecessary complexity or UI clutter.
 
@@ -32,6 +32,7 @@ The main tracking window can display:
 * Artisan Moxie
 * Next ready forecast
 * Imbued Mulch
+* Profession Cooldown readiness (`CD`)
 
 If a character only has one concentration-tracked profession, EmberLedger places it in the first profession/concentration slot instead of leaving awkward empty gaps.
 
@@ -56,6 +57,8 @@ This makes it easier to identify which characters have enough Moxie to spend wit
 ## 🌱 Imbued Mulch Tracking
 
 EmberLedger tracks **Imbued Mulch** readiness across characters and includes it directly inside the main profession tracker.
+
+EmberLedger can also show a compact **CD** readiness column for supported profession cooldown crafts, with a small table indicator and detailed tooltip breakdown for Alchemy and Tailoring cooldowns.
 
 * Tracks Imbued Mulch cooldown readiness
 * Displays remaining time until ready
@@ -207,27 +210,24 @@ If you manage multiple profession characters and want a faster way to check read
 
 ***
 
-# 🤖 AI Disclosure
+# 🤖 AI-Assisted Development
 
-EmberLedger was developed with significant AI assistance and iterative manual refinement/testing.
+EmberLedger was developed with significant AI-assisted iteration and refinement during development and testing.
 
-AI-assisted development was used primarily to accelerate:
+All major design decisions, feature direction, testing, and long-term scope management were still guided manually.
 
-* Prototyping
-* UI iteration
-* Cleanup passes
-* Feature implementation
-* Code review support
-* Release-note preparation
+***
 
-All major systems, release decisions, performance passes, visual polish decisions, and user-facing workflow adjustments were manually reviewed and repeatedly tested during development.
+# ❤️ Feedback & Support
 
-The addon has gone through multiple cleanup and optimization passes focused on:
+Bug reports, suggestions, and feedback are always appreciated.
 
-* Reducing unnecessary refresh work
-* Minimizing hidden UI processing
-* Avoiding protected Blizzard UI behavior
-* Keeping the addon lightweight and maintainable
-* Preserving readable source files for future maintenance
+## 🔗 Links
 
-Performance, usability, and practical in-game behavior have remained the primary priorities throughout development.
+### CurseForge
+
+[https://www.curseforge.com/wow/addons/emberledger](https://www.curseforge.com/wow/addons/emberledger)
+
+### GitHub
+
+[https://github.com/Hitshade/EmberLedger](https://github.com/Hitshade/EmberLedger)

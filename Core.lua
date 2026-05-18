@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.17.3"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.18.5"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -69,7 +69,7 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_SCALE = 1.4,
 }
 
-EL.DB_VERSION = 11500
+EL.DB_VERSION = 11501
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -114,6 +114,7 @@ local defaults = {
         mulch = {},
         professions = {},
         moxie = {},
+        professionCooldowns = {},
     },
     stats = {
         lifetime = {
@@ -218,6 +219,7 @@ local defaults = {
             showConcentration2Column = true,
             showMoxieColumn = false,
             showMulchColumn = true,
+            showCooldownColumn = true,
             showForecastColumn = false,
             showCharacterRealm = true,
             attentionOnly = false,
@@ -449,6 +451,7 @@ function EL:NormalizeDatabaseSettings()
     self.db.resources.concentration = type(self.db.resources.concentration) == "table" and self.db.resources.concentration or {}
     self.db.resources.mulch = type(self.db.resources.mulch) == "table" and self.db.resources.mulch or {}
     self.db.resources.professions = type(self.db.resources.professions) == "table" and self.db.resources.professions or {}
+    self.db.resources.professionCooldowns = type(self.db.resources.professionCooldowns) == "table" and self.db.resources.professionCooldowns or {}
     self.db.resources.moxie = type(self.db.resources.moxie) == "table" and self.db.resources.moxie or {}
     self.db.stats = type(self.db.stats) == "table" and self.db.stats or {}
     self.db.stats.lifetime = type(self.db.stats.lifetime) == "table" and self.db.stats.lifetime or {}
@@ -513,6 +516,7 @@ function EL:NormalizeDatabaseSettings()
     if settings.display.showConcentration2Column == nil then settings.display.showConcentration2Column = true end
     if settings.display.showMoxieColumn == nil then settings.display.showMoxieColumn = false end
     if settings.display.showMulchColumn == nil then settings.display.showMulchColumn = true end
+    if settings.display.showCooldownColumn == nil then settings.display.showCooldownColumn = true end
     if settings.display.showForecastColumn == nil then settings.display.showForecastColumn = false end
     if settings.display.showCharacterRealm == nil then settings.display.showCharacterRealm = true end
     if settings.display.attentionOnly == nil then settings.display.attentionOnly = false end
@@ -530,6 +534,7 @@ function EL:NormalizeDatabaseSettings()
     settings.display.showConcentration2Column = settings.display.showConcentration2Column ~= false
     settings.display.showMoxieColumn = settings.display.showMoxieColumn == true
     settings.display.showMulchColumn = settings.display.showMulchColumn ~= false
+    settings.display.showCooldownColumn = settings.display.showCooldownColumn ~= false
     settings.display.showForecastColumn = settings.display.showForecastColumn == true
     settings.display.showCharacterRealm = settings.display.showCharacterRealm ~= false
     settings.display.attentionOnly = settings.display.attentionOnly == true
@@ -538,7 +543,7 @@ function EL:NormalizeDatabaseSettings()
     settings.display.showPinnedFirst = settings.display.showPinnedFirst ~= false
     settings.display.showProfessionColumn = settings.display.showProfession1Column
     settings.display.showConcentrationColumn = settings.display.showConcentration1Column
-    if settings.display.showProfession1Column == false and settings.display.showConcentration1Column == false and settings.display.showProfession2Column == false and settings.display.showConcentration2Column == false and settings.display.showMoxieColumn == false and settings.display.showMulchColumn == false and settings.display.showForecastColumn == false then
+    if settings.display.showProfession1Column == false and settings.display.showConcentration1Column == false and settings.display.showProfession2Column == false and settings.display.showConcentration2Column == false and settings.display.showMoxieColumn == false and settings.display.showMulchColumn == false and settings.display.showCooldownColumn == false and settings.display.showForecastColumn == false then
         settings.display.showProfession1Column = true
         settings.display.showProfessionColumn = true
     end
@@ -828,6 +833,14 @@ EL.REQUIRED_MODULES = {
     mulch = { registered = true },
     session = { registered = true },
     Minimap = { registered = true },
+    ProfessionCooldowns = {
+        registered = true,
+        functions = {
+            "RefreshCurrentProfessionCooldowns",
+            "GetProfessionCooldownDisplayText",
+            "AddProfessionCooldownTooltipLines",
+        },
+    },
     SessionWindow = {
         registered = true,
         functions = {
@@ -1504,6 +1517,8 @@ function EL:GetDashboardSortValue(entry, key, now, cache)
         return self:GetMoxieSortValue(charKey, cache and cache.moxieEntries)
     elseif key == "mulch" then
         return self:GetMulchSortValue(charKey, now)
+    elseif key == "cooldown" then
+        return self.GetProfessionCooldownSortValue and self:GetProfessionCooldownSortValue(charKey, cache and cache.profEntries) or nil
     end
     return tostring(self:GetCharacterDisplayName(char, charKey)):lower()
 end

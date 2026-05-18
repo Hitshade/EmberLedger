@@ -1,4 +1,4 @@
-# 🔥 EmberLedger v1.17.3
+# 🔥 EmberLedger v1.18.5
 
 **EmberLedger** is a lightweight World of Warcraft profession utility addon focused on helping players manage profession alts, concentration, Artisan Moxie, Imbued Mulch, and gathering sessions without unnecessary complexity or UI clutter.
 
@@ -32,6 +32,7 @@ The main tracking window can display:
 * Artisan Moxie
 * Next ready forecast
 * Imbued Mulch
+* Profession Cooldown readiness (`CD`)
 
 If a character only has one concentration-tracked profession, EmberLedger places it in the first profession/concentration slot instead of leaving awkward empty gaps.
 
@@ -56,6 +57,8 @@ This makes it easier to identify which characters have enough Moxie to spend wit
 ## 🌱 Imbued Mulch Tracking
 
 EmberLedger tracks **Imbued Mulch** readiness across characters and includes it directly inside the main profession tracker.
+
+EmberLedger can also show a compact **CD** readiness column for supported profession cooldown crafts, with a small table indicator and detailed tooltip breakdown for Alchemy and Tailoring cooldowns.
 
 * Tracks Imbued Mulch cooldown readiness
 * Displays remaining time until ready

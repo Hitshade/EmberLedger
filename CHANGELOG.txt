@@ -1,5 +1,61 @@
 # EmberLedger Changelog
 
+## v1.18.5
+
+- Polished Main Window column option sections for better spacing.
+- Tightened Next and Cooldown Readiness descriptions so the bottom of the page no longer feels cramped.
+- Moved the CD column checkbox closer to its explanation.
+
+---
+
+## v1.18.5
+
+- Moved the CD column toggle into its own Cooldown Readiness Column section in Options.
+- Added a short Options description explaining what the CD column tracks.
+- Moved the Next column toggle into its own Options section.
+- Added a short Options description explaining that Next shows concentration readiness forecasting.
+- No behavior changes.
+
+---
+
+## v1.18.3
+
+- Improved Profession Cooldown tooltip clarity for characters that have the relevant profession but have not learned a supported cooldown recipe.
+- Added an explicit `Unlearned` state so unlearned cooldown recipes are no longer shown as `Open profession to scan`.
+- Reserved `Open profession to scan` for genuinely unknown or unscanned cooldown data.
+
+---
+
+## v1.18.2
+
+- Polished the Profession Cooldown `CD` column countdown display so sub-hour timers use compact `Xm` / `<1m` values instead of longer countdown text.
+- Kept full cooldown timing detail in tooltips while preserving the narrow main tracker column.
+- Added short README coverage for Profession Cooldown readiness tracking.
+
+---
+
+## v1.18.1
+
+- Stabilized Profession Cooldown readiness tracking after the initial v1.18.0 implementation.
+- Removed duplicate login cooldown scans by letting the module refresh path handle PLAYER_ENTERING_WORLD.
+- Cached cooldown-column availability so the main tracker no longer scans all characters every refresh.
+- Hoisted cooldown entry sorting to a named helper to avoid repeated closure allocations.
+- Shortened hour-based CD column countdowns to compact `Xh` display while keeping full timers in tooltips.
+- Tightened recipe-known detection so unlearned browsable recipes are not treated as ready cooldowns.
+- Bumped the SavedVariables schema version for the new profession cooldown settings/resources.
+
+---
+
+## v1.18.0
+
+- Added Profession Cooldown readiness tracking for a curated set of Alchemy and Tailoring cooldown crafts.
+- Added a compact optional `CD` column to the main tracker with tooltip details for supported cooldowns.
+- Added `Modules/ProfessionCooldowns.lua` to keep cooldown scanning and display summary logic separated from the main UI.
+- Tracked cooldowns include Wondrous Synergist, Bouquet of Herbs, Box of Rocks, School of Gems, Dawnweave Bolt, Duskweave Bolt, Arcanoweave Bolt, and Sunfire Silk Bolt.
+- Added profession cooldown module initialization checks and saved cooldown data under existing SavedVariables resources.
+
+---
+
 ## v1.17.3
 
 - Fixed Action Bar spell-variant icon resolution so zone-specific profession utility spells use the resolved active spell icon.

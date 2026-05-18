@@ -104,7 +104,7 @@ end
 local function ApplyTrackingTextStyle(row)
     if not row then return end
     local fontObject = IsCompactModeEnabled() and GameFontHighlightSmall or GameFontHighlight
-    for _, fs in ipairs({row.name, row.prof1, row.conc1, row.prof2, row.conc2, row.moxie, row.moxieLeft, row.moxieSep, row.moxieRight, row.forecast, row.mulch}) do
+    for _, fs in ipairs({row.name, row.prof1, row.conc1, row.prof2, row.conc2, row.moxie, row.moxieLeft, row.moxieSep, row.moxieRight, row.forecast, row.cooldown, row.mulch}) do
         if fs and fs.SetFontObject then fs:SetFontObject(fontObject) end
     end
 end
@@ -352,6 +352,7 @@ local HEADER_LABELS = {
     conc2 = "Conc 2",
     moxie = "Moxie",
     forecast = "Next",
+    cooldown = "CD",
     mulch = "Mulch",
 }
 
@@ -363,6 +364,7 @@ local TRACKING_COLUMN_DEFS = {
     { key = "conc2", label = "Conc 2", width = 86, minWidth = 86, compactWidth = 68, compactMinWidth = 68, justify = "RIGHT", sortKey = "conc2", setting = "showConcentration2Column", toggleLabel = "Conc 2 column", secondary = true },
     { key = "forecast", label = "Next", width = 84, minWidth = 72, compactWidth = 72, compactMinWidth = 64, justify = "RIGHT", sortKey = "forecast", setting = "showForecastColumn", toggleLabel = "Next column" },
     { key = "moxie", label = "Moxie", width = 82, minWidth = 78, compactWidth = 70, compactMinWidth = 64, justify = "RIGHT", sortKey = "moxie", setting = "showMoxieColumn", toggleLabel = "Moxie column" },
+    { key = "cooldown", label = "CD", width = 42, minWidth = 36, compactWidth = 34, compactMinWidth = 30, justify = "CENTER", sortKey = "cooldown", setting = "showCooldownColumn", toggleLabel = "Cooldown readiness column", autoHide = true },
     { key = "mulch", label = "Mulch", width = 68, minWidth = 64, compactWidth = 60, compactMinWidth = 58, justify = "RIGHT", sortKey = "mulch", setting = "showMulchColumn", toggleLabel = "Mulch column" },
 }
 
@@ -414,6 +416,7 @@ local TRACKING_COLUMN_DEFAULT_SETTINGS = {
     showConcentration2Column = true,
     showMoxieColumn = false,
     showMulchColumn = true,
+    showCooldownColumn = true,
     showForecastColumn = false,
     showCharacterRealm = true,
     showProfessionColumn = true,
@@ -434,6 +437,7 @@ function EL:IsTrackingColumnVisible(key)
     local def = TRACKING_COLUMN_BY_KEY[key]
     if not def or not def.setting then return false end
     if def.secondary and not self:HasSecondaryConcentrationColumnData() then return false end
+    if def.key == "cooldown" and def.autoHide and self.HasProfessionCooldownColumnData and not self:HasProfessionCooldownColumnData() then return false end
     local display = self:GetTrackingColumnSettings()
     return display[def.setting] ~= false
 end
@@ -521,6 +525,7 @@ local function GetColumnLayout(width)
     layout.conc2X, layout.conc2W = layout.conc2X or 0, layout.conc2W or 1
     layout.moxieX, layout.moxieW = layout.moxieX or 0, layout.moxieW or 1
     layout.forecastX, layout.forecastW = layout.forecastX or 0, layout.forecastW or 1
+    layout.cooldownX, layout.cooldownW = layout.cooldownX or 0, layout.cooldownW or 1
     layout.mulchX, layout.mulchW = layout.mulchX or 0, layout.mulchW or 1
     return layout
 end
@@ -1202,7 +1207,7 @@ function EL:CreateSettingsPanel(parent)
     end)
     f.moxieThresholdSlider:SetPoint("TOPLEFT", 12, -78)
 
-    f.trackingColumnsSection = MakeSettingsSection(f, "Main Window Columns", contentX, -766, contentW, 148)
+    f.trackingColumnsSection = MakeSettingsSection(f, "Main Window Columns", contentX, -766, contentW, 122)
     local trackingColumnLeftX = 12
     local trackingColumnRightX = 250
     f.toggleProf1Column = MakeSettingsCheck(f.trackingColumnsSection, "Show Prof 1 column", function() EL:ToggleTrackingColumn("prof1") end)
@@ -1215,10 +1220,31 @@ function EL:CreateSettingsPanel(parent)
     f.toggleConc2Column:SetPoint("TOPLEFT", trackingColumnRightX, -60)
     f.toggleMoxieColumn = MakeSettingsCheck(f.trackingColumnsSection, "Show Moxie column", function() EL:ToggleTrackingColumn("moxie") end)
     f.toggleMoxieColumn:SetPoint("TOPLEFT", trackingColumnLeftX, -86)
-    f.toggleForecastColumn = MakeSettingsCheck(f.trackingColumnsSection, "Show Next column", function() EL:ToggleTrackingColumn("forecast") end)
-    f.toggleForecastColumn:SetPoint("TOPLEFT", trackingColumnRightX, -86)
     f.toggleMulchColumn = MakeSettingsCheck(f.trackingColumnsSection, "Show Imbued Mulch column", function() EL:ToggleTrackingColumn("mulch") end)
-    f.toggleMulchColumn:SetPoint("TOPLEFT", trackingColumnLeftX, -112)
+    f.toggleMulchColumn:SetPoint("TOPLEFT", trackingColumnRightX, -86)
+
+    f.nextColumnSection = MakeSettingsSection(f, "Next Column", contentX, -926, contentW, 88)
+    f.nextColumnDesc = f.nextColumnSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.nextColumnDesc:SetPoint("TOPLEFT", 12, -36)
+    f.nextColumnDesc:SetPoint("TOPRIGHT", -12, -36)
+    f.nextColumnDesc:SetJustifyH("LEFT")
+    if f.nextColumnDesc.SetWordWrap then f.nextColumnDesc:SetWordWrap(true) end
+    f.nextColumnDesc:SetTextColor(0.82, 0.82, 0.76)
+    f.nextColumnDesc:SetText("Shows the next concentration readiness forecast based on your threshold and regeneration timing.")
+    f.toggleForecastColumn = MakeSettingsCheck(f.nextColumnSection, "Show Next column", function() EL:ToggleTrackingColumn("forecast") end)
+    f.toggleForecastColumn:SetPoint("TOPLEFT", 12, -62)
+
+    f.cooldownColumnSection = MakeSettingsSection(f, "Cooldown Readiness Column", contentX, -1026, contentW, 94)
+    f.cooldownColumnDesc = f.cooldownColumnSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.cooldownColumnDesc:SetPoint("TOPLEFT", 12, -36)
+    f.cooldownColumnDesc:SetPoint("TOPRIGHT", -12, -36)
+    f.cooldownColumnDesc:SetJustifyH("LEFT")
+    if f.cooldownColumnDesc.SetWordWrap then f.cooldownColumnDesc:SetWordWrap(true) end
+    f.cooldownColumnDesc:SetTextColor(0.82, 0.82, 0.76)
+    f.cooldownColumnDesc:SetText("Shows readiness for supported profession cooldown crafts. Hover character rows for details and timers.")
+    f.toggleCooldownColumn = MakeSettingsCheck(f.cooldownColumnSection, "Show CD column", function() EL:ToggleTrackingColumn("cooldown") end)
+    f.toggleCooldownColumn:SetPoint("TOPLEFT", 12, -68)
+    SetSettingsTooltip(f.toggleCooldownColumn, "Profession cooldown readiness", {"Adds a compact CD column for supported profession cooldown crafts.", "Details appear in the row tooltip."})
     f.launcherSection = MakeSettingsSection(f, "Launcher Display", contentX, -598, contentW, 88)
     f.toggleConc = MakeSettingsCheck(f.launcherSection, "Concentration alert", function() EL:ToggleDisplaySetting("showLauncherConc") end)
     f.toggleConc:SetPoint("TOPLEFT", 12, -34)
@@ -1441,7 +1467,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.17.3"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.18.5"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -1451,6 +1477,8 @@ function EL:CreateSettingsPanel(parent)
         f.mainWindowTogglesSection,
         f.thresholdSection,
         f.trackingColumnsSection,
+        f.nextColumnSection,
+        f.cooldownColumnSection,
         f.launcherSection,
         f.sessionOptions,
         f.craftedItemsSection,
@@ -1463,7 +1491,7 @@ function EL:CreateSettingsPanel(parent)
         General = {f.generalSection, f.appearanceSection, f.scaleSection, f.footerSection},
         Launcher = {f.launcherSection},
         Session = {f.sessionOptions, f.craftedItemsSection},
-        ["Main Window"] = {f.mainWindowTogglesSection, f.thresholdSection, f.trackingColumnsSection},
+        ["Main Window"] = {f.mainWindowTogglesSection, f.thresholdSection, f.trackingColumnsSection, f.nextColumnSection, f.cooldownColumnSection},
         ["Action Bar"] = {f.actionButtonsSection},
         Performance = {f.performanceSection},
         Maintenance = {f.maintenanceSection},
@@ -1566,6 +1594,7 @@ function EL:RefreshSettingsPanel()
     setToggle(f.toggleConc2Column, trackingDisplay.showConcentration2Column ~= false)
     setToggle(f.toggleMoxieColumn, trackingDisplay.showMoxieColumn == true)
     setToggle(f.toggleMulchColumn, trackingDisplay.showMulchColumn ~= false)
+    setToggle(f.toggleCooldownColumn, trackingDisplay.showCooldownColumn ~= false)
     setToggle(f.toggleForecastColumn, trackingDisplay.showForecastColumn == true)
     setToggle(f.toggleCharacterRealm, display.showCharacterRealm ~= false)
     setToggle(f.toggleAttentionOnly, display.attentionOnly == true)
@@ -1789,6 +1818,7 @@ local TRACKING_COLUMN_SETTING_KEYS = {
     conc2 = "showConcentration2Column",
     moxie = "showMoxieColumn",
     mulch = "showMulchColumn",
+    cooldown = "showCooldownColumn",
     forecast = "showForecastColumn",
 }
 
@@ -2023,7 +2053,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.17.3"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.18.5"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -3238,6 +3268,7 @@ function EL:CreatePanel()
     panel.header.conc2 = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     panel.header.moxie = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     panel.header.forecast = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    panel.header.cooldown = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     panel.header.mulch = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     panel.header.name:SetText("Character")
     panel.header.prof1:SetText("P1")
@@ -3246,8 +3277,9 @@ function EL:CreatePanel()
     panel.header.conc2:SetText("Conc 2")
     panel.header.moxie:SetText("Moxie")
     panel.header.forecast:SetText("Next")
+    panel.header.cooldown:SetText("CD")
     panel.header.mulch:SetText("Mulch")
-    for _, fs in pairs({panel.header.name, panel.header.prof1, panel.header.conc1, panel.header.prof2, panel.header.conc2, panel.header.moxie, panel.header.forecast, panel.header.mulch}) do
+    for _, fs in pairs({panel.header.name, panel.header.prof1, panel.header.conc1, panel.header.prof2, panel.header.conc2, panel.header.moxie, panel.header.forecast, panel.header.cooldown, panel.header.mulch}) do
         fs:SetTextColor(0.88, 0.84, 0.74)
         fs:SetJustifyH(fs == panel.header.name and "LEFT" or "CENTER")
         if fs.SetShadowColor then fs:SetShadowColor(0, 0, 0, 0.80) end
@@ -3260,6 +3292,7 @@ function EL:CreatePanel()
     panel.header.conc2Button = CreateHeaderButton(panel.header, panel.header.conc2, "conc2")
     panel.header.moxieButton = CreateHeaderButton(panel.header, panel.header.moxie, "moxie")
     panel.header.forecastButton = CreateHeaderButton(panel.header, panel.header.forecast, "forecast")
+    panel.header.cooldownButton = CreateHeaderButton(panel.header, panel.header.cooldown, "cooldown")
     panel.header.mulchButton = CreateHeaderButton(panel.header, panel.header.mulch, "mulch")
 
     panel.scroll = CreateFrame("ScrollFrame", "EmberLedgerScrollFrame", panel, "UIPanelScrollFrameTemplate")
@@ -3375,6 +3408,7 @@ function EL:UpdateSortHeaders()
         conc2 = p.header.conc2,
         moxie = p.header.moxie,
         forecast = p.header.forecast,
+        cooldown = p.header.cooldown,
         mulch = p.header.mulch,
     }
     if not self:IsTrackingColumnVisible(active) then
@@ -3522,8 +3556,8 @@ function EL:LayoutPanel()
         local visible = {}
         for _, def in ipairs(cols.columns or {}) do visible[def.key] = true end
 
-        local headerMap = { character = p.header.name, prof1 = p.header.prof1, conc1 = p.header.conc1, prof2 = p.header.prof2, conc2 = p.header.conc2, moxie = p.header.moxie, forecast = p.header.forecast, mulch = p.header.mulch }
-        local buttonMap = { character = p.header.nameButton, prof1 = p.header.prof1Button, conc1 = p.header.conc1Button, prof2 = p.header.prof2Button, conc2 = p.header.conc2Button, moxie = p.header.moxieButton, forecast = p.header.forecastButton, mulch = p.header.mulchButton }
+        local headerMap = { character = p.header.name, prof1 = p.header.prof1, conc1 = p.header.conc1, prof2 = p.header.prof2, conc2 = p.header.conc2, moxie = p.header.moxie, forecast = p.header.forecast, cooldown = p.header.cooldown, mulch = p.header.mulch }
+        local buttonMap = { character = p.header.nameButton, prof1 = p.header.prof1Button, conc1 = p.header.conc1Button, prof2 = p.header.prof2Button, conc2 = p.header.conc2Button, moxie = p.header.moxieButton, forecast = p.header.forecastButton, cooldown = p.header.cooldownButton, mulch = p.header.mulchButton }
         for _, def in ipairs(TRACKING_COLUMN_DEFS) do
             local fs = headerMap[def.key]
             local btn = buttonMap[def.key]
@@ -3660,6 +3694,8 @@ function EL:GetRow(i)
         row.moxieRight:SetJustifyH("LEFT")
         row.forecast = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         row.forecast:SetJustifyH("CENTER")
+        row.cooldown = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        row.cooldown:SetJustifyH("CENTER")
         row.mulch = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         row.mulch:SetJustifyH("CENTER")
         row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -3841,6 +3877,10 @@ function EL:RefreshPanel()
         local profData1, concData1 = slots[1] and slots[1].prof or nil, slots[1] and slots[1].conc or nil
         local profData2, concData2 = slots[2] and slots[2].prof or nil, slots[2] and slots[2].conc or nil
         local moxieEntries = self:GetMoxieEntriesForCharacter(charKey, profEntries)
+        local cooldownValue, cooldownSummary = "-", nil
+        if self.GetProfessionCooldownDisplayText then
+            cooldownValue, cooldownSummary = self:GetProfessionCooldownDisplayText(charKey, profEntries)
+        end
         local mulchData = self.db and self.db.resources and self.db.resources.mulch and self.db.resources.mulch[charKey]
         local profValue1 = "N/A"
         local concValue1 = "N/A"
@@ -3882,8 +3922,8 @@ function EL:RefreshPanel()
             tostring(cols.prof1X), tostring(cols.prof1W), tostring(cols.conc1X), tostring(cols.conc1W),
             tostring(cols.prof2X), tostring(cols.prof2W), tostring(cols.conc2X), tostring(cols.conc2W),
             tostring(cols.moxieX), tostring(cols.moxieW), tostring(cols.forecastX), tostring(cols.forecastW),
-            tostring(cols.mulchX), tostring(cols.mulchW), tostring(visible.prof1), tostring(visible.prof2),
-            tostring(visible.conc1), tostring(visible.conc2), tostring(visible.moxie), tostring(visible.forecast), tostring(visible.mulch),
+            tostring(cols.cooldownX), tostring(cols.cooldownW), tostring(cols.mulchX), tostring(cols.mulchW), tostring(visible.prof1), tostring(visible.prof2),
+            tostring(visible.conc1), tostring(visible.conc2), tostring(visible.moxie), tostring(visible.forecast), tostring(visible.cooldown), tostring(visible.mulch),
             tostring(profIcon1), tostring(profIcon2)
         }, ":")
         if row._emberLayoutKey ~= layoutKey then
@@ -3894,6 +3934,7 @@ function EL:RefreshPanel()
             AnchorColumnText(row.conc2, row, cols.conc2X, cols.conc2W, "CENTER")
             AnchorMoxieCell(row, row, cols.moxieX, math.max(1, cols.moxieW))
             AnchorColumnText(row.forecast, row, cols.forecastX, math.max(1, cols.forecastW), "CENTER")
+            AnchorColumnText(row.cooldown, row, cols.cooldownX, math.max(1, cols.cooldownW), "CENTER")
             AnchorColumnText(row.mulch, row, cols.mulchX, math.max(1, cols.mulchW), "CENTER")
             AnchorProfessionCell(row, row.prof1, row.prof1Icon, cols.prof1X, cols.prof1W, visible.prof1, profIcon1)
             AnchorProfessionCell(row, row.prof2, row.prof2Icon, cols.prof2X, cols.prof2W, visible.prof2, profIcon2)
@@ -3905,6 +3946,7 @@ function EL:RefreshPanel()
         row.conc2:SetShown(visible.conc2 and true or false)
         SetMoxieCellShown(row, visible.moxie and true or false, row._emberMoxieSplit)
         row.forecast:SetShown(visible.forecast and true or false)
+        row.cooldown:SetShown(visible.cooldown and true or false)
         row.mulch:SetShown(visible.mulch and true or false)
 
         row.charKey = charKey
@@ -3912,6 +3954,7 @@ function EL:RefreshPanel()
         row.forecastData = forecastData
         row.concEntries = concEntries
         row.profEntries = profEntries
+        row.cooldownEntries = cooldownSummary and cooldownSummary.entries or nil
         row.moxieEntries = moxieEntries
         row.mulchData = mulchData
         row.name:SetText(self:GetCharacterDisplayName(char, charKey))
@@ -3986,6 +4029,14 @@ function EL:RefreshPanel()
             row.forecast:SetTextColor(0.35, 1.00, 0.45)
         else
             row.forecast:SetTextColor(0.70, 0.70, 0.70)
+        end
+        row.cooldown:SetText(cooldownValue or "-")
+        if cooldownSummary and cooldownSummary.ready and cooldownSummary.ready > 0 then
+            row.cooldown:SetTextColor(0.35, 1.00, 0.45)
+        elseif cooldownSummary and cooldownSummary.tracked and cooldownSummary.tracked > 0 then
+            row.cooldown:SetTextColor(1.00, 0.82, 0.32)
+        else
+            row.cooldown:SetTextColor(0.70, 0.70, 0.70)
         end
         row.mulch:SetText(mulchValue)
         if self:HasImbuedMulchAccess(mulchData) then
@@ -4339,6 +4390,10 @@ function EL:ShowRowTooltip(row)
         end
     else
         GameTooltip:AddLine("No professions tracked yet.", 0.7, 0.7, 0.7)
+    end
+
+    if self.AddProfessionCooldownTooltipLines then
+        self:AddProfessionCooldownTooltipLines(GameTooltip, row.charKey, row.profEntries)
     end
 
     GameTooltip:AddLine(" ")
