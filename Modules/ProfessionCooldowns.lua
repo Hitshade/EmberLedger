@@ -122,8 +122,15 @@ local function EnsureProfessionCooldownStore()
 end
 
 local function SafeNumber(value, fallback)
-    local ok, n = pcall(tonumber, value)
-    if ok and n ~= nil then return n end
+    if EL and type(EL.SafeNumber) == "function" then
+        return EL:SafeNumber(value, fallback, "ProfessionCooldowns")
+    end
+    if type(value) == "number" then return value end
+    local ok, text = pcall(tostring, value)
+    if ok and text and text ~= "" then
+        local num = tonumber(text)
+        if num ~= nil then return num end
+    end
     return fallback
 end
 

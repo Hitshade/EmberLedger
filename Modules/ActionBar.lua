@@ -8,6 +8,19 @@ local ACTION_BAR_FLOATING_H = UIC.ACTION_BAR_FLOATING_H or 40
 local BORDER_R, BORDER_G, BORDER_B = 0.82, 0.66, 0.34
 local EL_BG_R, EL_BG_G, EL_BG_B = 0.030, 0.024, 0.075
 
+local function SafeNumber(value, fallback)
+    if EL and type(EL.SafeNumber) == "function" then
+        return EL:SafeNumber(value, fallback ~= nil and fallback or 0, "ActionBar")
+    end
+    if type(value) == "number" then return value end
+    local ok, text = pcall(tostring, value)
+    if ok and text and text ~= "" then
+        local num = tonumber(text)
+        if num ~= nil then return num end
+    end
+    return fallback ~= nil and fallback or 0
+end
+
 local function AddBackdrop(frame, alpha, borderAlpha)
     if not frame or not frame.SetBackdrop then return end
     frame:SetBackdrop({
@@ -28,8 +41,8 @@ local function GetActionBarPanelSettings()
     panel.actionBarPosition = type(panel.actionBarPosition) == "table" and panel.actionBarPosition or { point = "CENTER", relativePoint = "CENTER", x = 0, y = -160 }
     panel.actionBarPosition.point = panel.actionBarPosition.point or "CENTER"
     panel.actionBarPosition.relativePoint = panel.actionBarPosition.relativePoint or "CENTER"
-    panel.actionBarPosition.x = tonumber(panel.actionBarPosition.x) or 0
-    panel.actionBarPosition.y = tonumber(panel.actionBarPosition.y) or -160
+    panel.actionBarPosition.x = SafeNumber(panel.actionBarPosition.x, 0)
+    panel.actionBarPosition.y = SafeNumber(panel.actionBarPosition.y, -160)
     return panel
 end
 
@@ -57,8 +70,8 @@ local function SetFloatingActionBarPoint(bar, pos)
     if not bar then return end
     local point = SanitizeAnchorPoint(pos and pos.point, "CENTER")
     local relativePoint = SanitizeAnchorPoint(pos and pos.relativePoint, "CENTER")
-    local x = tonumber(pos and pos.x) or 0
-    local y = tonumber(pos and pos.y) or -160
+    local x = SafeNumber(pos and pos.x, 0)
+    local y = SafeNumber(pos and pos.y, -160)
     local ok = pcall(bar.SetPoint, bar, point, UIParent, relativePoint, x, y)
     if ok then return end
 
@@ -115,7 +128,7 @@ local function StyleBlizzardButton(button)
 end
 
 local function FormatActionCooldownText(seconds)
-    seconds = tonumber(seconds) or 0
+    seconds = SafeNumber(seconds, 0)
     if seconds <= 0 then return "" end
     if seconds < 60 then return tostring(math.ceil(seconds)) .. "s" end
     local minutes = math.ceil(seconds / 60)
@@ -226,15 +239,15 @@ local function GetItemCountSafe(itemID, itemName)
     if not item then return 0 end
     if C_Item and C_Item.GetItemCount then
         local ok, count = pcall(C_Item.GetItemCount, item, false, false, false, true)
-        if ok and tonumber(count) then return tonumber(count) end
+        if ok and SafeNumber(count, nil) then return SafeNumber(count, 0) end
         ok, count = pcall(C_Item.GetItemCount, item)
-        if ok and tonumber(count) then return tonumber(count) end
+        if ok and SafeNumber(count, nil) then return SafeNumber(count, 0) end
     end
     if GetItemCount then
         local ok, count = pcall(GetItemCount, item, false, false, true)
-        if ok and tonumber(count) then return tonumber(count) end
+        if ok and SafeNumber(count, nil) then return SafeNumber(count, 0) end
         ok, count = pcall(GetItemCount, item)
-        if ok and tonumber(count) then return tonumber(count) end
+        if ok and SafeNumber(count, nil) then return SafeNumber(count, 0) end
     end
     return 0
 end
@@ -327,6 +340,10 @@ local function GetActionAvailable(info)
     end
 end
 
+local function NormalizeCooldownValues(start, duration, enable)
+    return SafeNumber(start, 0), SafeNumber(duration, 0), SafeNumber(enable, 0)
+end
+
 local function GetActionCooldownSafe(info)
     if not info then return 0, 0, 0 end
     if info.kind == "spell" then
@@ -335,26 +352,26 @@ local function GetActionCooldownSafe(info)
         if C_Spell and C_Spell.GetSpellCooldown then
             local ok, cd = pcall(C_Spell.GetSpellCooldown, spell)
             if ok and cd then
-                return cd.startTime or 0, cd.duration or 0, cd.isEnabled and 1 or 0
+                return NormalizeCooldownValues(cd.startTime, cd.duration, cd.isEnabled and 1 or 0)
             end
         end
         if GetSpellCooldown then
             local ok, start, duration, enable = pcall(GetSpellCooldown, spell)
-            if ok and start then return start or 0, duration or 0, enable or 0 end
+            if ok and start then return NormalizeCooldownValues(start, duration, enable) end
         end
         return 0, 0, 0
     elseif info.kind == "toy" then
         if info.itemID and C_ToyBox and C_ToyBox.GetToyCooldown then
             local ok, start, duration, enable = pcall(C_ToyBox.GetToyCooldown, info.itemID)
-            if ok and start then return start or 0, duration or 0, enable or 0 end
+            if ok and start then return NormalizeCooldownValues(start, duration, enable) end
         end
         if info.itemID and C_Item and C_Item.GetItemCooldown then
             local ok, start, duration, enable = pcall(C_Item.GetItemCooldown, info.itemID)
-            if ok and start then return start or 0, duration or 0, enable or 0 end
+            if ok and start then return NormalizeCooldownValues(start, duration, enable) end
         end
         if info.itemID and GetItemCooldown then
             local ok, start, duration, enable = pcall(GetItemCooldown, info.itemID)
-            if ok and start then return start or 0, duration or 0, enable or 0 end
+            if ok and start then return NormalizeCooldownValues(start, duration, enable) end
         end
         return 0, 0, 0
     else
@@ -362,15 +379,15 @@ local function GetActionCooldownSafe(info)
         if not item then return 0, 0, 0 end
         if C_Container and C_Container.GetItemCooldown then
             local ok, start, duration, enable = pcall(C_Container.GetItemCooldown, item)
-            if ok and start then return start or 0, duration or 0, enable or 0 end
+            if ok and start then return NormalizeCooldownValues(start, duration, enable) end
         end
         if C_Item and C_Item.GetItemCooldown then
             local ok, start, duration, enable = pcall(C_Item.GetItemCooldown, item)
-            if ok and start then return start or 0, duration or 0, enable or 0 end
+            if ok and start then return NormalizeCooldownValues(start, duration, enable) end
         end
         if GetItemCooldown then
             local ok, start, duration, enable = pcall(GetItemCooldown, item)
-            if ok and start then return start or 0, duration or 0, enable or 0 end
+            if ok and start then return NormalizeCooldownValues(start, duration, enable) end
         end
         return 0, 0, 0
     end

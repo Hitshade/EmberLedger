@@ -316,8 +316,7 @@ local function SetTrackingPanelVerticalHeight(panel, height)
     panel._autoSizingPanel = true
     panel:SetSize(targetW, targetH)
     if left and top then
-        panel:ClearAllPoints()
-        panel:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+        SafeSetFramePoint(panel, "TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
         SaveFramePoint(panel, settings)
     end
     panel._autoSizingPanel = false
@@ -340,8 +339,7 @@ function EL:AutoSizeTrackingPanel(reason)
     panel._autoSizingPanel = true
     panel:SetSize(targetW, targetH)
     if left and top then
-        panel:ClearAllPoints()
-        panel:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+        SafeSetFramePoint(panel, "TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
         SaveFramePoint(panel, settings)
     end
     panel._autoSizingPanel = false
@@ -1525,7 +1523,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.20.4"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.20.8"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -2154,7 +2152,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.20.4"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.20.8"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -3566,8 +3564,7 @@ local function SetPanelHeightKeepTopLeft(panel, height, settings)
     -- Re-anchor by the current top-left corner so collapse/expand only changes
     -- the bottom edge of the EmberLedger window.
     if left and top then
-        panel:ClearAllPoints()
-        panel:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+        SafeSetFramePoint(panel, "TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
         if settings then
             SaveFramePoint(panel, settings)
         end
@@ -4298,15 +4295,10 @@ end
 
 function EL:ShowPanelFromSavedState()
     if not self.panel then return end
-    if not self.db.settings.panel.detached and self.button then
-        local anchored = SafeSetFramePoint(self.panel, "TOPLEFT", self.button, "BOTTOMLEFT", 0, -8)
-        if not anchored then
-            self.db.settings.panel.detached = true
-            SetFramePointFromDB(self.panel, self.db.settings.panel)
-        end
-    else
-        SetFramePointFromDB(self.panel, self.db.settings.panel)
-    end
+    -- Restore the main tracker only against UIParent. Anchoring the tracker
+    -- to launcher/action frames can create anchor-family loops after secure
+    -- action bar reparenting or third-party frame changes.
+    SetFramePointFromDB(self.panel, self.db.settings.panel)
     self:ApplyPanelScale()
     self:RefreshPanel()
     self.panel:Show()

@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.20.4"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.20.8"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -640,6 +640,32 @@ function EL:Debug(msg)
     if self.db and self.db.settings and self.db.settings.debug then
         print("|cff9ecbffEmberLedger Debug:|r " .. tostring(msg))
     end
+end
+
+function EL:SafeNumber(value, fallback, context)
+    -- Shared guard for WoW values that may behave like protected/secret numbers.
+    -- Normal numbers use a fast path; other values convert through protected tostring,
+    -- then tonumber. If conversion fails, the caller-provided fallback is returned.
+    if type(value) == "number" then
+        return value
+    end
+
+    local ok, text = pcall(tostring, value)
+    if ok and text and text ~= "" then
+        local num = tonumber(text)
+        if num ~= nil then return num end
+    end
+
+    if value ~= nil and self.db and self.db.settings and self.db.settings.debug then
+        self._safeNumberWarnings = self._safeNumberWarnings or {}
+        local key = tostring(context or "unknown")
+        if not self._safeNumberWarnings[key] then
+            self._safeNumberWarnings[key] = true
+            self:Debug("Sanitized non-numeric protected value in " .. key .. ".")
+        end
+    end
+
+    return fallback
 end
 
 function EL:ToggleDebug()

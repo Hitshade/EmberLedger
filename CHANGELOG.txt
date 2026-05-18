@@ -1,3 +1,37 @@
+## v1.20.8
+
+- Centralized protected numeric conversion through a shared `SafeNumber` helper in Core.lua.
+- Added a fast path for normal Lua numbers before protected string conversion.
+- Added debug-only one-time logging when cooldown paths sanitize a non-numeric protected value.
+- Updated Action Bar and Profession Cooldown modules to use the shared numeric safety helper.
+- No layout, database, or feature behavior changes.
+
+---
+
+## v1.20.7
+
+- Replaced cooldown numeric sanitization with a safer protected string-conversion path.
+- Hardened Action Bar and Profession Cooldown cooldown/charge handling against WoW protected or secret number values.
+- No feature or layout changes.
+
+---
+
+## v1.20.6
+
+- Hardened Profession Cooldown numeric handling to avoid converting protected/secret cooldown and charge values.
+- Updated Action Bar numeric safety helper with the same protected-value guard pattern.
+- No layout, database, or feature behavior changes.
+
+---
+
+## v1.20.5
+
+- Fixed remaining main-window anchor-family errors by restoring the tracker only against UIParent instead of launcher/action frames.
+- Added safer Action Bar cooldown numeric handling for protected/secret cooldown values.
+- Kept floating Action Bar behavior unchanged while improving restore stability.
+
+---
+
 # EmberLedger Changelog
 
 ## v1.20.4
