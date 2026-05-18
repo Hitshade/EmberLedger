@@ -219,16 +219,33 @@ local function ExtractCraftedItemFromEvent(...)
         end
     end
 
+    local numericItemCandidates = {}
+    local numericQuantityCandidates = {}
     for i = 1, select("#", ...) do
         local value = select(i, ...)
         if type(value) == "number" and value > 0 then
-            if not itemID and value >= 1000 then
+            if not itemID then
                 local parsed = GetItemInfoInstantSafe(value)
                 if parsed then
-                    itemID = parsed
+                    table.insert(numericItemCandidates, parsed)
                 end
-            elseif not quantity and (not itemID or value ~= itemID) and value < 10000 then
+            end
+            if value < 10000 then
+                table.insert(numericQuantityCandidates, value)
+            end
+        end
+    end
+
+    if not itemID and #numericItemCandidates > 0 then
+        table.sort(numericItemCandidates, function(a, b) return (tonumber(a) or 0) > (tonumber(b) or 0) end)
+        itemID = numericItemCandidates[1]
+    end
+
+    if not quantity then
+        for _, value in ipairs(numericQuantityCandidates) do
+            if not itemID or value ~= itemID then
                 quantity = value
+                break
             end
         end
     end
@@ -677,6 +694,8 @@ function M:OnEvent(event, ...)
     elseif event == "MAIL_CLOSED" then
         if EL.ClearTrustedSessionMailCache then EL:ClearTrustedSessionMailCache() end
     elseif event == "PLAYER_ENTERING_WORLD" then
+        -- Core also calls module:Refresh() after login; this branch only handles
+        -- session-specific money sync and the delayed bag baseline priming window.
         C_Timer.After(1, function()
             if not EL or not EL.db then return end
             if EL.SyncSessionMoneyBaseline then EL:SyncSessionMoneyBaseline() end

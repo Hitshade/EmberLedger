@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.20.8"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.20.9"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -1464,6 +1464,9 @@ function EL:ResetCharacterData(charKey)
         if self.db.resources.moxie then
             self.db.resources.moxie[charKey] = nil
         end
+        if self.db.resources.professionCooldowns then
+            self.db.resources.professionCooldowns[charKey] = nil
+        end
     end
 
     if self.db.settings and self.db.settings.hiddenCharacters then
@@ -2176,9 +2179,9 @@ end
 
 function EL:GetSessionElapsedSeconds()
     local s = self:GetSessionDB()
-    local prior = tonumber(s.priorDuration) or 0
-    if s.isPaused then return math.max(1, prior) end
-    return math.max(1, prior + math.max(0, math.floor(GetTime() - (tonumber(s.sessionStartUptime) or GetTime()))))
+    local prior = math.max(0, tonumber(s.priorDuration) or 0)
+    if s.isPaused then return prior end
+    return prior + math.max(0, math.floor(GetTime() - (tonumber(s.sessionStartUptime) or GetTime())))
 end
 
 function EL:IsRawGoldGainTrackingEnabled()
@@ -2235,7 +2238,9 @@ end
 
 function EL:GetSessionGoldPerHour()
     local s = self:GetSessionDB()
-    return math.floor(((tonumber(s.totalSilver) or 0) * 3600) / self:GetSessionElapsedSeconds())
+    local elapsed = self:GetSessionElapsedSeconds()
+    if elapsed <= 0 then return 0 end
+    return math.floor(((tonumber(s.totalSilver) or 0) * 3600) / elapsed)
 end
 
 function EL:SetSessionPaused(paused)
@@ -2665,6 +2670,8 @@ end
 local function AddEntryValuesToAggregateBucket(bucket, entry, sign)
     if type(bucket) ~= "table" or type(entry) ~= "table" then return end
     sign = sign or 1
+    -- Aggregate buckets clamp non-money counts to zero when subtracting replaced entries.
+    -- totalSilver intentionally remains signed so refunds/spend adjustments can be represented.
     bucket.duration = math.max(0, (tonumber(bucket.duration) or 0) + (math.max(0, tonumber(entry.duration) or 0) * sign))
     bucket.itemValueSilver = math.max(0, (tonumber(bucket.itemValueSilver) or 0) + ((tonumber(entry.itemValueSilver) or 0) * sign))
     bucket.rawGoldGainedSilver = math.max(0, (tonumber(bucket.rawGoldGainedSilver) or 0) + ((tonumber(entry.rawGoldGainedSilver) or 0) * sign))
@@ -2847,40 +2854,49 @@ function EL:PrintSessionSummaryToChat(text)
     end
 end
 
+local COPY_SESSION_POPUP_NAME = "EMBERLEDGER_COPY_SESSION"
+
+local function EnsureCopySessionPopupDefinition()
+    if not StaticPopupDialogs or StaticPopupDialogs[COPY_SESSION_POPUP_NAME] then return end
+    StaticPopupDialogs[COPY_SESSION_POPUP_NAME] = {
+        text = "Press Ctrl+C to copy the highlighted session summary. The OK button only closes this window.",
+        button1 = CLOSE,
+        button2 = "Print Chat",
+        hasEditBox = true,
+        editBoxWidth = 360,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        OnShow = function(dialog, data)
+            local editBox = dialog and (dialog.editBox or dialog.EditBox)
+            if editBox then
+                editBox:SetText(data or "")
+                editBox:HighlightText()
+                editBox:SetFocus()
+            end
+        end,
+        EditBoxOnEscapePressed = function(editBox)
+            local dialog = editBox and editBox:GetParent()
+            if dialog then dialog:Hide() end
+        end,
+        EditBoxOnEnterPressed = function(editBox)
+            editBox:HighlightText()
+        end,
+        -- Blizzard StaticPopup button2 dispatches through OnCancel with reason == "clicked".
+        -- Use that path for the optional Print Chat action while button1 simply closes.
+        OnCancel = function(_, data, reason)
+            if reason == "clicked" and EmberLedger and EmberLedger.PrintSessionSummaryToChat then
+                EmberLedger:PrintSessionSummaryToChat(data)
+            end
+        end,
+    }
+end
+
 function EL:ShowCopySessionSummaryDialog()
     local text = self:BuildSessionSummaryText()
     if StaticPopupDialogs then
-        StaticPopupDialogs["EMBERLEDGER_COPY_SESSION"] = StaticPopupDialogs["EMBERLEDGER_COPY_SESSION"] or {
-            text = "Press Ctrl+C to copy the highlighted session summary. The OK button only closes this window.",
-            button1 = CLOSE,
-            button2 = "Print Chat",
-            hasEditBox = true,
-            editBoxWidth = 360,
-            timeout = 0,
-            whileDead = true,
-            hideOnEscape = true,
-            OnShow = function(dialog, data)
-                local editBox = dialog and (dialog.editBox or dialog.EditBox)
-                if editBox then
-                    editBox:SetText(data or "")
-                    editBox:HighlightText()
-                    editBox:SetFocus()
-                end
-            end,
-            EditBoxOnEscapePressed = function(editBox)
-                local dialog = editBox and editBox:GetParent()
-                if dialog then dialog:Hide() end
-            end,
-            EditBoxOnEnterPressed = function(editBox)
-                editBox:HighlightText()
-            end,
-            OnCancel = function(_, data, reason)
-                if reason == "clicked" and EmberLedger and EmberLedger.PrintSessionSummaryToChat then
-                    EmberLedger:PrintSessionSummaryToChat(data)
-                end
-            end,
-        }
-        StaticPopup_Show("EMBERLEDGER_COPY_SESSION", nil, nil, text)
+        EnsureCopySessionPopupDefinition()
+        StaticPopup_Show(COPY_SESSION_POPUP_NAME, nil, nil, text)
     else
         self:PrintSessionSummaryToChat(text)
     end
@@ -3005,9 +3021,13 @@ end
 
 function EL:PrintSlashHelp()
     self:Print("Commands:")
-    self:Print("/el or /ember - Toggle EmberLedger.")
+    self:Print("/el or /ember - Toggle EmberLedger launcher/main view.")
+    self:Print("/el main - Toggle the main tracking window.")
     self:Print("/el settings - Open Options.")
     self:Print("/el session - Toggle the standalone Session window.")
+    self:Print("/el history - Toggle Session History / Stats.")
+    self:Print("/el session start or /el session resume - Resume session tracking.")
+    self:Print("/el session pause - Pause session tracking.")
     self:Print("/el refresh - Refresh tracked profession data.")
     self:Print("/el scale - Show the current main window scale.")
     self:Print("/el scale 0.85 - Set main window scale from 0.60 to 1.40.")
@@ -3015,7 +3035,7 @@ function EL:PrintSlashHelp()
     self:Print("/el lock or /el unlock - Lock or unlock EmberLedger windows.")
     self:Print("/el reset layout - Reset window positions.")
     self:Print("/el reset session - Reset current session totals.")
-    self:Print("/el restore - Restore hidden characters.")
+    self:Print("/el restore or /el restore hidden - Restore hidden characters.")
     self:Print("/el reset pinned - Remove all pinned markers.")
 end
 

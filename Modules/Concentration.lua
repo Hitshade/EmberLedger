@@ -103,9 +103,9 @@ function M:OnEvent(event, ...)
         end)
     elseif event == "CURRENCY_DISPLAY_UPDATE" then
         C_Timer.After(0.1, function()
-            if not EL or not EL.db then return end
-            self:RefreshKnownCurrencies()
-            self:RefreshMoxieCurrencies()
+            if not EL or not EL.db or not self then return end
+            if self.RefreshKnownCurrencies then self:RefreshKnownCurrencies() end
+            if self.RefreshMoxieCurrencies then self:RefreshMoxieCurrencies() end
             EL:RequestUpdate()
         end)
     end

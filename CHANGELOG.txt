@@ -1,3 +1,13 @@
+## v1.20.9
+
+- Fixed profession cooldown refresh to capture both the current character key and character table correctly.
+- Resetting a character now clears stored profession cooldown data for that character.
+- Added missing slash command help entries for main, history, and session pause/resume commands.
+- Improved crafted item event parsing by validating numeric item candidates through item info instead of relying on a fixed itemID threshold.
+- Added clearer comments around StaticPopup button handling and aggregate stat subtraction behavior.
+- Made session gold/hour return zero until a session has elapsed time instead of forcing a one-second minimum.
+- Tightened a delayed concentration refresh guard and cleaned a profession cooldown API field fallback.
+
 ## v1.20.8
 
 - Centralized protected numeric conversion through a shared `SafeNumber` helper in Core.lua.

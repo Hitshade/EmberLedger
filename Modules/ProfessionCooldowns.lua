@@ -170,7 +170,7 @@ local function GetSpellCooldownData(spellID)
     if C_Spell and C_Spell.GetSpellCooldown then
         local info = SafeCall(C_Spell.GetSpellCooldown, spellID)
         if type(info) == "table" then
-            startTime = SafeNumber(info.startTime or info.start, 0)
+            startTime = SafeNumber(info.start or info.startTime, 0)
             duration = SafeNumber(info.duration, 0)
             isEnabled = info.isEnabled == false and 0 or 1
             modRate = SafeNumber(info.modRate, 1)
@@ -298,8 +298,8 @@ function EL:RefreshCurrentProfessionCooldowns()
     if not cooldownStore then return false end
     if self.PruneProfessionCooldownStore then self:PruneProfessionCooldownStore() end
 
-    local char = self:GetCurrentCharacter()
-    local charKey = char and char.key or (self.GetCharacterKey and self:GetCharacterKey())
+    local charKey, char = self:GetCurrentCharacter()
+    charKey = charKey or (char and char.key) or (self.GetCharacterKey and self:GetCharacterKey())
     if not charKey then return false end
 
     local professions = self:GetProfessionEntriesForCharacter(charKey) or {}
