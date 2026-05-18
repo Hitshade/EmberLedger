@@ -1494,7 +1494,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.20.2"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.20.3"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -2123,7 +2123,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.20.2"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.20.3"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -2198,6 +2198,8 @@ function EL:CreateSessionHistoryWindow()
             EL.db.settings.session.windowOpen = false
         end
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
+        if EL.LayoutActionBar then EL:LayoutActionBar() end
+        if EL.RequestActionBarRefresh then EL:RequestActionBarRefresh(true) end
         if EL.RefreshUpdateTicker then EL:RefreshUpdateTicker() end
     end)
     frame:SetScript("OnHide", function()
@@ -4274,6 +4276,8 @@ function EL:ShowPanelFromSavedState()
     self:ApplyPanelScale()
     self:RefreshPanel()
     self.panel:Show()
+    if self.LayoutActionBar then self:LayoutActionBar() end
+    if self.RequestActionBarRefresh then self:RequestActionBarRefresh(true) end
     BringEmberWindowToFront(self.panel)
     if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
 end

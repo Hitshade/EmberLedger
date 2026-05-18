@@ -1,5 +1,13 @@
 # EmberLedger Changelog
 
+## v1.20.3
+
+- Fixed anchored Action Bar not appearing inside the main window after login until the floating option was toggled.
+- Updated Action Bar refresh gating so anchored mode can refresh when the main tracker is visible, even before the bar has completed its first show/layout pass.
+- Added an immediate Action Bar layout/refresh pass when the main tracker opens or restores from saved state.
+
+---
+
 ## v1.20.2
 
 - Fixed a floating Action Bar anchoring error that could occur when restoring saved floating positions.

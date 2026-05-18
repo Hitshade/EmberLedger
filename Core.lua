@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.20.2"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.20.3"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -2908,7 +2908,14 @@ end
 function EL:ShouldRefreshActionBar()
     if self.IsActionBarEnabled and not self:IsActionBarEnabled() then return false end
     local bar = self.GetActionBarFrame and self:GetActionBarFrame() or (self.panel and self.panel.actionBar)
-    return bar and bar:IsShown()
+    local floating = self.IsActionBarFloating and self:IsActionBarFloating()
+    if floating then
+        return bar and bar:IsShown()
+    end
+    -- Anchored mode belongs to the main tracker. During login/show restore the
+    -- action bar may still be hidden until its first layout pass, so refresh
+    -- whenever the panel is visible rather than requiring bar:IsShown() first.
+    return (self.panel and self.panel:IsShown()) or (bar and bar:IsShown())
 end
 
 function EL:HasVisibleUpdateConsumers()
