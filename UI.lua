@@ -95,6 +95,15 @@ local function GetTrackingActionBarBottomOffset()
     return IsCompactModeEnabled() and 8 or 10
 end
 
+local function IsActionBarAnchoredToPanel()
+    return not (EL.IsActionBarFloating and EL:IsActionBarFloating())
+end
+
+local function IsAnchoredActionBarShown()
+    local enabled = not EL.IsActionBarEnabled or EL:IsActionBarEnabled()
+    return enabled and IsActionBarAnchoredToPanel()
+end
+
 local function GetTrackingBottomPadding(actionBarShown)
     -- Match the scroll frame's bottom anchor when the action bar is hidden so
     -- auto-height calculations do not clip the last visible character row.
@@ -172,7 +181,7 @@ local function GetCurrentPanelMinHeight(panel)
     local db = EL and EL.db
     local settings = db and db.settings and db.settings.panel or {}
     local charShown = settings.charactersShown ~= false
-    local actionBarShown = not EL.IsActionBarEnabled or EL:IsActionBarEnabled()
+    local actionBarShown = IsAnchoredActionBarShown()
 
     -- The main window can be used as a compact convenience/action bar when
     -- the character table is hidden from Options. Keep the dynamic minimum
@@ -237,7 +246,7 @@ end
 function EL:GetTrackingPanelAutoSize()
     local settings = self.db and self.db.settings and self.db.settings.panel or {}
     local charShown = settings.charactersShown ~= false
-    local actionBarShown = not self.IsActionBarEnabled or self:IsActionBarEnabled()
+    local actionBarShown = IsAnchoredActionBarShown()
 
     local width = (self.GetTrackingPanelMaxWidth and self:GetTrackingPanelMaxWidth()) or PANEL_MIN_W
     local rowCount = charShown and self:GetVisibleTrackingRowCount() or 0
@@ -1312,7 +1321,21 @@ function EL:CreateSettingsPanel(parent)
     f.craftedItemsBody:SetText("Most users should leave this off. Use it only when you specifically want crafted outputs counted at craft time. It may double-count value if the crafted item is later sold and AH/mail gold is also tracked, and reagent costs are not deducted.")
     f.craftedItemsBody:SetTextColor(0.76, 0.76, 0.70)
 
-    f.actionButtonsSection = MakeSettingsSection(f, "Button Visibility", contentX, -42, contentW, 232)
+    f.actionPlacementSection = MakeSettingsSection(f, "Placement", contentX, -42, contentW, 132)
+    f.actionPlacementDesc = f.actionPlacementSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.actionPlacementDesc:SetPoint("TOPLEFT", 12, -34)
+    f.actionPlacementDesc:SetWidth(contentW - 24)
+    f.actionPlacementDesc:SetJustifyH("LEFT")
+    f.actionPlacementDesc:SetTextColor(0.76, 0.76, 0.70)
+    f.actionPlacementDesc:SetText("Anchor the action bar inside the main tracker, or let it float as a small draggable utility strip.")
+    f.actionBarFloating = MakeSettingsCheck(f.actionPlacementSection, "Floating action bar", function() EL:ToggleActionBarFloating() end)
+    f.actionBarFloating:SetPoint("TOPLEFT", 12, -72)
+    f.actionBarLocked = MakeSettingsCheck(f.actionPlacementSection, "Lock floating bar", function() EL:ToggleFloatingActionBarLocked() end)
+    f.actionBarLocked:SetPoint("TOPLEFT", 178, -72)
+    f.resetActionBarPosition = MakeSettingsButton(f.actionPlacementSection, "Reset Position", 118, function() EL:ResetFloatingActionBarPosition() end)
+    f.resetActionBarPosition:SetPoint("TOPLEFT", 12, -100)
+
+    f.actionButtonsSection = MakeSettingsSection(f, "Button Visibility", contentX, -188, contentW, 232)
     f.actionGeneralLabel = f.actionButtonsSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     f.actionGeneralLabel:SetPoint("TOPLEFT", 12, -32)
     f.actionGeneralLabel:SetText("General")
@@ -1381,6 +1404,10 @@ function EL:CreateSettingsPanel(parent)
     SetSettingsTooltip(f.filterFish, "Fish", {"Includes fish loot in session value tracking."})
     SetSettingsTooltip(f.filterOther, "Other materials", {"Includes other recognized materials in session value tracking."})
 
+    SetSettingsTooltip(f.actionBarFloating, "Floating action bar", {"Detaches the action bar from the main tracker so it can be positioned independently.", "Layout changes are deferred during combat for secure button safety."})
+    SetSettingsTooltip(f.actionBarLocked, "Lock floating bar", {"Prevents the floating action bar from being dragged unless Shift is held."})
+    SetSettingsTooltip(f.resetActionBarPosition, "Reset floating position", {"Returns the floating action bar to its default screen position."})
+
     SetSettingsTooltip(f.actionMulchButton, "Imbued Mulch button", {"Allows the Imbued Mulch button to appear on the action bar when available."})
     SetSettingsTooltip(f.actionGreenThumbButton, "Green Thumb button", {"Allows the Green Thumb button to appear on the action bar when available."})
     SetSettingsTooltip(f.actionOverloadHerbButton, "Overload Herb button", {"Allows the Overload Herb button to appear on the action bar when available."})
@@ -1431,7 +1458,7 @@ function EL:CreateSettingsPanel(parent)
     f.historyCapTip:SetText("Session history cap: 500 is already enough for almost everyone, including extreme players, because stats use compact aggregates. Increase this only if you specifically want a deeper visible Sessions list and do not mind larger SavedVariables.")
 
     SetSettingsTooltip(f.enableSessionTracking, "Enable session tracking", {"Tracks session time, gathered items, session value, bag summaries, and recent/lifetime stats.", "Turn off to stop most background loot and bag processing."})
-    SetSettingsTooltip(f.enableActionBar, "Enable action bar", {"Allows EmberLedger utility buttons in the main window.", "Turn off to hide the bar and skip action bar refresh work."})
+    SetSettingsTooltip(f.enableActionBar, "Enable action bar", {"Allows EmberLedger utility buttons in the main window or floating action bar.", "Turn off to hide the bar and skip action bar refresh work."})
 
     f.historyMaxEntriesSlider = MakeSettingsSlider(f.performanceSection, "Session history cap", 50, 3000, 50, function(v) return string.format("%d entries", v) end, function(v)
         if EL.SetSessionHistoryMaxEntries then EL:SetSessionHistoryMaxEntries(v) end
@@ -1467,7 +1494,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.19.0"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.20.2"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -1482,6 +1509,7 @@ function EL:CreateSettingsPanel(parent)
         f.launcherSection,
         f.sessionOptions,
         f.craftedItemsSection,
+        f.actionPlacementSection,
         f.actionButtonsSection,
         f.performanceSection,
         f.maintenanceSection,
@@ -1492,7 +1520,7 @@ function EL:CreateSettingsPanel(parent)
         Launcher = {f.launcherSection},
         Session = {f.sessionOptions, f.craftedItemsSection},
         ["Main Window"] = {f.mainWindowTogglesSection, f.thresholdSection, f.trackingColumnsSection, f.nextColumnSection, f.cooldownColumnSection},
-        ["Action Bar"] = {f.actionButtonsSection},
+        ["Action Bar"] = {f.actionPlacementSection, f.actionButtonsSection},
         Performance = {f.performanceSection},
         Maintenance = {f.maintenanceSection},
     }
@@ -1620,8 +1648,10 @@ function EL:RefreshSettingsPanel()
     setToggle(f.actionOverloadOreButton, actionButtons.overloadOre ~= false)
     setToggle(f.actionParcelButton, actionButtons.parcel ~= false)
     setToggle(f.actionBankButton, actionButtons.bank ~= false)
+    setToggle(f.actionBarFloating, panelSettings.actionBarFloating == true)
+    setToggle(f.actionBarLocked, panelSettings.actionBarLocked == true)
     local actionControlsAlpha = (performanceSettings.actionBar ~= false) and 1.0 or 0.45
-    for _, btn in ipairs({ f.actionMulchButton, f.actionSeedButton, f.actionGlowingSeedButton, f.actionWildSeedButton, f.actionPrimalSeedButton, f.actionGreenThumbButton, f.actionOverloadHerbButton, f.actionOverloadOreButton, f.actionParcelButton, f.actionBankButton }) do
+    for _, btn in ipairs({ f.actionBarFloating, f.actionBarLocked, f.resetActionBarPosition, f.actionMulchButton, f.actionSeedButton, f.actionGlowingSeedButton, f.actionWildSeedButton, f.actionPrimalSeedButton, f.actionGreenThumbButton, f.actionOverloadHerbButton, f.actionOverloadOreButton, f.actionParcelButton, f.actionBankButton }) do
         if btn and btn.SetAlpha then btn:SetAlpha(actionControlsAlpha) end
     end
     local sessionControlsAlpha = (performanceSettings.sessionTracking ~= false) and 1.0 or 0.45
@@ -1966,10 +1996,12 @@ function EL:TogglePerformanceSetting(key)
             sessionSettings.windowOpen = false
         end
     elseif key == "actionBar" then
+        if self.LayoutActionBar then self:LayoutActionBar() end
         if enabled then
-            if self:IsActionBarEnabled() and self.RequestActionBarRefresh then self:RequestActionBarRefresh() end
-        elseif self.panel and self.panel.actionBar then
-            self.panel.actionBar:Hide()
+            if self:IsActionBarEnabled() and self.RequestActionBarRefresh then self:RequestActionBarRefresh(true) end
+        else
+            local bar = self.GetActionBarFrame and self:GetActionBarFrame() or (self.panel and self.panel.actionBar)
+            if bar then bar:Hide() end
         end
         if self.LayoutPanel then self:LayoutPanel() end
         if self.AutoSizePanelHeight then self:AutoSizePanelHeight("actionBarPerformanceToggle") end
@@ -1989,6 +2021,44 @@ function EL:ToggleActionBarButton(key, label)
     if self:IsActionBarEnabled() and self.RequestActionBarRefresh then self:RequestActionBarRefresh() end
     if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
     if self.RequestUpdate then self:RequestUpdate() end
+end
+
+function EL:ToggleActionBarFloating()
+    self.db.settings.panel = self.db.settings.panel or {}
+    local panelSettings = self.db.settings.panel
+    panelSettings.actionBarFloating = not (panelSettings.actionBarFloating == true)
+    self:NotifyToggle("Floating action bar", panelSettings.actionBarFloating == true)
+    if self.IsCombatLocked and self:IsCombatLocked() then
+        if self.QueueCombatDeferredWork then self:QueueCombatDeferredWork("layout") end
+        self:Print("Action bar placement will update after combat.")
+    else
+        if self.LayoutActionBar then self:LayoutActionBar() end
+        if self.LayoutPanel then self:LayoutPanel() end
+        if self.AutoSizePanelHeight then self:AutoSizePanelHeight("actionBarFloatingToggle") end
+        if self.RequestActionBarRefresh then self:RequestActionBarRefresh(true) end
+    end
+    if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+end
+
+function EL:ToggleFloatingActionBarLocked()
+    self.db.settings.panel = self.db.settings.panel or {}
+    local panelSettings = self.db.settings.panel
+    panelSettings.actionBarLocked = not (panelSettings.actionBarLocked == true)
+    self:NotifyToggle("Floating action bar lock", panelSettings.actionBarLocked == true)
+    if self.IsCombatLocked and self:IsCombatLocked() then
+        if self.QueueCombatDeferredWork then self:QueueCombatDeferredWork("layout") end
+    else
+        if self.LayoutActionBar then self:LayoutActionBar() end
+    end
+    if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+end
+
+function EL:ResetFloatingActionBarPosition()
+    self.db.settings.panel = self.db.settings.panel or {}
+    self.db.settings.panel.actionBarPosition = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -160 }
+    if self.LayoutActionBar then self:LayoutActionBar() end
+    if self.RequestActionBarRefresh then self:RequestActionBarRefresh(true) end
+    self:Print("Floating action bar position reset.")
 end
 
 function EL:ToggleSectionSetting(section)
@@ -2053,7 +2123,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.19.0"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.20.2"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -3495,21 +3565,15 @@ function EL:LayoutPanel()
     local w, h = p:GetWidth(), p:GetHeight()
     local settings = self.db and self.db.settings and self.db.settings.panel or {}
     local charShown = settings.charactersShown ~= false
-    local actionBarShown = not self.IsActionBarEnabled or self:IsActionBarEnabled()
+    local actionBarShown = IsAnchoredActionBarShown()
 
     if p.characterToggle then
         p.characterToggle:Hide()
         p.characterToggle:ClearAllPoints()
     end
 
-    if p.actionBar then
-        p.actionBar:ClearAllPoints()
-        local actionBottom = GetTrackingActionBarBottomOffset()
-        p.actionBar:SetPoint("BOTTOMLEFT", p, "BOTTOMLEFT", 12, actionBottom)
-        p.actionBar:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -14, actionBottom)
-        p.actionBar:SetHeight(actionBarShown and ACTION_BAR_H or 1)
-        p.actionBar:SetShown(actionBarShown)
-    end
+    if self.LayoutActionBar then self:LayoutActionBar() end
+    -- Action bar anchoring/floating layout is owned by Modules/ActionBar.lua.
     if p.resize then
         p.resize:ClearAllPoints()
         if actionBarShown and p.actionBar then

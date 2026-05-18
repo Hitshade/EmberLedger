@@ -1,4 +1,4 @@
-# 🔥 EmberLedger v1.19.0
+# 🔥 EmberLedger v1.20.2
 
 **EmberLedger** is a lightweight World of Warcraft profession utility addon focused on helping players manage profession alts, concentration, Artisan Moxie, Imbued Mulch, and gathering sessions without unnecessary complexity or UI clutter.
 
@@ -114,6 +114,8 @@ The action bar is configurable, compact, and performance-aware.
 * Individual buttons can be enabled or disabled
 * Seed buttons can be selected through Options
 * Spell buttons respect learned abilities where possible
+* The action bar can stay anchored inside the main tracker or float as a minimal draggable utility strip
+* Floating mode can be dragged independently, locked in place, and reset from Options
 * Item buttons can hide when unavailable
 * Zone-specific abilities are limited to appropriate areas where possible
 * Action bar processing can be disabled entirely under Performance options

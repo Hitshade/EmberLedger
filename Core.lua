@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.19.0"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.20.2"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -41,6 +41,8 @@ EL.UI_CONSTANTS = {
     SESSION_COLLAPSED_H = 36,
     SESSION_WINDOW_PAD = 6,
     ACTION_BAR_H = 36,
+    ACTION_BAR_FLOATING_W = 244,
+    ACTION_BAR_FLOATING_H = 40,
     SESSION_VISIBLE_ITEM_ROWS = 4,
     SESSION_ITEM_ROW_H = 18,
     SESSION_HISTORY_ROWS = 8,
@@ -88,7 +90,7 @@ EL.UI_CONSTANTS = {
     OPTIONS_COOLDOWN_COLUMN_CHECK_Y = -68,
 }
 
-EL.DB_VERSION = 11501
+EL.DB_VERSION = 11601
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -127,6 +129,7 @@ EL.PROFESSION_ABBREVIATIONS = {
 
 local defaults = {
     version = EL.DB_VERSION,
+    actionBarPlacementVersion = 1202,
     characters = {},
     resources = {
         concentration = {},
@@ -174,6 +177,9 @@ local defaults = {
             scale = 1,
             charactersCollapsed = false,
             charactersShown = true,
+            actionBarFloating = false,
+            actionBarLocked = false,
+            actionBarPosition = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -160 },
             actionButtons = {
                 mulch = true,
                 seed = true,
@@ -509,6 +515,14 @@ function EL:NormalizeDatabaseSettings()
     settings.favoriteCharacters = settings.favoriteCharacters or {}
     settings.options = type(settings.options) == "table" and settings.options or {}
 
+    settings.panel.actionBarFloating = settings.panel.actionBarFloating == true
+    settings.panel.actionBarLocked = settings.panel.actionBarLocked == true
+    settings.panel.actionBarPosition = type(settings.panel.actionBarPosition) == "table" and settings.panel.actionBarPosition or { point = "CENTER", relativePoint = "CENTER", x = 0, y = -160 }
+    settings.panel.actionBarPosition.point = settings.panel.actionBarPosition.point or "CENTER"
+    settings.panel.actionBarPosition.relativePoint = settings.panel.actionBarPosition.relativePoint or "CENTER"
+    settings.panel.actionBarPosition.x = tonumber(settings.panel.actionBarPosition.x) or 0
+    settings.panel.actionBarPosition.y = tonumber(settings.panel.actionBarPosition.y) or -160
+
     settings.panel.actionButtons = type(settings.panel.actionButtons) == "table" and settings.panel.actionButtons or {}
     local validActionButtons = {
         mulch = true,
@@ -791,6 +805,16 @@ function EL:EnsureDB()
         self.db.polishVersion = 1900
     end
 
+    -- Keep the action bar anchored by default after the first floating-bar release.
+    -- Users can still enable floating mode again from Options.
+    local actionBarPlacementVersion = tonumber(self.db.actionBarPlacementVersion) or 0
+    if actionBarPlacementVersion < 1202 then
+        self.db.settings = self.db.settings or {}
+        self.db.settings.panel = self.db.settings.panel or {}
+        self.db.settings.panel.actionBarFloating = false
+        self.db.actionBarPlacementVersion = 1202
+    end
+
     self:NormalizeDatabaseSettings()
     if self.BackfillLifetimeSessionStatsFromHistory then self:BackfillLifetimeSessionStatsFromHistory() end
     if self.BackfillSessionAggregateStatsFromHistory then self:BackfillSessionAggregateStatsFromHistory() end
@@ -896,6 +920,8 @@ EL.REQUIRED_MODULES = {
         functions = {
             "CreateActionBar",
             "UpdateActionBar",
+            "LayoutActionBar",
+            "ToggleActionBarFloating",
         },
     },
 }
@@ -1733,6 +1759,11 @@ function EL:GetHighestConcentrationSummary()
     return best
 end
 
+
+function EL:GetConcentrationThreshold()
+    local alerts = self.db and self.db.settings and self.db.settings.alerts
+    return tonumber(alerts and alerts.concentrationThreshold) or 360
+end
 
 function EL:GetConcentrationReadyCount(threshold)
     threshold = tonumber(threshold) or 800
@@ -2869,11 +2900,14 @@ function EL:IsActionBarEnabled()
     return perf.actionBar ~= false
 end
 
+function EL:IsActionBarFloating()
+    local panel = self.db and self.db.settings and self.db.settings.panel or {}
+    return panel.actionBarFloating == true
+end
+
 function EL:ShouldRefreshActionBar()
     if self.IsActionBarEnabled and not self:IsActionBarEnabled() then return false end
-    local panel = self.panel
-    if not (panel and panel:IsShown()) then return false end
-    local bar = panel.actionBar
+    local bar = self.GetActionBarFrame and self:GetActionBarFrame() or (self.panel and self.panel.actionBar)
     return bar and bar:IsShown()
 end
 

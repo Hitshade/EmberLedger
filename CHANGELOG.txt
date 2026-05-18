@@ -1,5 +1,33 @@
 # EmberLedger Changelog
 
+## v1.20.2
+
+- Fixed a floating Action Bar anchoring error that could occur when restoring saved floating positions.
+- Prevented floating Action Bar refreshes from snapping the bar back while it is being dragged.
+- Kept the Action Bar anchored inside the main window by default after the floating-bar test release; floating mode can still be enabled from Options.
+- Added a safe fallback that resets invalid floating anchors to a standard center-screen position instead of throwing a Lua error.
+
+---
+
+## v1.20.1
+
+- Added a shared `GetConcentrationThreshold()` helper so minimap and tracker summary logic use the same threshold source.
+- Made the floating Action Bar lock toggle follow the same combat-safe layout deferral pattern as the floating placement toggle.
+- Bumped the database version to `11600` for the floating Action Bar settings added in v1.20.0.
+- Updated README documentation to explain that floating Action Bar mode can be dragged, locked, and reset from Options.
+
+---
+
+## v1.20.0
+
+- Added an optional floating Action Bar mode for independent placement outside the main tracker window.
+- Added Action Bar placement controls for floating mode, lock/unlock behavior, and position reset.
+- Floating action bar uses a very minimal background and border to stay unobtrusive during active gameplay.
+- Preserved the existing anchored action bar behavior as the default.
+- Kept action bar layout changes combat-safe by deferring secure layout updates when needed.
+
+---
+
 ## v1.19.0
 
 ### Final Polish and Consistency

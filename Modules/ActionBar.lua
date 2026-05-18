@@ -2,6 +2,8 @@ local addonName, EL = ...
 
 local UIC = EL.UI_CONSTANTS or {}
 local ACTION_BAR_H = UIC.ACTION_BAR_H or 36
+local ACTION_BAR_FLOATING_W = UIC.ACTION_BAR_FLOATING_W or 244
+local ACTION_BAR_FLOATING_H = UIC.ACTION_BAR_FLOATING_H or 40
 
 local BORDER_R, BORDER_G, BORDER_B = 0.82, 0.66, 0.34
 local EL_BG_R, EL_BG_G, EL_BG_B = 0.030, 0.024, 0.075
@@ -16,6 +18,66 @@ local function AddBackdrop(frame, alpha, borderAlpha)
     })
     if frame.SetBackdropColor then frame:SetBackdropColor(EL_BG_R, EL_BG_G, EL_BG_B, alpha or 0.38) end
     if frame.SetBackdropBorderColor then frame:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, borderAlpha or 0.46) end
+end
+
+local function GetActionBarPanelSettings()
+    EL.db = EL.db or {}
+    EL.db.settings = EL.db.settings or {}
+    EL.db.settings.panel = EL.db.settings.panel or {}
+    local panel = EL.db.settings.panel
+    panel.actionBarPosition = type(panel.actionBarPosition) == "table" and panel.actionBarPosition or { point = "CENTER", relativePoint = "CENTER", x = 0, y = -160 }
+    panel.actionBarPosition.point = panel.actionBarPosition.point or "CENTER"
+    panel.actionBarPosition.relativePoint = panel.actionBarPosition.relativePoint or "CENTER"
+    panel.actionBarPosition.x = tonumber(panel.actionBarPosition.x) or 0
+    panel.actionBarPosition.y = tonumber(panel.actionBarPosition.y) or -160
+    return panel
+end
+
+local function SaveActionBarPoint(frame)
+    local panelSettings = GetActionBarPanelSettings()
+    local point, _, relativePoint, x, y = frame:GetPoint()
+    panelSettings.actionBarPosition.point = point or "CENTER"
+    panelSettings.actionBarPosition.relativePoint = relativePoint or "CENTER"
+    panelSettings.actionBarPosition.x = x or 0
+    panelSettings.actionBarPosition.y = y or -160
+end
+
+local VALID_ANCHOR_POINTS = {
+    TOPLEFT = true, TOP = true, TOPRIGHT = true,
+    LEFT = true, CENTER = true, RIGHT = true,
+    BOTTOMLEFT = true, BOTTOM = true, BOTTOMRIGHT = true,
+}
+
+local function SanitizeAnchorPoint(point, fallback)
+    point = tostring(point or "")
+    return VALID_ANCHOR_POINTS[point] and point or fallback or "CENTER"
+end
+
+local function SetFloatingActionBarPoint(bar, pos)
+    if not bar then return end
+    local point = SanitizeAnchorPoint(pos and pos.point, "CENTER")
+    local relativePoint = SanitizeAnchorPoint(pos and pos.relativePoint, "CENTER")
+    local x = tonumber(pos and pos.x) or 0
+    local y = tonumber(pos and pos.y) or -160
+    local ok = pcall(bar.SetPoint, bar, point, UIParent, relativePoint, x, y)
+    if ok then return end
+
+    -- If another addon or a stale saved anchor causes an anchor-family error,
+    -- reset to a plain UIParent center anchor instead of throwing a Lua error.
+    local panelSettings = GetActionBarPanelSettings()
+    panelSettings.actionBarPosition = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -160 }
+    bar:ClearAllPoints()
+    pcall(bar.SetPoint, bar, "CENTER", UIParent, "CENTER", 0, -160)
+end
+
+local function ApplyActionBarBackdrop(bar, floating)
+    if not bar then return end
+    if floating then
+        AddBackdrop(bar, 0.08, 0.24)
+    else
+        AddBackdrop(bar, 0.18, 0.18)
+        if bar.SetBackdropColor then bar:SetBackdropColor(EL_BG_R, EL_BG_G, EL_BG_B, 0.30) end
+    end
 end
 
 local function ClearButtonTexture(button, getterName)
@@ -510,12 +572,34 @@ local ACTION_ITEM_BUTTONS = {
     { key = "bank", kind = "spell", label = "Warband Bank Distance Inhibitor", name = "Warband Bank Distance Inhibitor", spellID = 460905, spellIDs = { 460905, 465226, 460925 }, fallback = "Interface\\Icons\\INV_Engineering_90_WormholeGenerator_PortalBlue", hideWhenMissing = true },
 }
 
+function EL:GetActionBarFrame()
+    return self.actionBar or (self.panel and self.panel.actionBar)
+end
+
 function EL:CreateActionBar(parent)
-    local bar = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    parent.actionBar = bar
+    local bar = CreateFrame("Frame", "EmberLedgerActionBar", parent or UIParent, "BackdropTemplate")
+    self.actionBar = bar
+    if parent then parent.actionBar = bar end
     bar:SetHeight(ACTION_BAR_H)
-    AddBackdrop(bar, 0.18, 0.18)
-    if bar.SetBackdropColor then bar:SetBackdropColor(EL_BG_R, EL_BG_G, EL_BG_B, 0.30) end
+    ApplyActionBarBackdrop(bar, false)
+    bar:SetMovable(true)
+    bar:EnableMouse(true)
+    bar:RegisterForDrag("LeftButton")
+    bar:SetScript("OnDragStart", function(frame)
+        if not (EL.IsActionBarFloating and EL:IsActionBarFloating()) then return end
+        local panelSettings = GetActionBarPanelSettings()
+        if panelSettings.actionBarLocked == true and not IsShiftKeyDown() then return end
+        if EL.IsCombatLocked and EL:IsCombatLocked() then return end
+        frame._emberDragging = true
+        frame:StartMoving()
+    end)
+    bar:SetScript("OnDragStop", function(frame)
+        frame:StopMovingOrSizing()
+        frame._emberDragging = false
+        if EL.IsActionBarFloating and EL:IsActionBarFloating() then
+            SaveActionBarPoint(frame)
+        end
+    end)
 
     bar.itemButtons = {}
     local last
@@ -533,7 +617,51 @@ function EL:CreateActionBar(parent)
     bar.logout = MakeLogoutButton(bar)
     bar.logout:SetPoint("RIGHT", bar, "RIGHT", -34, 0)
 
+    if self.LayoutActionBar then self:LayoutActionBar() end
     if self:IsActionBarEnabled() then self:RequestActionBarRefresh() end
+end
+
+function EL:LayoutActionBar()
+    if self:IsCombatLocked() then
+        if self.QueueCombatDeferredWork then self:QueueCombatDeferredWork("layout") end
+        return
+    end
+    local bar = self:GetActionBarFrame()
+    local panel = self.panel
+    if not bar then return end
+
+    local enabled = not self.IsActionBarEnabled or self:IsActionBarEnabled()
+    local floating = self.IsActionBarFloating and self:IsActionBarFloating()
+
+    if floating and bar._emberDragging then
+        bar:SetHeight(ACTION_BAR_FLOATING_H)
+        bar:EnableMouse(true)
+        ApplyActionBarBackdrop(bar, true)
+        bar:SetShown(enabled)
+        return
+    end
+
+    bar:ClearAllPoints()
+    bar:SetHeight(floating and ACTION_BAR_FLOATING_H or ACTION_BAR_H)
+    bar:SetWidth(floating and ACTION_BAR_FLOATING_W or 1)
+    bar:EnableMouse(floating)
+    ApplyActionBarBackdrop(bar, floating)
+
+    if floating then
+        bar:SetParent(UIParent)
+        bar:SetClampedToScreen(true)
+        local pos = GetActionBarPanelSettings().actionBarPosition
+        SetFloatingActionBarPoint(bar, pos)
+        bar:SetShown(enabled)
+    elseif panel then
+        bar:SetParent(panel)
+        local actionBottom = ((EL.db and EL.db.settings and EL.db.settings.display and EL.db.settings.display.compactMode == true) and 8 or 10)
+        bar:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 12, actionBottom)
+        bar:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -14, actionBottom)
+        bar:SetShown(enabled and panel:IsShown())
+    else
+        bar:SetShown(false)
+    end
 end
 
 function EL:UpdateActionBar()
@@ -542,14 +670,16 @@ function EL:UpdateActionBar()
         return
     end
     if self.IsActionBarEnabled and not self:IsActionBarEnabled() then
-        local bar = self.panel and self.panel.actionBar
+        local bar = self.GetActionBarFrame and self:GetActionBarFrame() or (self.panel and self.panel.actionBar)
         if bar then bar:Hide() end
         return
     end
-    local bar = self.panel and self.panel.actionBar
+    local bar = self.GetActionBarFrame and self:GetActionBarFrame() or (self.panel and self.panel.actionBar)
     if not bar or not bar.itemButtons then return end
+    if self.LayoutActionBar then self:LayoutActionBar() end
 
     local lastVisible
+    local visibleCount = 0
     for _, info in ipairs(ACTION_ITEM_BUTTONS) do
         local b = bar.itemButtons[info.key]
         if b then
@@ -567,6 +697,7 @@ function EL:UpdateActionBar()
                     b:SetPoint("LEFT", bar, "LEFT", 6, 0)
                 end
                 lastVisible = b
+                visibleCount = visibleCount + 1
 
                 if b.icon then
                     if info.kind == "spell" then b.icon:SetTexture(GetActionIcon(info)) end
@@ -596,6 +727,15 @@ function EL:UpdateActionBar()
                 end
             end
         end
+    end
+
+    if bar.logout then
+        bar.logout:ClearAllPoints()
+        bar.logout:SetPoint("RIGHT", bar, "RIGHT", -34, 0)
+    end
+    if self.IsActionBarFloating and self:IsActionBarFloating() then
+        local dynamicW = 6 + (visibleCount * 29) + 3 + 72 + 34
+        bar:SetWidth(math.max(ACTION_BAR_FLOATING_W, dynamicW))
     end
 end
 
