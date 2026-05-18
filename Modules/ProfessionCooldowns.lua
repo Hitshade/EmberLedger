@@ -114,13 +114,11 @@ end
 
 
 local function EnsureProfessionCooldownStore()
-    if EL.EnsureProfessionCooldownStore then
+    -- Store creation lives in Core.lua so database normalization and this module use one path.
+    if type(EL.EnsureProfessionCooldownStore) == "function" then
         return EL:EnsureProfessionCooldownStore()
     end
-    if not EL.db then return nil end
-    EL.db.resources = type(EL.db.resources) == "table" and EL.db.resources or {}
-    EL.db.resources.professionCooldowns = type(EL.db.resources.professionCooldowns) == "table" and EL.db.resources.professionCooldowns or {}
-    return EL.db.resources.professionCooldowns
+    return nil
 end
 
 local function SafeNumber(value, fallback)

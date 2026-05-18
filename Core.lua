@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.18.9"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.19.0"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -77,6 +77,15 @@ EL.UI_CONSTANTS = {
     PANEL_MAX_H = 1600,
     PANEL_MIN_SCALE = 0.6,
     PANEL_MAX_SCALE = 1.4,
+    OPTIONS_COLUMN_DESC_LEFT = 12,
+    OPTIONS_COLUMN_DESC_TOP = -36,
+    OPTIONS_COLUMN_DESC_RIGHT = -12,
+    OPTIONS_NEXT_COLUMN_Y = -926,
+    OPTIONS_NEXT_COLUMN_H = 88,
+    OPTIONS_NEXT_COLUMN_CHECK_Y = -62,
+    OPTIONS_COOLDOWN_COLUMN_Y = -1026,
+    OPTIONS_COOLDOWN_COLUMN_H = 94,
+    OPTIONS_COOLDOWN_COLUMN_CHECK_Y = -68,
 }
 
 EL.DB_VERSION = 11501
@@ -764,9 +773,7 @@ function EL:EnsureDB()
         self.db.sessionWidthVersion = 910
     end
 
-    -- Legacy migration: compact tracking layout hides the summary ticker and trims bottom padding.
-
-    -- Legacy migration: compact tracking layout also hides the subtitle and tightens top padding.
+    -- Legacy compact tracking layout migration.
     if rawSessionWidthVersion < 1750 then
         self.db.settings = self.db.settings or {}
         self.db.settings.session = self.db.settings.session or {}
@@ -777,8 +784,7 @@ function EL:EnsureDB()
         self.db.sessionWidthVersion = 1750
     end
 
-    -- Legacy migration: remove stale hidden/pinned character flags and normalize table containers after the pinning update.
-    -- Legacy migration: existing favoriteCharacters saved key remains as a backward-compatible storage key for pinned character data.
+    -- Legacy pinning cleanup and saved-table normalization.
     local polishVersion = tonumber(self.db.polishVersion) or 0
     if polishVersion < 1900 then
         CleanupSavedCharacterFlags(self.db)
@@ -855,6 +861,7 @@ EL.REQUIRED_MODULES = {
     ProfessionCooldowns = {
         registered = true,
         functions = {
+            "EnsureProfessionCooldownStore",
             "RefreshCurrentProfessionCooldowns",
             "GetProfessionCooldownDisplayText",
             "AddProfessionCooldownTooltipLines",

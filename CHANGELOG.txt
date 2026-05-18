@@ -1,5 +1,17 @@
 # EmberLedger Changelog
 
+## v1.19.0
+
+### Final Polish and Consistency
+
+- Centralized Profession Cooldown store fallback usage so the module now relies on the shared Core initialization path.
+- Added cooldown store initialization to the module self-check requirements.
+- Moved remaining Next/CD column option layout values into named UI constants.
+- Cleaned several old internal migration comments without changing behavior.
+- Updated release metadata for the v1.19.0 polish milestone.
+
+---
+
 ## v1.18.9
 
 - Centralized Profession Cooldown store initialization through a shared Core helper used by both database normalization and the cooldown module.
