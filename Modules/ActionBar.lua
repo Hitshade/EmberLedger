@@ -5,8 +5,9 @@ local ACTION_BAR_H = UIC.ACTION_BAR_H or 36
 local ACTION_BAR_FLOATING_W = UIC.ACTION_BAR_FLOATING_W or 244
 local ACTION_BAR_FLOATING_H = UIC.ACTION_BAR_FLOATING_H or 40
 
-local BORDER_R, BORDER_G, BORDER_B = 0.82, 0.66, 0.34
-local EL_BG_R, EL_BG_G, EL_BG_B = 0.030, 0.024, 0.075
+local THEME = EL.THEME_COLORS or {}
+local BORDER_R, BORDER_G, BORDER_B = THEME.BORDER_R or 0.82, THEME.BORDER_G or 0.66, THEME.BORDER_B or 0.34
+local EL_BG_R, EL_BG_G, EL_BG_B = THEME.BG_R or 0.030, THEME.BG_G or 0.024, THEME.BG_B or 0.075
 
 local function SafeNumber(value, fallback)
     if EL and type(EL.SafeNumber) == "function" then
@@ -22,6 +23,9 @@ local function SafeNumber(value, fallback)
 end
 
 local function AddBackdrop(frame, alpha, borderAlpha)
+    if EL.Style and EL.Style.AddFlatBackdrop then
+        return EL.Style:AddFlatBackdrop(frame, alpha, borderAlpha)
+    end
     if not frame or not frame.SetBackdrop then return end
     frame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -94,15 +98,11 @@ local function ApplyActionBarBackdrop(bar, floating)
 end
 
 local function ClearButtonTexture(button, getterName)
-    if not button or not getterName or not button[getterName] then return end
-    local ok, texture = pcall(button[getterName], button)
-    if ok and texture then
-        if texture.SetTexture then texture:SetTexture(nil) end
-        if texture.SetAlpha then texture:SetAlpha(0) end
-    end
+    if EL.Style and EL.Style.ClearButtonTexture then return EL.Style:ClearButtonTexture(button, getterName) end
 end
 
 local function DisableButtonArt(button)
+    if EL.Style and EL.Style.DisableButtonArt then return EL.Style:DisableButtonArt(button) end
     ClearButtonTexture(button, "GetNormalTexture")
     ClearButtonTexture(button, "GetPushedTexture")
     ClearButtonTexture(button, "GetHighlightTexture")
@@ -110,21 +110,13 @@ local function DisableButtonArt(button)
 end
 
 local function StyleBlizzardButton(button)
+    if EL.Style and EL.Style.StyleActionBarButton then return EL.Style:StyleActionBarButton(button) end
     if not button then return end
-    -- Some modern WoW builds reject nil in SetNormalTexture/SetPushedTexture/etc.
-    -- Clear the template art by mutating the existing texture objects instead.
     DisableButtonArt(button)
-    if button.SetBackdrop then
-        button:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8x8",
-            edgeFile = "Interface\\Buttons\\WHITE8x8",
-            edgeSize = 1,
-            insets = { left = 0, right = 0, top = 0, bottom = 0 },
-        })
-        button:SetBackdropColor(0.10, 0.08, 0.16, 0.86)
-        button:SetBackdropBorderColor(0.72, 0.56, 0.28, 0.60)
-    end
-    if button.SetTextColor then button:SetTextColor(1.00, 0.86, 0.36) end
+    AddBackdrop(button, 0.86, 0.60)
+    if button.SetBackdropColor then button:SetBackdropColor(THEME.ACTION_BUTTON_BG_R or 0.10, THEME.ACTION_BUTTON_BG_G or 0.08, THEME.ACTION_BUTTON_BG_B or 0.16, 0.86) end
+    if button.SetBackdropBorderColor then button:SetBackdropBorderColor(0.72, 0.56, 0.28, 0.60) end
+    if button.SetTextColor then button:SetTextColor(THEME.ACTION_BUTTON_TEXT_R or 1.00, THEME.ACTION_BUTTON_TEXT_G or 0.86, THEME.ACTION_BUTTON_TEXT_B or 0.36) end
 end
 
 local function FormatActionCooldownText(seconds)

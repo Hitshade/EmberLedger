@@ -3,8 +3,9 @@ local addonName, EL = ...
 EL.Style = EL.Style or {}
 local Style = EL.Style
 
-local BORDER_R, BORDER_G, BORDER_B = 0.82, 0.66, 0.34
-local EL_BG_R, EL_BG_G, EL_BG_B = 0.030, 0.024, 0.075
+local THEME = EL.THEME_COLORS or {}
+local BORDER_R, BORDER_G, BORDER_B = THEME.BORDER_R or 0.82, THEME.BORDER_G or 0.66, THEME.BORDER_B or 0.34
+local EL_BG_R, EL_BG_G, EL_BG_B = THEME.BG_R or 0.030, THEME.BG_G or 0.024, THEME.BG_B or 0.075
 
 function Style:ColorTextByRGB(text, r, g, b)
     r = math.max(0, math.min(1, tonumber(r) or 1))
@@ -25,6 +26,18 @@ function Style:AddBackdrop(frame, alpha, borderAlpha)
     })
     frame:SetBackdropColor(EL_BG_R, EL_BG_G, EL_BG_B, alpha or 0.55)
     frame:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, borderAlpha or 0.55)
+end
+
+function Style:AddFlatBackdrop(frame, alpha, borderAlpha)
+    if not frame or not frame.SetBackdrop then return end
+    frame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+        insets = { left = 0, right = 0, top = 0, bottom = 0 },
+    })
+    if frame.SetBackdropColor then frame:SetBackdropColor(EL_BG_R, EL_BG_G, EL_BG_B, alpha or 0.38) end
+    if frame.SetBackdropBorderColor then frame:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, borderAlpha or 0.46) end
 end
 
 function Style:ApplyFrameOpacity(frame, alpha)
@@ -106,6 +119,19 @@ function Style:StyleBlizzardButton(button)
         fs:SetJustifyH("CENTER")
         if fs.SetWordWrap then fs:SetWordWrap(false) end
     end
+end
+
+function Style:StyleActionBarButton(button)
+    if not button then return end
+    self:DisableButtonArt(button)
+    self:AddFlatBackdrop(button, 0.86, 0.60)
+    if button.SetBackdropColor then
+        button:SetBackdropColor(THEME.ACTION_BUTTON_BG_R or 0.10, THEME.ACTION_BUTTON_BG_G or 0.08, THEME.ACTION_BUTTON_BG_B or 0.16, 0.86)
+    end
+    if button.SetBackdropBorderColor then
+        button:SetBackdropBorderColor(0.72, 0.56, 0.28, 0.60)
+    end
+    if button.SetTextColor then button:SetTextColor(THEME.ACTION_BUTTON_TEXT_R or 1.00, THEME.ACTION_BUTTON_TEXT_G or 0.86, THEME.ACTION_BUTTON_TEXT_B or 0.36) end
 end
 
 function EL:StyleBlizzardButton(button)

@@ -32,6 +32,7 @@ function M:RecordFromTradeSkill()
     data.quantity = currency.quantity or 0
     data.maxQuantity = currency.maxQuantity or EL.CONCENTRATION_MAX_DEFAULT
     data.lastUpdate = time()
+    if EL.InvalidateConcentrationIndex then EL:InvalidateConcentrationIndex() end
 end
 
 function M:RefreshKnownCurrencies()
@@ -39,6 +40,7 @@ function M:RefreshKnownCurrencies()
     if not EL or not EL.db or not EL.db.resources then return end
     local charKey = EL:GetCharacterKey()
     if not charKey then return end
+    local changed = false
     for _, data in pairs(EL.db.resources.concentration or {}) do
         if data.charKey == charKey and data.currencyID then
             local currency = C_CurrencyInfo.GetCurrencyInfo(data.currencyID)
@@ -46,9 +48,11 @@ function M:RefreshKnownCurrencies()
                 data.quantity = currency.quantity
                 data.maxQuantity = currency.maxQuantity or data.maxQuantity or EL.CONCENTRATION_MAX_DEFAULT
                 data.lastUpdate = time()
+                changed = true
             end
         end
     end
+    if changed and EL.InvalidateConcentrationIndex then EL:InvalidateConcentrationIndex() end
 end
 
 function M:RefreshMoxieCurrencies()

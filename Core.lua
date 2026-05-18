@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.20.9"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.21.0"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -13,6 +13,21 @@ EL.TRADEGOODS_CLASS = Enum.ItemClass and Enum.ItemClass.Tradegoods or 7
 EL.CONSUMABLE_CLASS = Enum.ItemClass and Enum.ItemClass.Consumable or 0
 EL.SESSION_DEDUPE_SECONDS = 5
 EL.HERBALISM_ID = 182
+
+EL.THEME_COLORS = {
+    BORDER_R = 0.82,
+    BORDER_G = 0.66,
+    BORDER_B = 0.34,
+    BG_R = 0.030,
+    BG_G = 0.024,
+    BG_B = 0.075,
+    ACTION_BUTTON_BG_R = 0.10,
+    ACTION_BUTTON_BG_G = 0.08,
+    ACTION_BUTTON_BG_B = 0.16,
+    ACTION_BUTTON_TEXT_R = 1.00,
+    ACTION_BUTTON_TEXT_G = 0.86,
+    ACTION_BUTTON_TEXT_B = 0.36,
+}
 
 EL.UPDATE_DEBOUNCE_SECONDS = 0.05
 EL.ACTION_BAR_DEBOUNCE_SECONDS = 0.05
@@ -90,7 +105,7 @@ EL.UI_CONSTANTS = {
     OPTIONS_COOLDOWN_COLUMN_CHECK_Y = -68,
 }
 
-EL.DB_VERSION = 11601
+EL.DB_VERSION = 11602
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -475,18 +490,19 @@ function EL:EnsureProfessionCooldownStore()
     return self.db.resources.professionCooldowns
 end
 
-function EL:NormalizeDatabaseSettings()
-    if type(self.db) ~= "table" or type(self.db.settings) ~= "table" then return end
-    local settings = self.db.settings
+local function NormalizeResourceTables(self)
     self.db.characters = type(self.db.characters) == "table" and self.db.characters or {}
     self.db.resources = type(self.db.resources) == "table" and self.db.resources or {}
     self.db.resources.concentration = type(self.db.resources.concentration) == "table" and self.db.resources.concentration or {}
     self.db.resources.mulch = type(self.db.resources.mulch) == "table" and self.db.resources.mulch or {}
     self.db.resources.professions = type(self.db.resources.professions) == "table" and self.db.resources.professions or {}
-    -- Profession cooldowns are account resources keyed by character. Keep the table present for older SavedVariables even before the first scan.
     if self.EnsureProfessionCooldownStore then self:EnsureProfessionCooldownStore() end
     self._hasCooldownColumnData = nil
+    self._concentrationByCharKey = nil
     self.db.resources.moxie = type(self.db.resources.moxie) == "table" and self.db.resources.moxie or {}
+end
+
+local function NormalizeStatsTables(self)
     self.db.stats = type(self.db.stats) == "table" and self.db.stats or {}
     self.db.stats.lifetime = type(self.db.stats.lifetime) == "table" and self.db.stats.lifetime or {}
     local lifetime = self.db.stats.lifetime
@@ -504,7 +520,9 @@ function EL:NormalizeDatabaseSettings()
     self.db.stats.history.daily = type(self.db.stats.history.daily) == "table" and self.db.stats.history.daily or {}
     self.db.stats.history.weekly = type(self.db.stats.history.weekly) == "table" and self.db.stats.history.weekly or {}
     self.db.stats.history.backfilledFromHistory = self.db.stats.history.backfilledFromHistory == true
+end
 
+local function NormalizeSettingsTables(settings)
     settings.display = settings.display or {}
     settings.alerts = settings.alerts or {}
     settings.panel = settings.panel or {}
@@ -514,7 +532,9 @@ function EL:NormalizeDatabaseSettings()
     settings.hiddenCharacters = settings.hiddenCharacters or {}
     settings.favoriteCharacters = settings.favoriteCharacters or {}
     settings.options = type(settings.options) == "table" and settings.options or {}
+end
 
+local function NormalizeActionBarSettings(settings)
     settings.panel.actionBarFloating = settings.panel.actionBarFloating == true
     settings.panel.actionBarLocked = settings.panel.actionBarLocked == true
     settings.panel.actionBarPosition = type(settings.panel.actionBarPosition) == "table" and settings.panel.actionBarPosition or { point = "CENTER", relativePoint = "CENTER", x = 0, y = -160 }
@@ -548,7 +568,9 @@ function EL:NormalizeDatabaseSettings()
             settings.panel.actionButtons[key] = nil
         end
     end
+end
 
+local function NormalizeDisplaySettings(self, settings)
     settings.display.panelOpacity = ClampNumber(settings.display.panelOpacity, 0.20, 1.00, 0.55)
     settings.display.launcherOpacity = ClampNumber(settings.display.launcherOpacity, 0.20, 1.00, 0.50)
     settings.display.sessionOpacity = ClampNumber(settings.display.sessionOpacity, 0.20, 1.00, 0.55)
@@ -568,7 +590,6 @@ function EL:NormalizeDatabaseSettings()
         settings.display.showPinnedFirst = settings.display.showFavoritesFirst
         if settings.display.showPinnedFirst == nil then settings.display.showPinnedFirst = true end
     end
-    -- Legacy migration: read showFavoritesFirst once, then remove the old key.
     settings.display.showFavoritesFirst = nil
     settings.display.showProfession1Column = settings.display.showProfession1Column ~= false
     settings.display.showConcentration1Column = settings.display.showConcentration1Column ~= false
@@ -590,6 +611,9 @@ function EL:NormalizeDatabaseSettings()
         settings.display.showProfessionColumn = true
     end
     CleanupSavedCharacterFlags(self.db)
+end
+
+local function NormalizeAlertAndScaleSettings(self, settings)
     settings.alerts.concentrationThreshold = math.floor(ClampNumber(settings.alerts.concentrationThreshold, 0, self.CONCENTRATION_MAX_DEFAULT, 360))
     settings.alerts.moxieThreshold = math.floor(ClampNumber(settings.alerts.moxieThreshold, 0, 1000, 600))
 
@@ -609,7 +633,9 @@ function EL:NormalizeDatabaseSettings()
     end
     settings.session.width = math.floor(ClampNumber(settings.session.width, ui.SESSION_MIN_W or 320, ui.PANEL_MAX_W or 900, ui.SESSION_MIN_W or 320))
     settings.session.height = math.floor(ClampNumber(settings.session.height, 120, ui.PANEL_MAX_H or 720, 180))
+end
 
+local function NormalizeSessionSettings(settings)
     local function normalizeBool(tbl, key, default)
         if tbl[key] == nil then tbl[key] = default and true or false end
         tbl[key] = tbl[key] ~= false
@@ -634,6 +660,18 @@ function EL:NormalizeDatabaseSettings()
 
     settings.session.collapsed = nil
     settings.panel.sessionCollapsed = nil
+end
+
+function EL:NormalizeDatabaseSettings()
+    if type(self.db) ~= "table" or type(self.db.settings) ~= "table" then return end
+    local settings = self.db.settings
+    NormalizeResourceTables(self)
+    NormalizeStatsTables(self)
+    NormalizeSettingsTables(settings)
+    NormalizeActionBarSettings(settings)
+    NormalizeDisplaySettings(self, settings)
+    NormalizeAlertAndScaleSettings(self, settings)
+    NormalizeSessionSettings(settings)
 end
 
 function EL:Debug(msg)
@@ -1457,6 +1495,7 @@ function EL:ResetCharacterData(charKey)
                     self.db.resources.concentration[resourceKey] = nil
                 end
             end
+            if self.InvalidateConcentrationIndex then self:InvalidateConcentrationIndex() end
         end
         if self.db.resources.professions then
             self.db.resources.professions[charKey] = nil
@@ -1722,26 +1761,44 @@ function EL:SortDashboardRows(rows, dashboardLookups)
     end
 end
 
-function EL:GetConcentrationEntriesForCharacter(charKey)
-    local list = {}
+function EL:InvalidateConcentrationIndex()
+    self._concentrationByCharKey = nil
+end
+
+function EL:GetConcentrationIndex()
+    if self._concentrationByCharKey then return self._concentrationByCharKey end
+    local byChar = {}
     for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
-        if data.charKey == charKey then
-            table.insert(list, data)
+        local charKey = data and data.charKey
+        if charKey then
+            local list = byChar[charKey]
+            if not list then
+                list = {}
+                byChar[charKey] = list
+            end
+            list[#list + 1] = data
         end
     end
-    table.sort(list, SortConcentrationEntriesForCharacter)
-    return list
+    for _, list in pairs(byChar) do
+        table.sort(list, SortConcentrationEntriesForCharacter)
+    end
+    self._concentrationByCharKey = byChar
+    return byChar
+end
+
+function EL:GetConcentrationEntriesForCharacter(charKey)
+    if not charKey then return {} end
+    local index = self:GetConcentrationIndex()
+    return (index and index[charKey]) or {}
 end
 
 function EL:GetBestConcentrationForCharacter(charKey, now)
     local best
     now = now or time()
-    for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
-        if data.charKey == charKey then
-            local qty = self:GetEstimatedConcentration(data, now)
-            if not best or qty > (self:GetEstimatedConcentration(best, now) or 0) then
-                best = data
-            end
+    for _, data in ipairs(self:GetConcentrationEntriesForCharacter(charKey) or {}) do
+        local qty = self:GetEstimatedConcentration(data, now)
+        if not best or qty > (self:GetEstimatedConcentration(best, now) or 0) then
+            best = data
         end
     end
     return best
@@ -1753,12 +1810,10 @@ function EL:GetReadyConcentrationCountForCharacter(charKey, threshold, now)
     now = now or time()
 
     local count = 0
-    for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
-        if data and data.charKey == charKey then
-            local qty = self:GetEstimatedConcentration(data, now) or 0
-            if qty >= threshold then
-                count = count + 1
-            end
+    for _, data in ipairs(self:GetConcentrationEntriesForCharacter(charKey) or {}) do
+        local qty = self:GetEstimatedConcentration(data, now) or 0
+        if qty >= threshold then
+            count = count + 1
         end
     end
 
@@ -1928,12 +1983,10 @@ function EL:DoesCharacterNeedAttention(charKey, threshold, now)
     threshold = tonumber(threshold) or (self.db and self.db.settings and self.db.settings.alerts and self.db.settings.alerts.concentrationThreshold) or 360
     now = now or time()
 
-    for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
-        if data and data.charKey == charKey then
-            local qty = self:GetEstimatedConcentration(data, now) or 0
-            if qty >= threshold then
-                return true
-            end
+    for _, data in ipairs(self:GetConcentrationEntriesForCharacter(charKey) or {}) do
+        local qty = self:GetEstimatedConcentration(data, now) or 0
+        if qty >= threshold then
+            return true
         end
     end
 

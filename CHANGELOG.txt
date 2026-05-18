@@ -1,3 +1,16 @@
+## v1.21.0
+
+### Final Completion Cleanup
+
+- Centralized shared EmberLedger theme color constants for UI, Styling, Session Window, and Action Bar styling.
+- Moved remaining Action Bar styling helpers to the shared Styling module while preserving the Action Bar's distinct minimal look.
+- Split database normalization into smaller internal helper sections for resources, stats, display, alerts, session settings, and Action Bar settings.
+- Added a cached concentration index by character to reduce repeated concentration-table scans during dashboard refresh and sorting.
+- Added concentration-index invalidation when concentration data changes or character data is reset.
+- Kept behavior and UI layout unchanged; this is a completion/maintenance cleanup pass.
+
+---
+
 ## v1.20.9
 
 - Fixed profession cooldown refresh to capture both the current character key and character table correctly.
