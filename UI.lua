@@ -122,9 +122,40 @@ local function ColorTextByRGB(text, r, g, b)
     return EL.Style:ColorTextByRGB(text, r, g, b)
 end
 
-local function SetFramePointFromDB(frame, pos)
+local VALID_FRAME_POINTS = {
+    TOPLEFT = true, TOP = true, TOPRIGHT = true,
+    LEFT = true, CENTER = true, RIGHT = true,
+    BOTTOMLEFT = true, BOTTOM = true, BOTTOMRIGHT = true,
+}
+
+local function SanitizeFramePoint(point, fallback)
+    point = tostring(point or "")
+    return VALID_FRAME_POINTS[point] and point or fallback or "CENTER"
+end
+
+local function SafeSetFramePoint(frame, point, relativeTo, relativePoint, x, y)
+    if not frame then return false end
+    point = SanitizeFramePoint(point, "CENTER")
+    relativePoint = SanitizeFramePoint(relativePoint, point)
+    x = tonumber(x) or 0
+    y = tonumber(y) or 0
+    relativeTo = relativeTo or UIParent
+
     frame:ClearAllPoints()
-    frame:SetPoint(pos.point or "CENTER", UIParent, pos.relativePoint or "CENTER", pos.x or 0, pos.y or 0)
+    local ok = pcall(frame.SetPoint, frame, point, relativeTo, relativePoint, x, y)
+    if ok then return true end
+
+    -- Anchor-family conflicts can happen if another frame was reparented or a
+    -- stale restore target creates a circular relationship. Fall back to
+    -- UIParent so the window remains usable instead of throwing a Lua error.
+    frame:ClearAllPoints()
+    pcall(frame.SetPoint, frame, "CENTER", UIParent, "CENTER", 0, 0)
+    return false
+end
+
+local function SetFramePointFromDB(frame, pos)
+    pos = type(pos) == "table" and pos or {}
+    SafeSetFramePoint(frame, pos.point, UIParent, pos.relativePoint, pos.x, pos.y)
 end
 
 local function SaveFramePoint(frame, pos)
@@ -1494,7 +1525,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.20.3"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.20.4"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -2123,7 +2154,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.20.3"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.20.4"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -4268,8 +4299,11 @@ end
 function EL:ShowPanelFromSavedState()
     if not self.panel then return end
     if not self.db.settings.panel.detached and self.button then
-        self.panel:ClearAllPoints()
-        self.panel:SetPoint("TOPLEFT", self.button, "BOTTOMLEFT", 0, -8)
+        local anchored = SafeSetFramePoint(self.panel, "TOPLEFT", self.button, "BOTTOMLEFT", 0, -8)
+        if not anchored then
+            self.db.settings.panel.detached = true
+            SetFramePointFromDB(self.panel, self.db.settings.panel)
+        end
     else
         SetFramePointFromDB(self.panel, self.db.settings.panel)
     end

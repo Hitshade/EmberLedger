@@ -1,5 +1,13 @@
 # EmberLedger Changelog
 
+## v1.20.4
+
+- Added safer main-panel anchor restoration to prevent anchor-family `SetPoint` errors when the launcher or other frames are reparented.
+- The main tracker now falls back to a standard UIParent anchor if an attached launcher anchor is invalid.
+- Hardened saved frame point restoration with sanitized anchor points and protected SetPoint fallback handling.
+
+---
+
 ## v1.20.3
 
 - Fixed anchored Action Bar not appearing inside the main window after login until the floating option was toggled.
