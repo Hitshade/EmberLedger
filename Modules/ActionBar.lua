@@ -13,11 +13,12 @@ local function SafeNumber(value, fallback)
     if EL and type(EL.SafeNumber) == "function" then
         return EL:SafeNumber(value, fallback ~= nil and fallback or 0, "ActionBar")
     end
-    if type(value) == "number" then return value end
-    local ok, text = pcall(tostring, value)
-    if ok and text and text ~= "" then
-        local num = tonumber(text)
-        if num ~= nil then return num end
+    local okNumber, direct = pcall(tonumber, value)
+    if okNumber and direct ~= nil then return direct end
+    local okText, text = pcall(tostring, value)
+    if okText and text and text ~= "" then
+        local okParsed, parsed = pcall(tonumber, text)
+        if okParsed and parsed ~= nil then return parsed end
     end
     return fallback ~= nil and fallback or 0
 end

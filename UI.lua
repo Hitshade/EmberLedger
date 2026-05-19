@@ -60,13 +60,6 @@ function EL:RefreshUpdateTicker()
     end
 end
 
-local function SortDashboardConcentrationEntries(a, b)
-    local aa = EL:GetProfessionAbbreviation(a)
-    local bb = EL:GetProfessionAbbreviation(b)
-    if aa == bb then return (a.professionName or "") < (b.professionName or "") end
-    return aa < bb
-end
-
 local function SortDashboardProfessionEntries(a, b)
     local as = tonumber(a.slot) or 99
     local bs = tonumber(b.slot) or 99
@@ -784,10 +777,11 @@ local function MakeSettingsButton(parent, text, width, onClick)
 end
 
 
-local function ShowSettingsConfirm(text, acceptText, onAccept)
+local function ShowSettingsConfirm(text, acceptText, onAccept, popupKey, requireDialog)
     if not onAccept then return end
+    local key = popupKey or "EMBERLEDGER_CONFIRM_ACTION"
     if StaticPopupDialogs and StaticPopup_Show then
-        StaticPopupDialogs["EMBERLEDGER_CONFIRM_ACTION"] = {
+        StaticPopupDialogs[key] = {
             text = text or "Are you sure?",
             button1 = acceptText or YES,
             button2 = CANCEL,
@@ -797,7 +791,9 @@ local function ShowSettingsConfirm(text, acceptText, onAccept)
             hideOnEscape = true,
             preferredIndex = 3,
         }
-        StaticPopup_Show("EMBERLEDGER_CONFIRM_ACTION")
+        StaticPopup_Show(key)
+    elseif requireDialog then
+        if EL and EL.Print then EL:Print("Confirmation dialog unavailable. No data was removed.") end
     else
         onAccept()
     end
@@ -831,6 +827,19 @@ function EL:ConfirmRestoreHiddenCharacters()
     ShowSettingsConfirm("Unhide all hidden characters and return them to the main window table?", "Unhide All", function()
         if EL.RestoreHiddenCharacters then EL:RestoreHiddenCharacters() end
     end)
+end
+
+function EL:ConfirmRemoveHiddenCharacterData()
+    ShowSettingsConfirm("Remove all EmberLedger data for currently hidden characters? This only affects EmberLedger saved data and cannot be undone.", "Remove Data", function()
+        if EL.RemoveHiddenCharacterData then EL:RemoveHiddenCharacterData() end
+    end, "EMBERLEDGER_CONFIRM_REMOVE_HIDDEN_DATA", true)
+end
+
+function EL:ConfirmRemoveCharacterData(charKey, displayName)
+    if not charKey then return end
+    ShowSettingsConfirm("Remove EmberLedger data for " .. tostring(displayName or charKey) .. "? This only affects EmberLedger saved data and cannot be undone.", "Remove Data", function()
+        if EL.ResetCharacterData then EL:ResetCharacterData(charKey) end
+    end, "EMBERLEDGER_CONFIRM_REMOVE_CHARACTER_DATA", true)
 end
 
 function EL:ConfirmResetPinnedCharacters()
@@ -1496,7 +1505,7 @@ function EL:CreateSettingsPanel(parent)
     f.historyMaxEntriesSlider:SetPoint("TOPLEFT", f.performanceSection, "TOPLEFT", 12, -294)
     SetSettingsTooltip(f.historyMaxEntriesSlider, "Session history cap", {"Limits the visible saved session list after the 30-day retention filter is applied.", "Default: 500. Stats remain accurate through compact aggregates even when old visible list entries are pruned."})
 
-    f.maintenanceSection = MakeSettingsSection(f, "Maintenance / Resets", contentX, -438, contentW, 184)
+    f.maintenanceSection = MakeSettingsSection(f, "Maintenance / Resets", contentX, -438, contentW, 218)
     f.hiddenStatus = f.maintenanceSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.hiddenStatus:SetPoint("TOPLEFT", 12, -36)
     f.hiddenStatus:SetWidth(contentW - 24)
@@ -1514,17 +1523,20 @@ function EL:CreateSettingsPanel(parent)
     f.resetHistory:SetPoint("TOPLEFT", 12, -130)
     f.resetLifetimeStats = MakeSettingsButton(f.maintenanceSection, "Reset Lifetime", 138, function() if EL.ConfirmResetLifetimeSessionStats then EL:ConfirmResetLifetimeSessionStats() end end)
     f.resetLifetimeStats:SetPoint("LEFT", f.resetHistory, "RIGHT", 12, 0)
+    f.removeHiddenData = MakeSettingsButton(f.maintenanceSection, "Remove Hidden", 138, function() if EL.ConfirmRemoveHiddenCharacterData then EL:ConfirmRemoveHiddenCharacterData() end end)
+    f.removeHiddenData:SetPoint("TOPLEFT", 12, -164)
     SetSettingsTooltip(f.resetPos, "Reset Windows", {"Returns EmberLedger windows to their default screen positions.", "Scale and visibility settings are kept."})
     SetSettingsTooltip(f.resetSession, "Reset Session", {"Clears current session totals and tracked items."})
     SetSettingsTooltip(f.resetHidden, "Unhide All", {"Restores every hidden character to the main window table."})
     SetSettingsTooltip(f.resetPinned, "Reset Pinned", {"Removes all pinned character markers without deleting character data."})
     SetSettingsTooltip(f.resetHistory, "Clear History", {"Deletes all saved account-wide session history data.", "This does not reset the current active session."})
     SetSettingsTooltip(f.resetLifetimeStats, "Reset Lifetime", {"Resets only the lifetime aggregate stats.", "Session history and the current active session are not deleted."})
+    SetSettingsTooltip(f.removeHiddenData, "Remove Hidden", {"Deletes EmberLedger saved data for characters currently hidden from the main table.", "This is useful for deleted or permanently retired alts and cannot be undone."})
 
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.21.1"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.22.2"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -1712,6 +1724,9 @@ function EL:RefreshSettingsPanel()
     end
     if f.resetHidden and f.resetHidden.SetAlpha then
         f.resetHidden:SetAlpha(hiddenCount > 0 and 1.0 or 0.55)
+    end
+    if f.removeHiddenData and f.removeHiddenData.SetAlpha then
+        f.removeHiddenData:SetAlpha(hiddenCount > 0 and 1.0 or 0.55)
     end
     local locked = self.db.settings.lockWindows == true
     if f.lockWindows and f.lockWindows.text then
@@ -2026,15 +2041,20 @@ function EL:TogglePerformanceSetting(key)
             sessionSettings.windowOpen = false
         end
     elseif key == "actionBar" then
-        if self.LayoutActionBar then self:LayoutActionBar() end
-        if enabled then
-            if self:IsActionBarEnabled() and self.RequestActionBarRefresh then self:RequestActionBarRefresh(true) end
+        if self.IsCombatLocked and self:IsCombatLocked() then
+            if self.QueueCombatDeferredWork then self:QueueCombatDeferredWork("layout") end
+            if self.RequestActionBarRefresh then self:RequestActionBarRefresh(true) end
         else
-            local bar = self.GetActionBarFrame and self:GetActionBarFrame() or (self.panel and self.panel.actionBar)
-            if bar then bar:Hide() end
+            if self.LayoutActionBar then self:LayoutActionBar() end
+            if enabled then
+                if self:IsActionBarEnabled() and self.RequestActionBarRefresh then self:RequestActionBarRefresh(true) end
+            else
+                local bar = self.GetActionBarFrame and self:GetActionBarFrame() or (self.panel and self.panel.actionBar)
+                if bar then bar:Hide() end
+            end
+            if self.LayoutPanel then self:LayoutPanel() end
+            if self.AutoSizePanelHeight then self:AutoSizePanelHeight("actionBarPerformanceToggle") end
         end
-        if self.LayoutPanel then self:LayoutPanel() end
-        if self.AutoSizePanelHeight then self:AutoSizePanelHeight("actionBarPerformanceToggle") end
     end
 
     if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
@@ -2086,6 +2106,12 @@ end
 function EL:ResetFloatingActionBarPosition()
     self.db.settings.panel = self.db.settings.panel or {}
     self.db.settings.panel.actionBarPosition = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -160 }
+    if self.IsCombatLocked and self:IsCombatLocked() then
+        if self.QueueCombatDeferredWork then self:QueueCombatDeferredWork("layout") end
+        if self.RequestActionBarRefresh then self:RequestActionBarRefresh(true) end
+        self:Print("Floating action bar position will reset after combat.")
+        return
+    end
     if self.LayoutActionBar then self:LayoutActionBar() end
     if self.RequestActionBarRefresh then self:RequestActionBarRefresh(true) end
     self:Print("Floating action bar position reset.")
@@ -2153,7 +2179,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.21.1"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.22.2"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -3809,7 +3835,11 @@ function EL:GetRow(i)
                 GameTooltip:Hide()
 
                 if IsShiftKeyDown and IsShiftKeyDown() then
-                    EL:ResetCharacterData(self.charKey)
+                    if EL.ConfirmRemoveCharacterData then
+                        EL:ConfirmRemoveCharacterData(self.charKey, displayName)
+                    elseif EL.Debug then
+                        EL:Debug("ConfirmRemoveCharacterData is unavailable. Character data was not removed.")
+                    end
                 else
                     EL:SetCharacterHidden(self.charKey, true)
                     EL:RequestUpdate()
@@ -4536,7 +4566,8 @@ function EL:ShowRowTooltip(row)
     if self:IsCharacterPinned(row.charKey) then
         GameTooltip:AddLine("Pinned", 0.95, 0.82, 0.38)
     end
-    GameTooltip:AddLine((self:IsCharacterPinned(row.charKey) and "Alt-click: unpin" or "Alt-click: pin") .. " | Right-click: hide", 0.7, 0.7, 0.7)
-    GameTooltip:AddLine("Shift-right-click: reset this character", 0.95, 0.62, 0.26)
+    GameTooltip:AddLine((self:IsCharacterPinned(row.charKey) and "Alt-click: unpin" or "Alt-click: pin"), 0.7, 0.7, 0.7)
+    GameTooltip:AddLine("Right-click: hide character", 0.7, 0.7, 0.7)
+    GameTooltip:AddLine("Shift-right-click: remove EmberLedger data", 0.95, 0.62, 0.26)
     GameTooltip:Show()
 end

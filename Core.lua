@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.21.1"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.22.2"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -682,19 +682,20 @@ end
 
 function EL:SafeNumber(value, fallback, context)
     -- Shared guard for WoW values that may behave like protected/secret numbers.
-    -- Normal numbers use a fast path; other values convert through protected tostring,
-    -- then tonumber. If conversion fails, the caller-provided fallback is returned.
-    if type(value) == "number" then
-        return value
+    -- Use a cheap tonumber path first for normal values, then fall back to
+    -- protected tostring conversion only if direct numeric conversion fails.
+    if value == nil then return fallback end
+
+    local okNumber, direct = pcall(tonumber, value)
+    if okNumber and direct ~= nil then return direct end
+
+    local okText, text = pcall(tostring, value)
+    if okText and text and text ~= "" then
+        local okParsed, parsed = pcall(tonumber, text)
+        if okParsed and parsed ~= nil then return parsed end
     end
 
-    local ok, text = pcall(tostring, value)
-    if ok and text and text ~= "" then
-        local num = tonumber(text)
-        if num ~= nil then return num end
-    end
-
-    if value ~= nil and self.db and self.db.settings and self.db.settings.debug then
+    if self.db and self.db.settings and self.db.settings.debug then
         self._safeNumberWarnings = self._safeNumberWarnings or {}
         local key = tostring(context or "unknown")
         if not self._safeNumberWarnings[key] then
@@ -1473,7 +1474,7 @@ function EL:IsCharacterFavorite(charKey) return self:IsCharacterPinned(charKey) 
 function EL:SetCharacterFavorite(charKey, favorite) return self:SetCharacterPinned(charKey, favorite) end
 function EL:ToggleCharacterFavorite(charKey) return self:ToggleCharacterPinned(charKey) end
 
-function EL:ResetCharacterData(charKey)
+function EL:ResetCharacterData(charKey, silent)
     if not (self.db and charKey) then return false end
     local char = self.db and self.db.characters and self.db.characters[charKey]
     local displayName = (char and (char.displayName or char.name)) or charKey
@@ -1512,9 +1513,36 @@ function EL:ResetCharacterData(charKey)
         self.db.settings.hiddenCharacters[charKey] = nil
     end
 
-    self:RequestUpdate()
-    self:Print("Reset data for: " .. tostring(displayName))
+    if not silent then
+        self:RequestUpdate()
+        self:Print("Removed EmberLedger data for: " .. tostring(displayName))
+    end
     return true
+end
+
+function EL:RemoveHiddenCharacterData()
+    if not (self.db and self.db.settings and type(self.db.settings.hiddenCharacters) == "table") then
+        if self.Print then self:Print("No hidden character data to remove.") end
+        return 0
+    end
+
+    local keys = {}
+    for charKey, hidden in pairs(self.db.settings.hiddenCharacters) do
+        if hidden then keys[#keys + 1] = charKey end
+    end
+
+    local removed = 0
+    for _, charKey in ipairs(keys) do
+        if self:ResetCharacterData(charKey, true) then
+            removed = removed + 1
+        end
+    end
+
+    if self.RequestUpdate then self:RequestUpdate() end
+    if self.Print then
+        self:Print(removed > 0 and ("Removed hidden character data: " .. tostring(removed)) or "No hidden character data to remove.")
+    end
+    return removed
 end
 
 function EL:GetEffectiveMaxQuantity(maxQuantity)

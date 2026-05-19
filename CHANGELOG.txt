@@ -1,3 +1,46 @@
+## v1.22.2
+
+### Character Removal Confirmation Safety
+
+- Added unique confirmation popup keys for single-character data removal and hidden-character bulk removal.
+- Removed the direct-delete fallback from Shift-right-click removal so character data is never removed without the confirmation helper.
+- Added a safe no-delete fallback if a required removal confirmation dialog cannot be shown.
+
+---
+
+## v1.22.1
+
+### Character Row Tooltip Cleanup
+
+- Restored the release metadata after the character data cleanup pass.
+- Updated character row tooltips so regular right-click hiding and Shift-right-click permanent data removal are shown as separate actions.
+- No database or behavior changes.
+
+---
+
+## v1.22.0
+
+### Character Data Cleanup
+
+- Added a confirmed Remove Hidden option for deleting EmberLedger saved data tied to currently hidden characters.
+- Added confirmation before removing a character's saved EmberLedger data from the main tracker row shortcut.
+- Character data removal now clearly distinguishes permanent EmberLedger data cleanup from temporary hiding.
+
+---
+
+## v1.21.3
+
+- Added combat-safe deferral to floating Action Bar position reset.
+- Added combat-safe deferral to Action Bar enable/disable performance toggle.
+- Removed dead concentration dashboard sort helper.
+- Adjusted protected numeric conversion to try a cheaper guarded `tonumber` path before using the protected tostring fallback.
+
+## v1.21.2
+
+- Hardened shared numeric conversion for WoW protected/secret cooldown values.
+- Removed raw numeric fast paths from Action Bar and Profession Cooldown safety helpers so protected API values are always sanitized before comparison or arithmetic.
+- No behavior, layout, or database changes.
+
 ## v1.21.1
 
 ### Performance Cleanup
