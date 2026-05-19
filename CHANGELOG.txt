@@ -1,3 +1,14 @@
+## v1.21.1
+
+### Performance Cleanup
+
+- Reused concentration estimates during tracker row refresh instead of recalculating the same values for display and coloring.
+- Replaced per-row layout key string generation with a lightweight layout generation check.
+- Updated concentration summary helpers to use the cached concentration index where appropriate.
+- Kept the update cadence and visible behavior unchanged.
+
+---
+
 ## v1.21.0
 
 ### Final Completion Cleanup

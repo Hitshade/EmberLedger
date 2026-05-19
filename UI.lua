@@ -1524,7 +1524,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.20.9"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.21.1"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -2153,7 +2153,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.20.9"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.21.1"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -3835,6 +3835,33 @@ function EL:GetRow(i)
     return p.rows[i]
 end
 
+
+local function TrackingLayoutSnapshotChanged(snapshot, width, rowH, cols, visible)
+    if not snapshot or snapshot.width ~= width or snapshot.rowH ~= rowH then return true end
+    for _, def in ipairs(TRACKING_COLUMN_DEFS) do
+        local key = def.key
+        if snapshot.visible[key] ~= (visible[key] and true or false) then return true end
+        if snapshot[key .. "X"] ~= cols[key .. "X"] or snapshot[key .. "W"] ~= cols[key .. "W"] then return true end
+    end
+    return false
+end
+
+local function UpdateTrackingLayoutGeneration(owner, width, rowH, cols, visible)
+    owner._trackingLayoutGeneration = tonumber(owner._trackingLayoutGeneration) or 0
+    if TrackingLayoutSnapshotChanged(owner._trackingLayoutSnapshot, width, rowH, cols, visible) then
+        owner._trackingLayoutGeneration = owner._trackingLayoutGeneration + 1
+        local snapshot = { width = width, rowH = rowH, visible = {} }
+        for _, def in ipairs(TRACKING_COLUMN_DEFS) do
+            local key = def.key
+            snapshot.visible[key] = visible[key] and true or false
+            snapshot[key .. "X"] = cols[key .. "X"]
+            snapshot[key .. "W"] = cols[key .. "W"]
+        end
+        owner._trackingLayoutSnapshot = snapshot
+    end
+    return owner._trackingLayoutGeneration
+end
+
 function EL:RefreshPanel()
     local p = self.panel
     if not p then return end
@@ -3844,20 +3871,23 @@ function EL:RefreshPanel()
     local nowForSummary = time()
     local soonFloor = math.max(0, math.floor((tonumber(threshold) or 360) * 0.80 + 0.5))
     local charSummary = {}
-    for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
-        local charKey = data and data.charKey
+    for charKey, entries in pairs(self:GetConcentrationIndex() or {}) do
         if charKey and not self:IsCharacterHidden(charKey) then
             local summary = charSummary[charKey]
-            if not summary then
-                local char = self.db and self.db.characters and self.db.characters[charKey]
-                summary = { name = (char and (char.name or char.displayName)) or data.charName or "Unknown", ready = false, soon = false }
-                charSummary[charKey] = summary
-            end
-            local qty = self:GetEstimatedConcentration(data, nowForSummary) or 0
-            if qty >= threshold then
-                summary.ready = true
-            else
-                if qty >= soonFloor then summary.soon = true end
+            for _, data in ipairs(entries or {}) do
+                if data then
+                    if not summary then
+                        local char = self.db and self.db.characters and self.db.characters[charKey]
+                        summary = { name = (char and (char.name or char.displayName)) or data.charName or "Unknown", ready = false, soon = false }
+                        charSummary[charKey] = summary
+                    end
+                    local qty = self:GetEstimatedConcentration(data, nowForSummary) or 0
+                    if qty >= threshold then
+                        summary.ready = true
+                    elseif qty >= soonFloor then
+                        summary.soon = true
+                    end
+                end
             end
         end
     end
@@ -3907,25 +3937,19 @@ function EL:RefreshPanel()
         end
     end
     local concentrationLookup = {}
-    for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
-        local charKey = data and data.charKey
+    for charKey, entries in pairs(self:GetConcentrationIndex() or {}) do
         if charKey then
-            local lookup = concentrationLookup[charKey]
-            if not lookup then
-                lookup = { entries = {}, readyCount = 0, best = nil, bestQty = nil }
-                concentrationLookup[charKey] = lookup
-            end
-            table.insert(lookup.entries, data)
-            local qty = self:GetEstimatedConcentration(data, now) or 0
-            if qty >= threshold then lookup.readyCount = lookup.readyCount + 1 end
-            if not lookup.best or qty > (lookup.bestQty or -1) then
-                lookup.best = data
-                lookup.bestQty = qty
+            local lookup = { entries = entries or {}, readyCount = 0, best = nil, bestQty = nil }
+            concentrationLookup[charKey] = lookup
+            for _, data in ipairs(entries or {}) do
+                local qty = self:GetEstimatedConcentration(data, now) or 0
+                if qty >= threshold then lookup.readyCount = lookup.readyCount + 1 end
+                if not lookup.best or qty > (lookup.bestQty or -1) then
+                    lookup.best = data
+                    lookup.bestQty = qty
+                end
             end
         end
-    end
-    for _, lookup in pairs(concentrationLookup) do
-        table.sort(lookup.entries, SortDashboardConcentrationEntries)
     end
 
     local professionLookup = {}
@@ -3953,6 +3977,7 @@ function EL:RefreshPanel()
     p.content:SetWidth(width)
     local visible = {}
     for _, def in ipairs(cols.columns or {}) do visible[def.key] = true end
+    local layoutGeneration = UpdateTrackingLayoutGeneration(self, width, rowH, cols, visible)
 
     local currentCharKey = self.GetCharacterKey and self:GetCharacterKey() or nil
     local highlightCurrent = display.highlightCurrentCharacter ~= false
@@ -3989,16 +4014,18 @@ function EL:RefreshPanel()
         if profData1 then
             profValue1 = self:GetProfessionAbbreviation(profData1)
         end
+        local concQ1 = nil
+        local concQ2 = nil
         if concData1 then
-            local q = self:GetEstimatedConcentration(concData1, now) or 0
-            concValue1 = tostring(q) .. "/" .. tostring(concData1.maxQuantity or self.CONCENTRATION_MAX_DEFAULT)
+            concQ1 = self:GetEstimatedConcentration(concData1, now) or 0
+            concValue1 = tostring(concQ1) .. "/" .. tostring(concData1.maxQuantity or self.CONCENTRATION_MAX_DEFAULT)
         end
         if profData2 then
             profValue2 = self:GetProfessionAbbreviation(profData2)
         end
         if concData2 then
-            local q = self:GetEstimatedConcentration(concData2, now) or 0
-            concValue2 = tostring(q) .. "/" .. tostring(concData2.maxQuantity or self.CONCENTRATION_MAX_DEFAULT)
+            concQ2 = self:GetEstimatedConcentration(concData2, now) or 0
+            concValue2 = tostring(concQ2) .. "/" .. tostring(concData2.maxQuantity or self.CONCENTRATION_MAX_DEFAULT)
         end
         local forecastValue = "N/A"
         local forecastData = concLookup and concLookup.best or nil
@@ -4017,16 +4044,7 @@ function EL:RefreshPanel()
 
         local profIcon1 = profData1 and self:GetProfessionIconTexture(profData1) or nil
         local profIcon2 = profData2 and self:GetProfessionIconTexture(profData2) or nil
-        local layoutKey = table.concat({
-            tostring(width), tostring(rowH), tostring(cols.nameX), tostring(cols.nameW),
-            tostring(cols.prof1X), tostring(cols.prof1W), tostring(cols.conc1X), tostring(cols.conc1W),
-            tostring(cols.prof2X), tostring(cols.prof2W), tostring(cols.conc2X), tostring(cols.conc2W),
-            tostring(cols.moxieX), tostring(cols.moxieW), tostring(cols.forecastX), tostring(cols.forecastW),
-            tostring(cols.cooldownX), tostring(cols.cooldownW), tostring(cols.mulchX), tostring(cols.mulchW), tostring(visible.prof1), tostring(visible.prof2),
-            tostring(visible.conc1), tostring(visible.conc2), tostring(visible.moxie), tostring(visible.forecast), tostring(visible.cooldown), tostring(visible.mulch),
-            tostring(profIcon1), tostring(profIcon2)
-        }, ":")
-        if row._emberLayoutKey ~= layoutKey then
+        if row._emberLayoutGen ~= layoutGeneration or row._emberLayoutIndex ~= i or row._emberProfIcon1 ~= profIcon1 or row._emberProfIcon2 ~= profIcon2 then
             row:SetWidth(width)
             row:SetPoint("TOPLEFT", p.content, "TOPLEFT", 0, -((i - 1) * (rowH + gap)))
             AnchorColumnText(row.name, row, cols.nameX, cols.nameW, "LEFT")
@@ -4038,7 +4056,10 @@ function EL:RefreshPanel()
             AnchorColumnText(row.mulch, row, cols.mulchX, math.max(1, cols.mulchW), "CENTER")
             AnchorProfessionCell(row, row.prof1, row.prof1Icon, cols.prof1X, cols.prof1W, visible.prof1, profIcon1)
             AnchorProfessionCell(row, row.prof2, row.prof2Icon, cols.prof2X, cols.prof2W, visible.prof2, profIcon2)
-            row._emberLayoutKey = layoutKey
+            row._emberLayoutGen = layoutGeneration
+            row._emberLayoutIndex = i
+            row._emberProfIcon1 = profIcon1
+            row._emberProfIcon2 = profIcon2
         end
         row.prof1:SetShown(visible.prof1 and not row.prof1._emberHasProfessionIcon)
         row.conc1:SetShown(visible.conc1 and true or false)
@@ -4091,16 +4112,14 @@ function EL:RefreshPanel()
         row.prof2:SetTextColor(0.88, 0.86, 0.76)
         row.conc1:SetText(concValue1)
         if concData1 then
-            local cq = self:GetEstimatedConcentration(concData1, now) or 0
-            local cr, cg, cb = self:GetConcentrationColor(cq, concData1.maxQuantity or self.CONCENTRATION_MAX_DEFAULT)
+            local cr, cg, cb = self:GetConcentrationColor(concQ1 or 0, concData1.maxQuantity or self.CONCENTRATION_MAX_DEFAULT)
             row.conc1:SetTextColor(cr, cg, cb)
         else
             row.conc1:SetTextColor(0.7, 0.7, 0.7)
         end
         row.conc2:SetText(concValue2)
         if concData2 then
-            local cq = self:GetEstimatedConcentration(concData2, now) or 0
-            local cr, cg, cb = self:GetConcentrationColor(cq, concData2.maxQuantity or self.CONCENTRATION_MAX_DEFAULT)
+            local cr, cg, cb = self:GetConcentrationColor(concQ2 or 0, concData2.maxQuantity or self.CONCENTRATION_MAX_DEFAULT)
             row.conc2:SetTextColor(cr, cg, cb)
         else
             row.conc2:SetTextColor(0.7, 0.7, 0.7)

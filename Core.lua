@@ -2,7 +2,7 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.21.0"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.21.1"
 EL.frame = CreateFrame("Frame")
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
@@ -1823,20 +1823,24 @@ end
 function EL:GetHighestConcentrationSummary()
     local best
     local now = time()
-    for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
-        if data and not self:IsCharacterHidden(data.charKey) then
-            local char = self.db and self.db.characters and self.db.characters[data.charKey or ""]
-            local qty = self:GetEstimatedConcentration(data, now)
-            if not best or qty > best.quantity then
-                best = {
-                    charKey = data.charKey,
-                    displayName = (char and char.name) or data.charName or "Unknown",
-                    quantity = qty,
-                    maxQuantity = data.maxQuantity or self.CONCENTRATION_MAX_DEFAULT,
-                    professionName = data.professionName,
-                    professionID = data.professionID,
-                    abbrev = self:GetProfessionAbbreviation(data),
-                }
+    for charKey, entries in pairs(self:GetConcentrationIndex() or {}) do
+        if charKey and not self:IsCharacterHidden(charKey) then
+            local char = self.db and self.db.characters and self.db.characters[charKey]
+            for _, data in ipairs(entries or {}) do
+                if data then
+                    local qty = self:GetEstimatedConcentration(data, now) or 0
+                    if not best or qty > best.quantity then
+                        best = {
+                            charKey = charKey,
+                            displayName = (char and char.name) or data.charName or "Unknown",
+                            quantity = qty,
+                            maxQuantity = data.maxQuantity or self.CONCENTRATION_MAX_DEFAULT,
+                            professionName = data.professionName,
+                            professionID = data.professionID,
+                            abbrev = self:GetProfessionAbbreviation(data),
+                        }
+                    end
+                end
             end
         end
     end
@@ -1852,42 +1856,44 @@ end
 function EL:GetConcentrationReadyCount(threshold)
     threshold = tonumber(threshold) or 800
     local now = time()
-    local seen = {}
     local count = 0
-    for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
-        local charKey = data and data.charKey
-        if charKey and not seen[charKey] and not self:IsCharacterHidden(charKey) then
-            local qty = self:GetEstimatedConcentration(data, now) or 0
-            if qty >= threshold then
-                seen[charKey] = true
-                count = count + 1
+    for charKey, entries in pairs(self:GetConcentrationIndex() or {}) do
+        if charKey and not self:IsCharacterHidden(charKey) then
+            for _, data in ipairs(entries or {}) do
+                local qty = self:GetEstimatedConcentration(data, now) or 0
+                if qty >= threshold then
+                    count = count + 1
+                    break
+                end
             end
         end
     end
     return count
 end
 
+
 function EL:GetConcentrationReadyEntries(threshold, limit)
     threshold = tonumber(threshold) or 360
     local now = time()
     local entries = {}
 
-    for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
-        local charKey = data and data.charKey
+    for charKey, concEntries in pairs(self:GetConcentrationIndex() or {}) do
         if charKey and not self:IsCharacterHidden(charKey) then
-            local qty = self:GetEstimatedConcentration(data, now) or 0
-            if qty >= threshold then
-                local char = self.db and self.db.characters and self.db.characters[charKey]
-                entries[#entries + 1] = {
-                    type = "concentration",
-                    charKey = charKey,
-                    displayName = (char and (char.displayName or char.name)) or data.charName or "Unknown",
-                    professionName = data.professionName or "Profession",
-                    abbrev = self:GetProfessionAbbreviation(data),
-                    quantity = qty,
-                    maxQuantity = data.maxQuantity or self.CONCENTRATION_MAX_DEFAULT,
-                    threshold = threshold,
-                }
+            local char = self.db and self.db.characters and self.db.characters[charKey]
+            for _, data in ipairs(concEntries or {}) do
+                local qty = self:GetEstimatedConcentration(data, now) or 0
+                if qty >= threshold then
+                    entries[#entries + 1] = {
+                        type = "concentration",
+                        charKey = charKey,
+                        displayName = (char and (char.displayName or char.name)) or data.charName or "Unknown",
+                        professionName = data.professionName or "Profession",
+                        abbrev = self:GetProfessionAbbreviation(data),
+                        quantity = qty,
+                        maxQuantity = data.maxQuantity or self.CONCENTRATION_MAX_DEFAULT,
+                        threshold = threshold,
+                    }
+                end
             end
         end
     end
