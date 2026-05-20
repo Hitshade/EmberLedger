@@ -14,6 +14,8 @@ local SESSION_ITEM_ROW_H = UIC.SESSION_ITEM_ROW_H or 18
 local PANEL_DEFAULT_VISIBLE_ROWS = UIC.PANEL_DEFAULT_VISIBLE_ROWS or 12
 local TRACKING_ROW_H = 23
 local TRACKING_COMPACT_ROW_H = 18
+local TRACKING_EMPTY_BODY_H = 28
+local TRACKING_COMPACT_EMPTY_BODY_H = 24
 local PANEL_EXPANDED_MIN_H = UIC.PANEL_EXPANDED_MIN_H or 300
 local PANEL_MAX_W = UIC.PANEL_MAX_W or 900
 local PANEL_MAX_H = UIC.PANEL_MAX_H or 1600
@@ -101,7 +103,11 @@ end
 local function GetTrackingBottomPadding(actionBarShown)
     -- Match the scroll frame's bottom anchor when the action bar is hidden so
     -- auto-height calculations do not clip the last visible character row.
-    return actionBarShown and (GetTrackingActionBarBottomOffset() + ACTION_BAR_H + 8) or 34
+    return actionBarShown and (GetTrackingActionBarBottomOffset() + ACTION_BAR_H + 4) or 24
+end
+
+local function GetTrackingEmptyBodyHeight()
+    return IsCompactModeEnabled() and TRACKING_COMPACT_EMPTY_BODY_H or TRACKING_EMPTY_BODY_H
 end
 
 local function ApplyTrackingTextStyle(row)
@@ -211,11 +217,12 @@ local function GetCurrentPanelMinHeight(panel)
     -- The main window can be used as a compact convenience/action bar when
     -- the character table is hidden from Options. Keep the dynamic minimum
     -- tied to visible content instead of forcing the old tall table height.
+    -- Empty/Attention Only states intentionally use a shorter body minimum.
     local topPadding = GetTrackingTopPadding()
     local charHeaderH = charShown and (IsCompactModeEnabled() and 28 or 32) or 0
-    local charBodyMinH = charShown and (IsCompactModeEnabled() and 54 or 76) or 0
+    local charBodyMinH = charShown and GetTrackingEmptyBodyHeight() or 0
     local bottomPadding = GetTrackingBottomPadding(actionBarShown)
-    local compactMin = charShown and (IsCompactModeEnabled() and 156 or 190) or 110
+    local compactMin = charShown and (IsCompactModeEnabled() and 136 or 160) or 104
 
     return math.max(compactMin, topPadding + charHeaderH + charBodyMinH + bottomPadding)
 end
@@ -277,7 +284,7 @@ function EL:GetTrackingPanelAutoSize()
     local rowCount = charShown and self:GetVisibleTrackingRowCount() or 0
     local tableBodyH = 0
     if charShown then
-        tableBodyH = rowCount > 0 and (rowCount * GetTrackingRowHeight()) or 46
+        tableBodyH = rowCount > 0 and (rowCount * GetTrackingRowHeight()) or GetTrackingEmptyBodyHeight()
     end
 
     local topPadding = GetTrackingTopPadding()
@@ -285,7 +292,10 @@ function EL:GetTrackingPanelAutoSize()
     local bottomPadding = GetTrackingBottomPadding(actionBarShown)
     local height = topPadding + headerAndGapH + tableBodyH + bottomPadding
     local customHeight = tonumber(settings.customHeight)
-    if customHeight then
+    -- Ignore saved manual height in zero-row table states so Attention Only,
+    -- all-hidden, and fresh installs can shrink to the safe empty-state size
+    -- instead of preserving large dead space from a previous populated view.
+    if customHeight and not (charShown and rowCount == 0) then
         height = customHeight
     end
     height = math.max(GetCurrentPanelMinHeight(self.panel), math.min(GetTrackingPanelMaxHeight(self.panel), height))
@@ -317,7 +327,44 @@ local function SetTrackingPanelVerticalHeight(panel, height)
     settings.width = targetW
     settings.height = targetH
     settings.customHeight = targetH
+    if (EL.GetVisibleTrackingRowCount and EL:GetVisibleTrackingRowCount() or 0) > 0 then
+        settings.expandedHeight = targetH
+    end
+end
+
+local function RestoreSavedTrackingHeightIfNeeded(panel, rowCount)
+    local settings = EL and EL.db and EL.db.settings and EL.db.settings.panel
+    if not panel or not settings or panel._autoSizingPanel then return end
+    if not rowCount or rowCount <= 0 then
+        panel._emberRestoredSavedHeightWithRows = false
+        return
+    end
+    if panel._emberRestoredSavedHeightWithRows then return end
+
+    local savedHeight = tonumber(settings.customHeight)
+    if not savedHeight then return end
+
+    local targetW = (EL.GetTrackingPanelMaxWidth and EL:GetTrackingPanelMaxWidth()) or (panel:GetWidth() or PANEL_MIN_W)
+    local targetH = math.max(GetCurrentPanelMinHeight(panel), math.min(GetTrackingPanelMaxHeight(panel), savedHeight))
+    local currentH = panel:GetHeight() or targetH
+    if math.abs(currentH - targetH) <= 1 then
+        panel._emberRestoredSavedHeightWithRows = true
+        return
+    end
+
+    local left, top = panel:GetLeft(), panel:GetTop()
+    panel._autoSizingPanel = true
+    panel:SetSize(targetW, targetH)
+    if left and top then
+        SafeSetFramePoint(panel, "TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+        SaveFramePoint(panel, settings)
+    end
+    panel._autoSizingPanel = false
+
+    settings.width = targetW
+    settings.height = targetH
     settings.expandedHeight = targetH
+    panel._emberRestoredSavedHeightWithRows = true
 end
 
 function EL:AutoSizeTrackingPanel(reason)
@@ -340,7 +387,9 @@ function EL:AutoSizeTrackingPanel(reason)
 
     settings.width = targetW
     settings.height = targetH
-    settings.expandedHeight = targetH
+    if (self.GetVisibleTrackingRowCount and self:GetVisibleTrackingRowCount() or 0) > 0 then
+        settings.expandedHeight = targetH
+    end
 end
 
 function EL:SaveExpandedPanelHeight()
@@ -350,7 +399,7 @@ function EL:SaveExpandedPanelHeight()
 
     -- Remember a useful expanded height so collapsing does not permanently
     -- trap the window at a tiny size when the character list is reopened.
-    if not settings.charactersCollapsed then
+    if not settings.charactersCollapsed and (self.GetVisibleTrackingRowCount and self:GetVisibleTrackingRowCount() or 0) > 0 then
         local h = math.floor(p:GetHeight() or 0)
         if h and h > PANEL_MIN_H then
             settings.expandedHeight = math.max(PANEL_MIN_H, math.min(GetTrackingPanelMaxHeight(p), h))
@@ -1536,7 +1585,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.22.2"))
+    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.22.6"))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -2179,7 +2228,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.22.2"))
+    canvas.version:SetText("Version " .. tostring(self.version or "1.22.6"))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -3430,7 +3479,7 @@ function EL:CreatePanel()
     panel.rows = {}
 
     panel.empty = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    panel.empty:SetText("No tracked characters yet.\nOpen a profession window on each character to begin tracking.")
+    panel.empty:SetText("No tracked characters yet. Open professions to scan characters.")
     panel.empty:SetTextColor(0.68, 0.70, 0.72)
     panel.empty:SetJustifyH("CENTER")
     panel.empty:SetJustifyV("TOP")
@@ -3727,9 +3776,9 @@ function EL:LayoutPanel()
         p.scroll:ClearAllPoints()
         p.scroll:SetPoint("TOPLEFT", p.header, "BOTTOMLEFT", 0, -4)
         if p.actionBar and actionBarShown then
-            p.scroll:SetPoint("BOTTOMRIGHT", p.actionBar, "TOPRIGHT", -2, 8)
+            p.scroll:SetPoint("BOTTOMRIGHT", p.actionBar, "TOPRIGHT", -2, 4)
         else
-            p.scroll:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -14, 34)
+            p.scroll:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -14, 24)
         end
         p.content:SetWidth(math.max(1, p.scroll:GetWidth()))
         self:UpdateSortHeaders()
@@ -4203,26 +4252,32 @@ function EL:RefreshPanel()
         p.rows[i]:Hide()
     end
     if p.empty then
+        local compactMode = IsCompactModeEnabled()
         p.empty:ClearAllPoints()
-        p.empty:SetPoint("TOPLEFT", p.header, "BOTTOMLEFT", 12, -34)
-        p.empty:SetPoint("TOPRIGHT", p.header, "BOTTOMRIGHT", -12, -34)
-        p.empty:SetHeight(IsCompactModeEnabled() and 48 or 62)
+        p.empty:SetPoint("TOPLEFT", p.header, "BOTTOMLEFT", 12, compactMode and -8 or -10)
+        p.empty:SetPoint("TOPRIGHT", p.header, "BOTTOMRIGHT", -12, compactMode and -8 or -10)
+        p.empty:SetHeight(GetTrackingEmptyBodyHeight())
+        if p.empty.SetFontObject then p.empty:SetFontObject(compactMode and GameFontHighlightSmall or GameFontHighlight) end
+        if p.empty.SetSpacing then p.empty:SetSpacing(0) end
         if p.empty.SetWidth then p.empty:SetWidth(math.max(1, (p.header:GetWidth() or width) - 24)) end
 
         local emptyText
         if #allRows == 0 then
-            emptyText = "No tracked characters yet.\nOpen a profession window on each character to begin tracking."
-        elseif visibleRowCount == 0 and hiddenRowCount > 0 then
-            emptyText = "All tracked characters are hidden.\nUse EmberLedger Settings to restore hidden characters."
+            emptyText = "No tracked characters yet. Open professions to scan characters."
+        elseif visibleRowCount == 0 and hiddenRowCount == #allRows then
+            emptyText = "All tracked characters are hidden. Use Restore to show them."
+        elseif attentionOnly and hiddenRowCount > 0 then
+            emptyText = "No attention rows. Restore hidden or turn off Attention Only."
         elseif attentionOnly then
-            emptyText = "No characters currently need attention.\nTurn off Attention Only view to see all tracked characters."
+            emptyText = "No characters need attention."
         else
-            emptyText = "No visible character data.\nOpen a profession window to refresh tracking."
+            emptyText = "No visible character data. Open a profession window to refresh."
         end
         p.empty:SetText(emptyText)
         p.empty:SetShown(#rows == 0)
     end
-    p.content:SetHeight(math.max(40, #rows * (rowH + gap)))
+    p.content:SetHeight(math.max(GetTrackingEmptyBodyHeight(), #rows * (rowH + gap)))
+    if #rows > 0 and not p._emberVerticalResizing then RestoreSavedTrackingHeightIfNeeded(p, #rows) end
     if self.AutoSizeTrackingPanel and not p._emberVerticalResizing then self:AutoSizeTrackingPanel("refresh") end
 end
 

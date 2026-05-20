@@ -1,3 +1,46 @@
+# EmberLedger Changelog
+
+## v1.22.6
+
+### Empty-State Restoration Polish
+
+- Added a guarded saved-height restore when visible tracker rows return after a zero-row state.
+- Kept zero-row states from reusing saved manual height while preserving the preferred height once rows are visible again.
+- Clarified empty-state text when Attention Only is active and hidden characters exist.
+
+---
+
+## v1.22.5
+
+### Empty-State Edge Case Hardening
+
+- Ignored saved manual tracker height when the character table has zero visible rows so empty states can shrink safely.
+- Prevented zero-row auto-sizing from overwriting the remembered expanded tracker height.
+- Corrected the empty-state message priority when Attention Only filters visible characters while other characters are hidden.
+
+---
+
+## v1.22.4
+
+### Empty-State Safety Patch
+
+- Fixed compact Attention Only empty-state text being clipped when no characters need attention.
+- Changed tracker empty-state messages to short single-line Lua strings for safer parsing and layout.
+- Reduced zero-row tracker body height while keeping a safe minimum so the main window cannot collapse into an unusable size.
+- Preserved anchored Action Bar spacing and existing window restore behavior.
+
+---
+
+## v1.22.3
+
+### Attention Only Empty-State Polish
+
+- Tightened empty-state spacing in Attention Only view for compact and normal tracking windows.
+- Shortened empty-state messages so they fit cleanly without clipping in Compact Mode.
+- Reduced unused vertical padding around empty tracker states while preserving row and Action Bar layout behavior.
+
+---
+
 ## v1.22.2
 
 ### Character Removal Confirmation Safety
@@ -29,6 +72,8 @@
 ---
 
 ## v1.21.3
+
+### Combat Safety & Numeric Optimization
 
 - Added combat-safe deferral to floating Action Bar position reset.
 - Added combat-safe deferral to Action Bar enable/disable performance toggle.
@@ -67,6 +112,8 @@
 
 ## v1.20.9
 
+### Stability & Consistency Improvements
+
 - Fixed profession cooldown refresh to capture both the current character key and character table correctly.
 - Resetting a character now clears stored profession cooldown data for that character.
 - Added missing slash command help entries for main, history, and session pause/resume commands.
@@ -76,6 +123,8 @@
 - Tightened a delayed concentration refresh guard and cleaned a profession cooldown API field fallback.
 
 ## v1.20.8
+
+### Shared Numeric Safety Helpers
 
 - Centralized protected numeric conversion through a shared `SafeNumber` helper in Core.lua.
 - Added a fast path for normal Lua numbers before protected string conversion.
@@ -87,6 +136,8 @@
 
 ## v1.20.7
 
+### Protected Cooldown Value Hardening
+
 - Replaced cooldown numeric sanitization with a safer protected string-conversion path.
 - Hardened Action Bar and Profession Cooldown cooldown/charge handling against WoW protected or secret number values.
 - No feature or layout changes.
@@ -94,6 +145,8 @@
 ---
 
 ## v1.20.6
+
+### Cooldown Numeric Safety Fixes
 
 - Hardened Profession Cooldown numeric handling to avoid converting protected/secret cooldown and charge values.
 - Updated Action Bar numeric safety helper with the same protected-value guard pattern.
@@ -103,15 +156,19 @@
 
 ## v1.20.5
 
+### Anchor Restoration Stability
+
 - Fixed remaining main-window anchor-family errors by restoring the tracker only against UIParent instead of launcher/action frames.
 - Added safer Action Bar cooldown numeric handling for protected/secret cooldown values.
 - Kept floating Action Bar behavior unchanged while improving restore stability.
 
 ---
 
-# EmberLedger Changelog
+
 
 ## v1.20.4
+
+### Frame Anchor Recovery
 
 - Added safer main-panel anchor restoration to prevent anchor-family `SetPoint` errors when the launcher or other frames are reparented.
 - The main tracker now falls back to a standard UIParent anchor if an attached launcher anchor is invalid.
@@ -121,6 +178,8 @@
 
 ## v1.20.3
 
+### Action Bar Login Visibility Fix
+
 - Fixed anchored Action Bar not appearing inside the main window after login until the floating option was toggled.
 - Updated Action Bar refresh gating so anchored mode can refresh when the main tracker is visible, even before the bar has completed its first show/layout pass.
 - Added an immediate Action Bar layout/refresh pass when the main tracker opens or restores from saved state.
@@ -128,6 +187,8 @@
 ---
 
 ## v1.20.2
+
+### Floating Action Bar Stability
 
 - Fixed a floating Action Bar anchoring error that could occur when restoring saved floating positions.
 - Prevented floating Action Bar refreshes from snapping the bar back while it is being dragged.
@@ -138,6 +199,8 @@
 
 ## v1.20.1
 
+### Floating Action Bar Polish
+
 - Added a shared `GetConcentrationThreshold()` helper so minimap and tracker summary logic use the same threshold source.
 - Made the floating Action Bar lock toggle follow the same combat-safe layout deferral pattern as the floating placement toggle.
 - Bumped the database version to `11600` for the floating Action Bar settings added in v1.20.0.
@@ -146,6 +209,8 @@
 ---
 
 ## v1.20.0
+
+### Floating Action Bar
 
 - Added an optional floating Action Bar mode for independent placement outside the main tracker window.
 - Added Action Bar placement controls for floating mode, lock/unlock behavior, and position reset.
@@ -169,6 +234,8 @@
 
 ## v1.18.9
 
+### Cooldown Storage & Stability
+
 - Centralized Profession Cooldown store initialization through a shared Core helper used by both database normalization and the cooldown module.
 - Added a small cooldown store pruning pass to remove stale character entries and obsolete cooldown keys.
 - Tightened cooldown display and tooltip calls with protected fallbacks so main tracker rows remain stable if a cooldown helper errors.
@@ -181,6 +248,8 @@
 
 ## v1.18.8
 
+### Cooldown Storage Hotfix
+
 - Fixed Profession Cooldown store helper calls that could error during cooldown refresh or row tooltip generation.
 - Restored the local cooldown store initializer used by `RefreshCurrentProfessionCooldowns` and `GetProfessionCooldownEntriesForCharacter`.
 - No behavior or layout changes.
@@ -188,6 +257,8 @@
 ---
 
 ## v1.18.7
+
+### Cooldown Initialization Safety
 
 - Added explicit profession cooldown store normalization for older SavedVariables before first scan.
 - Added a defensive cooldown sort fallback so the dashboard remains stable if cooldown helpers are unavailable.
@@ -199,6 +270,8 @@
 
 ## v1.18.6
 
+### Protected Cooldown Value Hotfix
+
 - Fixed a cooldown scan error caused by protected/secret numeric values returned by WoW cooldown APIs.
 - Added safe numeric conversion guards to Profession Cooldown scanning and tooltip display paths.
 - Cleaned the duplicate v1.18.5 changelog heading.
@@ -206,6 +279,8 @@
 ---
 
 ## v1.18.5
+
+### Options Layout Cleanup
 
 - Polished Main Window column option sections for better spacing.
 - Tightened Next and Cooldown Readiness descriptions so the bottom of the page no longer feels cramped.
@@ -220,6 +295,8 @@
 
 ## v1.18.3
 
+### Cooldown Tooltip Clarity
+
 - Improved Profession Cooldown tooltip clarity for characters that have the relevant profession but have not learned a supported cooldown recipe.
 - Added an explicit `Unlearned` state so unlearned cooldown recipes are no longer shown as `Open profession to scan`.
 - Reserved `Open profession to scan` for genuinely unknown or unscanned cooldown data.
@@ -228,6 +305,8 @@
 
 ## v1.18.2
 
+### Cooldown Display Polish
+
 - Polished the Profession Cooldown `CD` column countdown display so sub-hour timers use compact `Xm` / `<1m` values instead of longer countdown text.
 - Kept full cooldown timing detail in tooltips while preserving the narrow main tracker column.
 - Added short README coverage for Profession Cooldown readiness tracking.
@@ -235,6 +314,8 @@
 ---
 
 ## v1.18.1
+
+### Cooldown Tracking Stabilization
 
 - Stabilized Profession Cooldown readiness tracking after the initial v1.18.0 implementation.
 - Removed duplicate login cooldown scans by letting the module refresh path handle PLAYER_ENTERING_WORLD.
@@ -247,6 +328,8 @@
 ---
 
 ## v1.18.0
+
+### Profession Cooldown Readiness
 
 - Added Profession Cooldown readiness tracking for a curated set of Alchemy and Tailoring cooldown crafts.
 - Added a compact optional `CD` column to the main tracker with tooltip details for supported cooldowns.

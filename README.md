@@ -1,4 +1,4 @@
-# 🔥 EmberLedger v1.22.2
+# 🔥 EmberLedger v1.22.6
 
 **EmberLedger** is a lightweight World of Warcraft profession utility addon focused on helping players manage profession alts, concentration, Artisan Moxie, Imbued Mulch, and gathering sessions without unnecessary complexity or UI clutter.
 
@@ -18,8 +18,6 @@ EmberLedger tracks profession information across your Warband so you can quickly
 * Optional **Next** forecast column for quick readiness timing
 * Supports pinned characters for easier alt management
 * Supports hidden characters for cleaner tracking
-* Optional **Attention Only** view for characters that need action
-* Character row shortcuts for pinning, hiding, restoring, and removing saved data
 * Optional **Current character first** behavior
 * Optional **Highlight current character** behavior
 * Optional compact display mode for smaller tracking windows
@@ -37,8 +35,6 @@ The main tracking window can display:
 * Profession Cooldown readiness (`CD`)
 
 If a character only has one concentration-tracked profession, EmberLedger places it in the first profession/concentration slot instead of leaving awkward empty gaps.
-
-Character rows also support quick management actions: **Alt-click** to pin or unpin, **right-click** to hide, and **Shift-right-click** to remove saved EmberLedger data after confirmation. Hidden characters can be restored or removed in bulk from Options.
 
 ***
 
@@ -91,8 +87,6 @@ It can track:
 * Basic material categorization
 * Session history
 
-Optional filters let you decide whether to include Enchanting items, Fish, Other materials, raw gold gains, gold spent, and trusted mail rewards.
-
 Session tracking can appear in the launcher, in the standalone Session window, or both. Launcher display and Session window visibility are customized independently, so hiding the Session window does not remove session information from the launcher.
 
 Session history keeps up to **30 days** of useful session summaries, can show either **This Week** since weekly reset or the full **30 days**, and automatically prunes empty/no-value sessions to avoid unnecessary SavedVariables growth.
@@ -134,8 +128,7 @@ EmberLedger is built around a polished dashboard-style interface designed to sta
 
 Main window options include:
 
-* Compact Mode for tighter spacing
-* Attention Only view for characters needing action
+* Compact Mode
 * Show character realm
 * Show pinned first
 * Current character first
@@ -146,7 +139,6 @@ Main window options include:
 * Optional Next column
 * Optional Mulch column
 * Configurable Moxie spend threshold
-* Maintenance tools for hidden characters, pinned characters, sessions, and window positions
 
 The Options window is organized into clear sections for main-window toggles, column visibility, launcher behavior, session behavior, action bar controls, performance settings, and maintenance tools.
 
@@ -217,21 +209,6 @@ EmberLedger is for players who:
 * Want useful information without a large profession suite
 
 If you manage multiple profession characters and want a faster way to check readiness, resources, and session value, EmberLedger was built for that exact workflow.
-
-***
-
-# ⌨️ Slash Commands
-
-EmberLedger can be opened with **/el**, **/ember**, or **/emberledger**. Useful commands include:
-
-* **/el main** - Toggle the main tracking window
-* **/el settings** - Open Options
-* **/el session** - Toggle the Session window
-* **/el history** - Toggle Session History / Stats
-* **/el refresh** - Refresh tracked profession data
-* **/el refresh professions** - Refresh profession identity data
-* **/el restore hidden** - Restore hidden characters
-* **/el debug** - Toggle debug output
 
 ***
 

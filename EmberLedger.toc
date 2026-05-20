@@ -1,8 +1,8 @@
 ## Interface: 120007, 120005, 120000
 ## Title: EmberLedger
-## Notes: Account-wide profession alt dashboard for concentration, Artisan Moxie, Imbued Mulch, profession cooldowns, session tracking, and utility action buttons.
+## Notes: Account-wide alt resource dashboard for concentration, Imbued Mulch, and profession session value tracking, and future resource timers.
 ## Author: Hitshade
-## Version: 1.22.2
+## Version: 1.22.6
 ## Category: Professions
 ## SavedVariables: EmberLedgerDB
 ## OptionalDeps: LibStub, LibDataBroker-1.1, LibDBIcon-1.0
