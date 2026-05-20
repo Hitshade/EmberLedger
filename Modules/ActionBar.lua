@@ -719,7 +719,7 @@ function EL:UpdateActionBar()
             local enabled = (not actionButtons) or actionButtons[info.key] ~= false
             local available = enabled and GetActionAvailable(info) or false
             local show = enabled and ((not b.hideWhenMissing) or available)
-            if info.kind == "spell" then SetSpellButtonAttributes(b, info) end
+            if info.kind == "spell" and enabled then SetSpellButtonAttributes(b, info) end
             b:SetShown(show)
             if show then
                 b:ClearAllPoints()

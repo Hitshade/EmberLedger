@@ -1,5 +1,66 @@
 # EmberLedger Changelog
 
+## v1.24.0
+
+### Modularity and Discoverability
+
+- Reworked README/CurseForge description to emphasize EmberLedger's modular design.
+- Restored the fuller feature overview, row interaction guidance, session details, Action Bar details, localization note, and lightweight design explanation.
+- Reduced decorative icon usage inside feature lists while keeping section headers visually distinct.
+- Simplified README slash command documentation around `/el help` to reduce documentation drift.
+- Improved `/el help` output with grouped command categories.
+- Updated the TOC notes field to better reflect the current addon scope.
+
+---
+
+## v1.23.7
+
+### Locale-Independent Concentration Matching
+
+- Stored parent profession IDs with newly scanned concentration records where Blizzard provides them.
+- Matched concentration records against both child profession IDs and parent/base profession IDs.
+- Improved P1/P2 profession abbreviations for localized clients by preferring parent profession IDs when available.
+- Improved profession icon and Moxie lookup behavior for concentration fallback slots.
+- Preserved the v1.23.6 unmatched-concentration rescue fallback for older saved records and untested locale edge cases.
+
+---
+## v1.23.6
+
+### Locale-Safe Concentration Display
+
+- Improved profession/concentration matching for non-English clients.
+- Added a locale-safe fallback so concentration records remain visible even when Blizzard reports profession names or expansion profession labels differently by locale.
+- Improved profession name cleanup for expansion names that appear after the profession name, such as localized "profession of Khaz Algar" style labels.
+- Preserved existing profession dashboard behavior while prioritizing concentration-bearing slots in the visible P1/P2 columns.
+
+---
+
+## v1.23.5
+
+### Defensive Hardening Pass
+
+- Hardened profession cooldown scan confidence so uncertain API states no longer overwrite known cooldown data as unlearned.
+- Preserved previous profession cooldown records when spell or recipe APIs are temporarily unavailable.
+- Removed raw numeric conversion fallbacks from concentration and mulch API-facing paths.
+- Wrapped additional profession and tradeskill API calls with protected guards.
+- Added guarded profession API wrappers for current profession identity scans.
+- Hardened session bag and item scanning with protected container and item API wrappers.
+- Added throttled debug output for noisy session diagnostics.
+- Avoided unnecessary spell-button attribute refreshes for disabled Action Bar buttons.
+
+---
+
+## v1.23.4
+
+### Secret Number Cooldown Safety
+
+- Hardened shared numeric sanitization against protected/secret number values that can survive conversion but fail later arithmetic.
+- Added an extra profession cooldown sanitization pass before charge comparisons and remaining-time calculations.
+- Fixed a Lua error path in profession cooldown refresh when Blizzard returns protected charge values.
+- Updated the README AI-assisted development disclosure wording.
+
+---
+
 ## v1.23.3
 
 ### Final Micro-Polish Pass

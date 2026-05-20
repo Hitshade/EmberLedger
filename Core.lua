@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.23.3"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.24.0"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -700,19 +700,36 @@ function EL:Debug(msg)
     end
 end
 
+function EL:DebugThrottled(key, seconds, msg)
+    if not (self.db and self.db.settings and self.db.settings.debug) then return end
+    self._debugThrottle = self._debugThrottle or {}
+    local now = (GetTime and GetTime()) or time()
+    key = tostring(key or msg or "debug")
+    seconds = self:SafeNumber(seconds, 1, "debug.throttleSeconds") or 1
+    if self._debugThrottle[key] and now - self._debugThrottle[key] < seconds then return end
+    self._debugThrottle[key] = now
+    self:Debug(msg)
+end
+
 function EL:SafeNumber(value, fallback, context)
     -- Shared guard for WoW values that may behave like protected/secret numbers.
-    -- Use a cheap tonumber path first for normal values, then fall back to
-    -- protected tostring conversion only if direct numeric conversion fails.
+    -- Some protected values can survive tonumber() but still fail later arithmetic,
+    -- so validate the converted value with a protected no-op numeric operation before returning it.
     if value == nil then return fallback end
 
     local okNumber, direct = pcall(tonumber, value)
-    if okNumber and direct ~= nil then return direct end
+    if okNumber and type(direct) == "number" then
+        local okUsable, usable = pcall(function() return direct + 0 end)
+        if okUsable and type(usable) == "number" then return usable end
+    end
 
     local okText, text = pcall(tostring, value)
     if okText and text and text ~= "" then
         local okParsed, parsed = pcall(tonumber, text)
-        if okParsed and parsed ~= nil then return parsed end
+        if okParsed and type(parsed) == "number" then
+            local okUsable, usable = pcall(function() return parsed + 0 end)
+            if okUsable and type(usable) == "number" then return usable end
+        end
     end
 
     if self.db and self.db.settings and self.db.settings.debug then
@@ -720,7 +737,7 @@ function EL:SafeNumber(value, fallback, context)
         local key = tostring(context or "unknown")
         if not self._safeNumberWarnings[key] then
             self._safeNumberWarnings[key] = true
-            self:Debug("Sanitized non-numeric protected value in " .. key .. ".")
+            self:Debug("Sanitized non-numeric or protected value in " .. key .. ".")
         end
     end
 
@@ -1124,12 +1141,31 @@ function EL:ResolveSessionHistoryClass(entry)
     return nil
 end
 
+function EL:GetProfessionsSafe()
+    if type(GetProfessions) ~= "function" then return nil, nil end
+    local ok, prof1, prof2 = pcall(GetProfessions)
+    if ok then return prof1, prof2 end
+    if self.DebugThrottled then self:DebugThrottled("professions.get.failed", 10, "GetProfessions failed during profession identity scan.") end
+    return nil, nil
+end
+
+function EL:GetProfessionInfoSafe(profIndex)
+    if type(GetProfessionInfo) ~= "function" or not profIndex then return nil end
+    local ok, name, icon, skillLevel, maxSkillLevel, numAbilities, spellOffset, skillLine = pcall(GetProfessionInfo, profIndex)
+    if ok then return name, icon, skillLevel, maxSkillLevel, numAbilities, spellOffset, skillLine end
+    if self.DebugThrottled then self:DebugThrottled("profession.info.failed", 10, "GetProfessionInfo failed during profession identity scan.") end
+    return nil
+end
+
 function EL:CharacterHasProfession(skillLineID)
-    local professions = { GetProfessions() }
+    local target = self:SafeNumber(skillLineID, nil, "profession.targetSkillLine")
+    if not target then return false end
+    local prof1, prof2 = self:GetProfessionsSafe()
+    local professions = { prof1, prof2 }
     for _, profIndex in ipairs(professions) do
         if profIndex then
-            local _, _, _, _, _, _, skillLine = GetProfessionInfo(profIndex)
-            if tonumber(skillLine) == tonumber(skillLineID) then
+            local _, _, _, _, _, _, skillLine = self:GetProfessionInfoSafe(profIndex)
+            if self:SafeNumber(skillLine, nil, "profession.skillLine") == target then
                 return true
             end
         end
@@ -1138,7 +1174,7 @@ function EL:CharacterHasProfession(skillLineID)
 end
 
 function EL:RefreshCurrentProfessionIdentity()
-    if not GetProfessions or not GetProfessionInfo then return false end
+    if type(GetProfessions) ~= "function" or type(GetProfessionInfo) ~= "function" then return false end
     self.db = self.db or {}
     self.db.resources = type(self.db.resources) == "table" and self.db.resources or {}
     self.db.resources.professions = type(self.db.resources.professions) == "table" and self.db.resources.professions or {}
@@ -1146,26 +1182,29 @@ function EL:RefreshCurrentProfessionIdentity()
     local charKey, char = self:GetCurrentCharacter()
     if not charKey then return false end
 
-    local prof1, prof2 = GetProfessions()
+    local prof1, prof2 = self:GetProfessionsSafe()
     local slots = { prof1, prof2 }
     local list = {}
 
     for slotIndex, profIndex in ipairs(slots) do
         if profIndex then
-            local name, icon, skillLevel, maxSkillLevel, _, _, skillLine = GetProfessionInfo(profIndex)
+            local name, icon, skillLevel, maxSkillLevel, _, _, skillLine = self:GetProfessionInfoSafe(profIndex)
             if name and name ~= "" then
+                skillLine = self:SafeNumber(skillLine, nil, "profession.identity.skillLine")
+                skillLevel = self:SafeNumber(skillLevel, 0, "profession.identity.skillLevel") or 0
+                maxSkillLevel = self:SafeNumber(maxSkillLevel, 0, "profession.identity.maxSkillLevel") or 0
                 list[#list + 1] = {
                     charKey = charKey,
                     charName = char and char.name or UnitName("player") or "Unknown",
                     realm = char and char.realm or self:GetRealm(),
                     class = char and char.class,
                     slot = slotIndex,
-                    professionID = tonumber(skillLine) or skillLine,
-                    skillLineID = tonumber(skillLine) or skillLine,
+                    professionID = skillLine,
+                    skillLineID = skillLine,
                     professionName = name,
                     icon = icon,
-                    skillLevel = tonumber(skillLevel) or 0,
-                    maxSkillLevel = tonumber(maxSkillLevel) or 0,
+                    skillLevel = skillLevel,
+                    maxSkillLevel = maxSkillLevel,
                     lastUpdate = time(),
                     source = "GetProfessions",
                 }
@@ -1230,15 +1269,26 @@ end
 
 function EL:GetConcentrationEntryForProfession(charKey, professionData, concentrationEntries)
     if not charKey or type(professionData) ~= "table" then return nil end
-    local targetID = tonumber(professionData.professionID or professionData.skillLineID or professionData.skillLine)
+    local targetID = self.SafeNumber and self:SafeNumber(professionData.professionID or professionData.skillLineID or professionData.skillLine, nil, "concentration.match.targetID") or nil
+    local targetParentID = self.SafeNumber and self:SafeNumber(professionData.parentProfessionID, nil, "concentration.match.targetParentID") or nil
     local targetName = self:GetCleanProfessionName(professionData.professionName):lower()
     local fallback
     local source = concentrationEntries or (self.db and self.db.resources and self.db.resources.concentration) or {}
 
     for _, data in pairs(source) do
         if data and data.charKey == charKey then
-            local dataID = tonumber(data.professionID or data.skillLineID or data.skillLine)
+            local dataID = self.SafeNumber and self:SafeNumber(data.professionID or data.skillLineID or data.skillLine, nil, "concentration.match.dataID") or nil
+            local dataParentID = self.SafeNumber and self:SafeNumber(data.parentProfessionID, nil, "concentration.match.dataParentID") or nil
             if targetID and dataID and targetID == dataID then
+                return data
+            end
+            if targetID and dataParentID and targetID == dataParentID then
+                return data
+            end
+            if targetParentID and dataID and targetParentID == dataID then
+                return data
+            end
+            if targetParentID and dataParentID and targetParentID == dataParentID then
                 return data
             end
             local dataName = self:GetCleanProfessionName(data.professionName):lower()
@@ -1255,36 +1305,43 @@ function EL:GetDashboardProfessionSlots(charKey, professionEntries, concentratio
     local slots = {}
     local professions = professionEntries or self:GetProfessionEntriesForCharacter(charKey)
     local matchedConc = {}
+    local concSource = concentrationEntries or self:GetConcentrationEntriesForCharacter(charKey) or {}
 
     for _, profData in ipairs(professions or {}) do
-        local concData = self:GetConcentrationEntryForProfession(charKey, profData, concentrationEntries)
+        local concData = self:GetConcentrationEntryForProfession(charKey, profData, concSource)
         if concData then matchedConc[concData] = true end
         table.insert(slots, { prof = profData, conc = concData })
     end
 
-    -- If profession identity is incomplete but concentration exists, keep the old
-    -- concentration-only fallback so older character records still display.
-    if #slots == 0 then
-        for _, concData in ipairs(concentrationEntries or self:GetConcentrationEntriesForCharacter(charKey) or {}) do
-            table.insert(slots, { prof = concData, conc = concData })
+    -- Locale-safe fallback: if Blizzard reports profession identity and
+    -- concentration under different localized labels or skill-line IDs, do not
+    -- drop the concentration data. Add any unmatched concentration records as
+    -- display-only profession slots, then promote concentration slots to the
+    -- visible P1/P2 positions below. This protects non-English clients such as
+    -- ptBR where expansion profession names may not match the English ordering.
+    for _, concData in ipairs(concSource) do
+        if concData and not matchedConc[concData] then
+            table.insert(slots, { prof = concData, conc = concData, concentrationFallback = true })
+            matchedConc[concData] = true
         end
     end
 
-    -- If one of two known professions has concentration and the other does not,
-    -- present the concentration profession in P1/Conc 1. This is display-only:
-    -- stored profession slots are not changed.
-    local concSlotIndex
-    local concCount = 0
-    for i, slotData in ipairs(slots) do
+    -- Prefer concentration-bearing slots first so the two visible profession
+    -- columns do not hide concentration just because a locale-specific name or
+    -- child-profession ID failed to match the base profession identity.
+    local withConcentration, withoutConcentration = {}, {}
+    for _, slotData in ipairs(slots) do
         if slotData and slotData.conc then
-            concCount = concCount + 1
-            concSlotIndex = i
+            table.insert(withConcentration, slotData)
+        else
+            table.insert(withoutConcentration, slotData)
         end
     end
 
-    if concCount == 1 and concSlotIndex and concSlotIndex > 1 then
-        local promoted = table.remove(slots, concSlotIndex)
-        table.insert(slots, 1, promoted)
+    if #withConcentration > 0 then
+        slots = {}
+        for _, slotData in ipairs(withConcentration) do table.insert(slots, slotData) end
+        for _, slotData in ipairs(withoutConcentration) do table.insert(slots, slotData) end
     end
 
     return slots
@@ -1301,11 +1358,13 @@ end
 
 function EL:GetMoxieCurrencyIDForProfession(professionData)
     if not professionData then return nil end
-    local professionID = tonumber(professionData.professionID or professionData.skillLineID or professionData.skillLine)
-    if professionID and self.MOXIE_CURRENCY_BY_PROFESSION_ID then
-        return self.MOXIE_CURRENCY_BY_PROFESSION_ID[professionID], professionID
+    local professionID = self.SafeNumber and self:SafeNumber(professionData.professionID or professionData.skillLineID or professionData.skillLine, nil, "moxie.professionID") or nil
+    local parentID = self.SafeNumber and self:SafeNumber(professionData.parentProfessionID, nil, "moxie.parentProfessionID") or nil
+    local lookupID = parentID and self.MOXIE_CURRENCY_BY_PROFESSION_ID and self.MOXIE_CURRENCY_BY_PROFESSION_ID[parentID] and parentID or professionID
+    if lookupID and self.MOXIE_CURRENCY_BY_PROFESSION_ID then
+        return self.MOXIE_CURRENCY_BY_PROFESSION_ID[lookupID], lookupID
     end
-    return nil, professionID
+    return nil, lookupID
 end
 
 function EL:GetMoxieEntryForProfession(charKey, professionData)
@@ -1395,6 +1454,26 @@ local function StripProfessionExpansionPrefix(name)
         if lower:sub(1, prefix.len) == prefix.lower and trimmed:sub(prefix.len + 1, prefix.len + 1) == " " then
             return trimmed:sub(prefix.len + 2):gsub("^%s+", ""):gsub("%s+$", "")
         end
+
+        -- Some locales place the expansion name after the profession name
+        -- instead of before it, for example "Alchemy of Khaz Algar" style
+        -- strings. Strip known expansion names anywhere in the label so
+        -- profession/concentration matching does not depend on English word
+        -- order. This is intentionally conservative and only removes the
+        -- expansion token plus common connector words left around it.
+        local startPos, endPos = lower:find(prefix.lower, 1, true)
+        if startPos and startPos > 1 then
+            local before = trimmed:sub(1, startPos - 1):gsub("%s+$", "")
+            before = before:gsub("%s+[Oo][Ff]$", "")
+            before = before:gsub("%s+[Dd][Ee]$", "")
+            before = before:gsub("%s+[Dd][Aa]$", "")
+            before = before:gsub("%s+[Dd][Oo]$", "")
+            before = before:gsub("%s+[Dd][Oo][Ss]$", "")
+            before = before:gsub("%s+[Dd][Aa][Ss]$", "")
+            local after = trimmed:sub(endPos + 1):gsub("^%s+", ""):gsub("%s+$", "")
+            if before ~= "" then return before end
+            if after ~= "" then return after end
+        end
     end
     return trimmed
 end
@@ -1420,12 +1499,15 @@ end
 
 function EL:GetProfessionAbbreviation(data)
     if not data then return "N/A" end
-    -- Prefer the explicit abbreviation table keyed by profession ID so known
-    -- professions always get a consistent short name regardless of locale or
-    -- how the name string is structured.
-    local professionID = tonumber(data.professionID or data.skillLineID or data.skillLine)
-    if professionID and self.PROFESSION_ABBREVIATIONS and self.PROFESSION_ABBREVIATIONS[professionID] then
-        local abbr = self.PROFESSION_ABBREVIATIONS[professionID]
+    -- Prefer the base/parent profession ID when available. Concentration uses
+    -- expansion child profession IDs, while the abbreviation table is keyed by
+    -- base profession IDs. This keeps P1/P2 labels locale-independent on CJK,
+    -- Russian, German hyphenated, and other localized clients.
+    local professionID = self.SafeNumber and self:SafeNumber(data.professionID or data.skillLineID or data.skillLine, nil, "profession.abbreviation.id") or nil
+    local parentID = self.SafeNumber and self:SafeNumber(data.parentProfessionID, nil, "profession.abbreviation.parentID") or nil
+    local lookupID = parentID and self.PROFESSION_ABBREVIATIONS and self.PROFESSION_ABBREVIATIONS[parentID] and parentID or professionID
+    if lookupID and self.PROFESSION_ABBREVIATIONS and self.PROFESSION_ABBREVIATIONS[lookupID] then
+        local abbr = self.PROFESSION_ABBREVIATIONS[lookupID]
         return abbr:sub(1, 1):upper() .. abbr:sub(2):lower()
     end
     -- Fallback: derive from the first word of the cleaned profession name.
@@ -1439,9 +1521,11 @@ end
 
 function EL:GetProfessionIconTexture(data)
     if not data then return nil end
-    local professionID = tonumber(data.professionID or data.skillLineID or data.skillLine)
-    if professionID and self.PROFESSION_ICON_TEXTURES and self.PROFESSION_ICON_TEXTURES[professionID] then
-        return self.PROFESSION_ICON_TEXTURES[professionID]
+    local professionID = self.SafeNumber and self:SafeNumber(data.professionID or data.skillLineID or data.skillLine, nil, "profession.icon.id") or nil
+    local parentID = self.SafeNumber and self:SafeNumber(data.parentProfessionID, nil, "profession.icon.parentID") or nil
+    local lookupID = parentID and self.PROFESSION_ICON_TEXTURES and self.PROFESSION_ICON_TEXTURES[parentID] and parentID or professionID
+    if lookupID and self.PROFESSION_ICON_TEXTURES and self.PROFESSION_ICON_TEXTURES[lookupID] then
+        return self.PROFESSION_ICON_TEXTURES[lookupID]
     end
     local clean = self:GetCleanProfessionName(data.professionName):lower()
     local nameMap = {
@@ -3237,23 +3321,31 @@ function EL:Print(msg)
 end
 
 function EL:PrintSlashHelp()
-    self:Print(self:T("Commands:"))
-    self:Print(self:T("/el or /ember - Toggle EmberLedger launcher/main view."))
+    self:Print(self:T("EmberLedger commands:"))
+    self:Print(self:T("General:"))
+    self:Print(self:T("/el - Toggle EmberLedger launcher/main view."))
     self:Print(self:T("/el main - Toggle the main tracking window."))
     self:Print(self:T("/el settings - Open Options."))
+    self:Print(self:T("/el help - Show this command list."))
+    self:Print(self:T("Sessions:"))
     self:Print(self:T("/el session - Toggle the standalone Session window."))
     self:Print(self:T("/el history - Toggle Session History / Stats."))
     self:Print(self:T("/el session start or /el session resume - Resume session tracking."))
     self:Print(self:T("/el session pause - Pause session tracking."))
-    self:Print(self:T("/el refresh - Refresh tracked profession data."))
-    self:Print(self:T("/el scale - Show the current main window scale."))
-    self:Print(self:T("/el scale 0.85 - Set main window scale from 0.60 to 1.40."))
-    self:Print(self:T("/el threshold 900 - Set concentration alert threshold."))
-    self:Print(self:T("/el lock or /el unlock - Lock or unlock EmberLedger windows."))
-    self:Print(self:T("/el reset layout - Reset window positions."))
     self:Print(self:T("/el reset session - Reset current session totals."))
+    self:Print(self:T("Characters:"))
     self:Print(self:T("/el restore or /el restore hidden - Restore hidden characters."))
     self:Print(self:T("/el reset pinned - Remove all pinned markers."))
+    self:Print(self:T("Display:"))
+    self:Print(self:T("/el scale - Show the current main window scale."))
+    self:Print(self:T("/el scale 0.85 - Set main window scale from 0.60 to 1.40."))
+    self:Print(self:T("/el lock or /el unlock - Lock or unlock EmberLedger windows."))
+    self:Print(self:T("/el reset layout - Reset window positions."))
+    self:Print(self:T("Maintenance:"))
+    self:Print(self:T("/el refresh - Refresh tracked profession data."))
+    self:Print(self:T("/el refresh professions - Refresh current character profession identity."))
+    self:Print(self:T("/el threshold 900 - Set concentration alert threshold."))
+    self:Print(self:T("/el debug - Toggle debug output."))
 end
 
 SLASH_EMBERLEDGER1 = "/ember"

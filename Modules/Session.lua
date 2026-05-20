@@ -34,11 +34,18 @@ local function TextContainsAny(value, patterns)
     return false
 end
 
+local function N(value, fallback, context)
+    if EL and type(EL.SafeNumber) == "function" then
+        return EL:SafeNumber(value, fallback, context)
+    end
+    return fallback
+end
+
 local function GetInboxAttachmentQuantity(mailIndex, attachmentIndex)
-    if not GetInboxItem then return 0 end
-    local _, itemID, _, count = GetInboxItem(mailIndex, attachmentIndex)
-    if itemID and tonumber(count) then return tonumber(count) or 0 end
-    return tonumber(count) or 0
+    if type(GetInboxItem) ~= "function" then return 0 end
+    local ok, _name, itemID, _texture, count = pcall(GetInboxItem, mailIndex, attachmentIndex)
+    if not ok then return 0 end
+    return itemID and (N(count, 0, "session.mailAttachmentCount") or 0) or 0
 end
 
 local function IsShownFrame(frame)
@@ -70,21 +77,53 @@ function EL:IsSessionMoneyTransferOpen()
 end
 
 local function GetItemInfoInstantSafe(itemLinkOrID)
-    if not itemLinkOrID or not C_Item or not C_Item.GetItemInfoInstant then return nil end
-    local itemID, itemType, itemSubType, itemEquipLoc, icon, classID, subClassID = C_Item.GetItemInfoInstant(itemLinkOrID)
-    return itemID, itemType, itemSubType, itemEquipLoc, icon, classID, subClassID
+    if not itemLinkOrID then return nil end
+    if C_Item and type(C_Item.GetItemInfoInstant) == "function" then
+        local ok, itemID, itemType, itemSubType, itemEquipLoc, icon, classID, subClassID = pcall(C_Item.GetItemInfoInstant, itemLinkOrID)
+        if ok then return itemID, itemType, itemSubType, itemEquipLoc, icon, classID, subClassID end
+    end
+    if type(GetItemInfoInstant) == "function" then
+        local ok, itemID, itemType, itemSubType, itemEquipLoc, icon, classID, subClassID = pcall(GetItemInfoInstant, itemLinkOrID)
+        if ok then return itemID, itemType, itemSubType, itemEquipLoc, icon, classID, subClassID end
+    end
+    return nil
 end
 
 local function GetItemName(itemID)
-    if C_Item and C_Item.GetItemNameByID then return C_Item.GetItemNameByID(itemID) end
-    local name = GetItemInfo and GetItemInfo(itemID)
-    return name
+    if C_Item and type(C_Item.GetItemNameByID) == "function" then
+        local ok, name = pcall(C_Item.GetItemNameByID, itemID)
+        if ok then return name end
+    end
+    if type(GetItemInfo) == "function" then
+        local ok, name = pcall(GetItemInfo, itemID)
+        if ok then return name end
+    end
+    return nil
 end
 
 local function GetItemIcon(itemID)
-    if C_Item and C_Item.GetItemIconByID then return C_Item.GetItemIconByID(itemID) end
-    local _, _, _, _, icon = GetItemInfoInstant and GetItemInfoInstant(itemID)
-    return icon
+    if C_Item and type(C_Item.GetItemIconByID) == "function" then
+        local ok, icon = pcall(C_Item.GetItemIconByID, itemID)
+        if ok then return icon end
+    end
+    if type(GetItemInfoInstant) == "function" then
+        local ok, _itemID, _itemType, _itemSubType, _itemEquipLoc, icon = pcall(GetItemInfoInstant, itemID)
+        if ok then return icon end
+    end
+    return nil
+end
+
+local function GetContainerNumSlotsSafe(bag)
+    if not C_Container or type(C_Container.GetContainerNumSlots) ~= "function" then return 0 end
+    local ok, slots = pcall(C_Container.GetContainerNumSlots, bag)
+    return ok and (N(slots, 0, "session.containerSlots") or 0) or 0
+end
+
+local function GetContainerItemInfoSafe(bag, slot)
+    if not C_Container or type(C_Container.GetContainerItemInfo) ~= "function" then return nil end
+    local ok, info = pcall(C_Container.GetContainerItemInfo, bag, slot)
+    if ok and type(info) == "table" then return info end
+    return nil
 end
 
 local function GetTradeGoodsSubclassID(key, legacy)
@@ -273,7 +312,7 @@ function EL:MarkPendingSessionCraftedItem(itemID, quantity)
     else
         s.pendingCraftedItems[itemID] = { quantity = quantity, expiresAt = now + self.SESSION_DEDUPE_SECONDS, lastMarkedAt = now }
     end
-    if self.Debug then self:Debug("Queued pending crafted item dedupe: item " .. tostring(itemID) .. " x" .. tostring(quantity) .. ".") end
+    if self.DebugThrottled then self:DebugThrottled("session.crafted.queue." .. tostring(itemID), 1, "Queued pending crafted item dedupe: item " .. tostring(itemID) .. " x" .. tostring(quantity) .. ".") elseif self.Debug then self:Debug("Queued pending crafted item dedupe: item " .. tostring(itemID) .. " x" .. tostring(quantity) .. ".") end
 end
 
 function EL:IsPendingSessionCraftedItem(itemID)
@@ -297,14 +336,14 @@ function EL:ConsumePendingSessionCraftedItem(itemID, quantity)
     if not pending then return 0 end
     if (pending.expiresAt or 0) <= GetTime() then
         s.pendingCraftedItems[itemID] = nil
-        if self.Debug then self:Debug("Expired pending crafted item dedupe for item " .. tostring(itemID) .. ".") end
+        if self.DebugThrottled then self:DebugThrottled("session.crafted.expired." .. tostring(itemID), 2, "Expired pending crafted item dedupe for item " .. tostring(itemID) .. ".") elseif self.Debug then self:Debug("Expired pending crafted item dedupe for item " .. tostring(itemID) .. ".") end
         return 0
     end
     local pendingQty = tonumber(pending.quantity) or 0
     local consumed = math.min(quantity, pendingQty)
     pending.quantity = pendingQty - consumed
     if pending.quantity <= 0 then s.pendingCraftedItems[itemID] = nil end
-    if consumed > 0 and self.Debug then self:Debug("Consumed pending crafted item dedupe: item " .. tostring(itemID) .. " x" .. tostring(consumed) .. ".") end
+    if consumed > 0 then if self.DebugThrottled then self:DebugThrottled("session.crafted.consume." .. tostring(itemID), 1, "Consumed pending crafted item dedupe: item " .. tostring(itemID) .. " x" .. tostring(consumed) .. ".") elseif self.Debug then self:Debug("Consumed pending crafted item dedupe: item " .. tostring(itemID) .. " x" .. tostring(consumed) .. ".") end end
     return consumed
 end
 
@@ -373,15 +412,15 @@ end
 function EL:CountSessionItemsInBags()
     local counts = {}
     if self.IsSessionTrackingEnabled and not self:IsSessionTrackingEnabled() then return counts end
-    if not C_Container or not C_Container.GetContainerNumSlots or not C_Container.GetContainerItemInfo then return counts end
     local maxBag = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
     for bag = 0, maxBag do
-        local slots = C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bag) or 0
+        local slots = GetContainerNumSlotsSafe(bag)
         for slot = 1, slots do
-            local info = C_Container.GetContainerItemInfo(bag, slot)
+            local info = GetContainerItemInfoSafe(bag, slot)
             local itemID = info and info.itemID
+            local stackCount = N(info and info.stackCount, 0, "session.containerStackCount") or 0
             if itemID and (self:IsSessionTrackedItem(itemID) or (self.IsPendingSessionCraftedItem and self:IsPendingSessionCraftedItem(itemID))) then
-                counts[itemID] = (counts[itemID] or 0) + (info.stackCount or 0)
+                counts[itemID] = (counts[itemID] or 0) + stackCount
             end
         end
     end
@@ -406,15 +445,14 @@ end
 
 function EL:GetCurrentBagSummaryLines()
     local summary = { lines = {}, totalSilver = 0, totalQuantity = 0 }
-    if not C_Container or not C_Container.GetContainerNumSlots or not C_Container.GetContainerItemInfo then return summary end
     local counts = {}
     local maxBag = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
     for bag = 0, maxBag do
-        local slots = C_Container.GetContainerNumSlots(bag) or 0
+        local slots = GetContainerNumSlotsSafe(bag)
         for slot = 1, slots do
-            local info = C_Container.GetContainerItemInfo(bag, slot)
+            local info = GetContainerItemInfoSafe(bag, slot)
             local itemID = info and info.itemID
-            local count = info and tonumber(info.stackCount) or 0
+            local count = N(info and info.stackCount, 0, "session.summaryStackCount") or 0
             if itemID and count and count > 0 and self:IsSessionTrackedItem(itemID) then
                 counts[itemID] = (counts[itemID] or 0) + count
             end
@@ -451,7 +489,7 @@ function EL:RecordPendingSessionChatLoot(itemID, quantity)
     else
         s.pendingChatLoot[itemID] = { quantity = quantity, expiresAt = now + self.SESSION_DEDUPE_SECONDS }
     end
-    if self.Debug then self:Debug("Queued pending chat-loot dedupe: item " .. tostring(itemID) .. " x" .. tostring(quantity) .. ".") end
+    if self.DebugThrottled then self:DebugThrottled("session.chat.queue." .. tostring(itemID), 1, "Queued pending chat-loot dedupe: item " .. tostring(itemID) .. " x" .. tostring(quantity) .. ".") elseif self.Debug then self:Debug("Queued pending chat-loot dedupe: item " .. tostring(itemID) .. " x" .. tostring(quantity) .. ".") end
 end
 
 function EL:ConsumePendingSessionChatLoot(itemID, quantity)
@@ -462,14 +500,14 @@ function EL:ConsumePendingSessionChatLoot(itemID, quantity)
     if not pending then return quantity end
     if (pending.expiresAt or 0) <= GetTime() then
         s.pendingChatLoot[itemID] = nil
-        if self.Debug then self:Debug("Expired pending chat-loot dedupe for item " .. tostring(itemID) .. ".") end
+        if self.DebugThrottled then self:DebugThrottled("session.chat.expired." .. tostring(itemID), 2, "Expired pending chat-loot dedupe for item " .. tostring(itemID) .. ".") elseif self.Debug then self:Debug("Expired pending chat-loot dedupe for item " .. tostring(itemID) .. ".") end
         return quantity
     end
     local pendingQty = tonumber(pending.quantity) or 0
     local consumed = math.min(quantity, pendingQty)
     pending.quantity = pendingQty - consumed
     if pending.quantity <= 0 then s.pendingChatLoot[itemID] = nil end
-    if consumed > 0 and self.Debug then self:Debug("Consumed pending chat-loot dedupe: item " .. tostring(itemID) .. " x" .. tostring(consumed) .. ".") end
+    if consumed > 0 then if self.DebugThrottled then self:DebugThrottled("session.chat.consume." .. tostring(itemID), 1, "Consumed pending chat-loot dedupe: item " .. tostring(itemID) .. " x" .. tostring(consumed) .. ".") elseif self.Debug then self:Debug("Consumed pending chat-loot dedupe: item " .. tostring(itemID) .. " x" .. tostring(consumed) .. ".") end end
     return quantity - consumed
 end
 
@@ -562,7 +600,7 @@ function M:ProcessBagDiff()
     -- bags without being gameplay loot. Refresh the baseline while these UIs
     -- are open so closing them does not create delayed false gains.
     if EL.IsSessionInventoryTransferOpen and EL:IsSessionInventoryTransferOpen() then
-        if EL.Debug then EL:Debug("Session bag baseline refreshed during inventory transfer UI.") end
+        if EL.DebugThrottled then EL:DebugThrottled("session.transfer.baseline", 2, "Session bag baseline refreshed during inventory transfer UI.") elseif EL.Debug then EL:Debug("Session bag baseline refreshed during inventory transfer UI.") end
         if IsShownFrame(_G.MailFrame) and EL.IsTrustedMailRewardTrackingEnabled and EL:IsTrustedMailRewardTrackingEnabled() then
             if EL.RefreshTrustedSessionMailCache and (not s.trustedMailItems or next(s.trustedMailItems) == nil) then
                 EL:RefreshTrustedSessionMailCache()
@@ -590,7 +628,7 @@ function M:ProcessBagDiff()
     if (tonumber(s.baselinePrimingUntil) or 0) > GetTime() then
         s.lastBagCounts = current
         s.bagBaselineReady = false
-        if EL.Debug then EL:Debug("Session bag baseline priming; ignored bag diff during startup/reset window.") end
+        if EL.DebugThrottled then EL:DebugThrottled("session.baseline.priming", 2, "Session bag baseline priming; ignored bag diff during startup/reset window.") elseif EL.Debug then EL:Debug("Session bag baseline priming; ignored bag diff during startup/reset window.") end
         return
     end
 
@@ -605,7 +643,7 @@ function M:ProcessBagDiff()
         local prev = tonumber(s.lastBagCounts[itemID]) or 0
         local diff = count - prev
         if diff > 0 then
-            if EL.Debug then EL:Debug("Session bag diff detected: item " .. tostring(itemID) .. " +" .. tostring(diff) .. ".") end
+            if EL.DebugThrottled then EL:DebugThrottled("session.bagdiff." .. tostring(itemID), 1, "Session bag diff detected: item " .. tostring(itemID) .. " +" .. tostring(diff) .. ".") elseif EL.Debug then EL:Debug("Session bag diff detected: item " .. tostring(itemID) .. " +" .. tostring(diff) .. ".") end
             local crafted = (EL.ConsumePendingSessionCraftedItem and EL:ConsumePendingSessionCraftedItem(itemID, diff)) or 0
             if crafted > 0 then
                 EL:AddSessionLootValue(itemID, crafted, true)
@@ -614,7 +652,7 @@ function M:ProcessBagDiff()
             if remaining > 0 then
                 remaining = EL:ConsumePendingSessionChatLoot(itemID, remaining)
                 if remaining > 0 then
-                    if EL.Debug then EL:Debug("Session bag diff remaining after dedupe: item " .. tostring(itemID) .. " x" .. tostring(remaining) .. ".") end
+                    if EL.DebugThrottled then EL:DebugThrottled("session.bagdiff.remaining." .. tostring(itemID), 1, "Session bag diff remaining after dedupe: item " .. tostring(itemID) .. " x" .. tostring(remaining) .. ".") elseif EL.Debug then EL:Debug("Session bag diff remaining after dedupe: item " .. tostring(itemID) .. " x" .. tostring(remaining) .. ".") end
                     EL:AddSessionLootValue(itemID, remaining)
                 end
             end
@@ -684,11 +722,15 @@ function M:OnEvent(event, ...)
         end)
     elseif event == "PLAYER_MONEY" then
         local s = EL:GetSessionDB()
-        local currentMoney = (GetMoney and GetMoney()) or tonumber(s.lastMoneyCopper) or 0
-        local previousMoney = tonumber(s.lastMoneyCopper) or currentMoney
+        local currentMoney = N(s.lastMoneyCopper, 0, "session.lastMoneyCopper") or 0
+        if type(GetMoney) == "function" then
+            local okMoney, money = pcall(GetMoney)
+            if okMoney then currentMoney = N(money, currentMoney, "session.currentMoneyCopper") or currentMoney end
+        end
+        local previousMoney = N(s.lastMoneyCopper, currentMoney, "session.previousMoneyCopper") or currentMoney
         s.lastMoneyCopper = currentMoney
         if EL.IsSessionMoneyTransferOpen and EL:IsSessionMoneyTransferOpen() then
-            if EL.Debug then EL:Debug("Ignored session money delta during transfer UI.") end
+            if EL.DebugThrottled then EL:DebugThrottled("session.money.transfer", 2, "Ignored session money delta during transfer UI.") elseif EL.Debug then EL:Debug("Ignored session money delta during transfer UI.") end
             return
         end
         local delta = currentMoney - previousMoney

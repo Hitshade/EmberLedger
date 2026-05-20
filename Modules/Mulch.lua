@@ -2,14 +2,21 @@ local _, EL = ...
 local M = {}
 EL:RegisterModule("mulch", M)
 
+local function N(value, fallback, context)
+    if EL and type(EL.SafeNumber) == "function" then
+        return EL:SafeNumber(value, fallback, context)
+    end
+    return fallback
+end
+
 local function GetItemCountSafe(itemID)
     if C_Item and C_Item.GetItemCount then
         local ok, count = pcall(C_Item.GetItemCount, itemID, false, false, false)
-        if ok and count ~= nil then return (EL.SafeNumber and EL:SafeNumber(count, 0, "mulch.itemCount")) or tonumber(count) or 0 end
+        if ok and count ~= nil then return N(count, 0, "mulch.itemCount") or 0 end
     end
     if GetItemCount then
         local ok, count = pcall(GetItemCount, itemID, false, false)
-        if ok then return (EL.SafeNumber and EL:SafeNumber(count, 0, "mulch.legacyItemCount")) or tonumber(count) or 0 end
+        if ok then return N(count, 0, "mulch.legacyItemCount") or 0 end
     end
     return 0
 end
@@ -40,8 +47,8 @@ local function GetCooldown(itemID)
             startTime, duration = startValue, durationValue
         end
     end
-    startTime = (EL.SafeNumber and EL:SafeNumber(startTime, 0, "mulch.cooldownStart")) or tonumber(startTime) or 0
-    duration = (EL.SafeNumber and EL:SafeNumber(duration, 0, "mulch.cooldownDuration")) or tonumber(duration) or 0
+    startTime = N(startTime, 0, "mulch.cooldownStart") or 0
+    duration = N(duration, 0, "mulch.cooldownDuration") or 0
     return startTime, duration
 end
 

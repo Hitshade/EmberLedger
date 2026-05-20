@@ -128,12 +128,19 @@ local function SafeNumber(value, fallback)
     if EL and type(EL.SafeNumber) == "function" then
         return EL:SafeNumber(value, fallback, "ProfessionCooldowns")
     end
+    if value == nil then return fallback end
     local okNumber, direct = pcall(tonumber, value)
-    if okNumber and direct ~= nil then return direct end
+    if okNumber and type(direct) == "number" then
+        local okUsable, usable = pcall(function() return direct + 0 end)
+        if okUsable and type(usable) == "number" then return usable end
+    end
     local okText, text = pcall(tostring, value)
     if okText and text and text ~= "" then
         local okParsed, parsed = pcall(tonumber, text)
-        if okParsed and parsed ~= nil then return parsed end
+        if okParsed and type(parsed) == "number" then
+            local okUsable, usable = pcall(function() return parsed + 0 end)
+            if okUsable and type(usable) == "number" then return usable end
+        end
     end
     return fallback
 end
@@ -155,18 +162,50 @@ local function GetRecipeInfo(spellID)
     return nil
 end
 
-local function IsSpellOrRecipeKnown(spellID)
-    if not spellID then return false end
-    if SafeCall(IsPlayerSpell, spellID) then return true end
-    if SafeCall(IsSpellKnown, spellID) then return true end
-    if C_Spell and C_Spell.IsSpellKnown and SafeCall(C_Spell.IsSpellKnown, spellID) then return true end
-    local recipeInfo = GetRecipeInfo(spellID)
-    if recipeInfo and (recipeInfo.learned == true or recipeInfo.unlocked == true) then
-        -- Do not treat a browsable recipe name alone as learned.
-        -- Some profession UI states expose unlearned recipe records while the trade skill frame is open.
-        return true
+local function CheckKnownAPI(fn, spellID)
+    if type(fn) ~= "function" or not spellID then return nil end
+    local ok, known = pcall(fn, spellID)
+    if not ok then return nil end
+    return known and true or false
+end
+
+local function GetSpellOrRecipeKnownState(spellID)
+    if not spellID then return nil end
+
+    local checked = false
+    local known = CheckKnownAPI(IsPlayerSpell, spellID)
+    if known ~= nil then
+        checked = true
+        if known == true then return true end
     end
-    return false
+
+    known = CheckKnownAPI(IsSpellKnown, spellID)
+    if known ~= nil then
+        checked = true
+        if known == true then return true end
+    end
+
+    known = C_Spell and CheckKnownAPI(C_Spell.IsSpellKnown, spellID) or nil
+    if known ~= nil then
+        checked = true
+        if known == true then return true end
+    end
+
+    local recipeInfo = GetRecipeInfo(spellID)
+    if type(recipeInfo) == "table" then
+        checked = true
+        if recipeInfo.learned == true or recipeInfo.unlocked == true then
+            -- Do not treat a browsable recipe name alone as learned.
+            -- Some profession UI states expose unlearned recipe records while the trade skill frame is open.
+            return true
+        end
+        if recipeInfo.learned == false or recipeInfo.unlocked == false then
+            return false
+        end
+    end
+
+    if checked then return false end
+    return nil
 end
 
 local function GetSpellCooldownData(spellID)
@@ -220,27 +259,35 @@ local function SortCooldownEntries(a, b)
 end
 
 local function BuildCooldownRecord(def)
-    if not def or not def.spellID then return nil end
-    if not IsSpellOrRecipeKnown(def.spellID) then return nil end
+    if not def or not def.spellID then return nil, nil end
+    local knownState = GetSpellOrRecipeKnownState(def.spellID)
+    if knownState ~= true then return nil, knownState end
 
     local now = Now()
     local name = GetSpellName(def.spellID) or def.label or ("Spell " .. tostring(def.spellID))
     local currentCharges, maxCharges, chargeStart, chargeDuration, chargeModRate = GetSpellChargeData(def.spellID)
     local startTime, duration, isEnabled, modRate = GetSpellCooldownData(def.spellID)
+    currentCharges = SafeNumber(currentCharges, 0)
+    maxCharges = SafeNumber(maxCharges, 0)
+    chargeStart = SafeNumber(chargeStart, 0)
+    chargeDuration = SafeNumber(chargeDuration, 0)
+    chargeModRate = SafeNumber(chargeModRate, 1)
+    startTime = SafeNumber(startTime, 0)
+    duration = SafeNumber(duration, 0)
+    isEnabled = SafeNumber(isEnabled, 1)
+    modRate = SafeNumber(modRate, 1)
     -- Profession cooldown crafts currently report normal modRate values.
     -- Keep the raw API remaining time for display unless Blizzard adds profession-specific modifiers.
 
     local ready = false
     local remaining = 0
-    if maxCharges and maxCharges > 0 then
-        currentCharges = math.max(0, math.min(maxCharges, SafeNumber(currentCharges, 0)))
+    if maxCharges > 0 then
+        currentCharges = math.max(0, math.min(maxCharges, currentCharges))
         if currentCharges > 0 then ready = true end
-        if currentCharges < maxCharges and chargeStart and chargeDuration and chargeDuration > 0 then
+        if currentCharges < maxCharges and chargeStart > 0 and chargeDuration > 0 then
             remaining = math.max(0, (chargeStart + chargeDuration) - now)
         end
     else
-        duration = SafeNumber(duration, 0)
-        startTime = SafeNumber(startTime, 0)
         if isEnabled == 0 then
             ready = false
         elseif duration <= 1 or startTime <= 0 then
@@ -296,6 +343,13 @@ function EL:GetProfessionCooldownDefinitionsForProfession(professionID)
     return COOLDOWN_DEFS_BY_PROFESSION[SafeNumber(professionID)] or {}
 end
 
+local function CopyCooldownRecord(record)
+    if type(record) ~= "table" then return nil end
+    local copy = {}
+    for k, v in pairs(record) do copy[k] = v end
+    return copy
+end
+
 function EL:RefreshCurrentProfessionCooldowns()
     self._hasCooldownColumnData = nil
     local cooldownStore = EnsureProfessionCooldownStore()
@@ -312,13 +366,14 @@ function EL:RefreshCurrentProfessionCooldowns()
         professions = self:GetProfessionEntriesForCharacter(charKey) or {}
     end
 
+    local previousRecords = type(cooldownStore[charKey]) == "table" and cooldownStore[charKey] or nil
     local records = {}
     for _, def in ipairs(self.PROFESSION_COOLDOWN_DEFS or {}) do
         if CharacterHasProfession(professions, def.professionID) then
-            local record = BuildCooldownRecord(def)
+            local record, knownState = BuildCooldownRecord(def)
             if record then
                 records[record.key] = record
-            else
+            elseif knownState == false then
                 records[def.key] = {
                     key = def.key,
                     label = def.label,
@@ -332,6 +387,27 @@ function EL:RefreshCurrentProfessionCooldowns()
                     remaining = 0,
                     lastUpdated = Now(),
                 }
+            else
+                local previous = previousRecords and CopyCooldownRecord(previousRecords[def.key])
+                if previous then
+                    previous.unknownScan = true
+                    previous.lastScanAttempt = Now()
+                    records[def.key] = previous
+                else
+                    records[def.key] = {
+                        key = def.key,
+                        label = def.label,
+                        shortLabel = def.shortLabel or def.label,
+                        category = def.category or def.professionName,
+                        professionID = def.professionID,
+                        professionName = def.professionName,
+                        spellID = def.spellID,
+                        unknown = true,
+                        ready = false,
+                        remaining = 0,
+                        lastUpdated = Now(),
+                    }
+                end
             end
         end
     end
