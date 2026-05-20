@@ -2,13 +2,15 @@
 ## Title: EmberLedger
 ## Notes: Account-wide alt resource dashboard for concentration, Imbued Mulch, and profession session value tracking, and future resource timers.
 ## Author: Hitshade
-## Version: 1.22.6
+## Version: 1.23.0
 ## Category: Professions
 ## SavedVariables: EmberLedgerDB
 ## OptionalDeps: LibStub, LibDataBroker-1.1, LibDBIcon-1.0
 ## DefaultState: Enabled
 
+## X-EmberLedger-LoadOrder: Core.lua first, Localization.lua second, lightweight resource modules next, UI after styling/session/cooldown helpers, ActionBar last so secure button setup runs after UI creation helpers are available.
 Core.lua
+Localization.lua
 Modules/Concentration.lua
 Modules/Mulch.lua
 Modules/Session.lua

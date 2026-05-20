@@ -54,6 +54,8 @@ function EL:IsSessionInventoryTransferOpen()
         or IsShownFrame(_G.AccountBankPanel)
         or IsShownFrame(_G.AccountBankFrame)
         or IsShownFrame(_G.WarbandBankFrame)
+        or IsShownFrame(_G.GuildBankFrame)
+        or IsShownFrame(_G.VoidStorageFrame)
         or IsShownFrame(_G.MailFrame)
 end
 
@@ -271,6 +273,7 @@ function EL:MarkPendingSessionCraftedItem(itemID, quantity)
     else
         s.pendingCraftedItems[itemID] = { quantity = quantity, expiresAt = now + self.SESSION_DEDUPE_SECONDS, lastMarkedAt = now }
     end
+    if self.Debug then self:Debug("Queued pending crafted item dedupe: item " .. tostring(itemID) .. " x" .. tostring(quantity) .. ".") end
 end
 
 function EL:IsPendingSessionCraftedItem(itemID)
@@ -294,11 +297,14 @@ function EL:ConsumePendingSessionCraftedItem(itemID, quantity)
     if not pending then return 0 end
     if (pending.expiresAt or 0) <= GetTime() then
         s.pendingCraftedItems[itemID] = nil
+        if self.Debug then self:Debug("Expired pending crafted item dedupe for item " .. tostring(itemID) .. ".") end
         return 0
     end
-    local consumed = math.min(quantity, tonumber(pending.quantity) or 0)
-    pending.quantity = (tonumber(pending.quantity) or 0) - consumed
+    local pendingQty = tonumber(pending.quantity) or 0
+    local consumed = math.min(quantity, pendingQty)
+    pending.quantity = pendingQty - consumed
     if pending.quantity <= 0 then s.pendingCraftedItems[itemID] = nil end
+    if consumed > 0 and self.Debug then self:Debug("Consumed pending crafted item dedupe: item " .. tostring(itemID) .. " x" .. tostring(consumed) .. ".") end
     return consumed
 end
 
@@ -445,6 +451,7 @@ function EL:RecordPendingSessionChatLoot(itemID, quantity)
     else
         s.pendingChatLoot[itemID] = { quantity = quantity, expiresAt = now + self.SESSION_DEDUPE_SECONDS }
     end
+    if self.Debug then self:Debug("Queued pending chat-loot dedupe: item " .. tostring(itemID) .. " x" .. tostring(quantity) .. ".") end
 end
 
 function EL:ConsumePendingSessionChatLoot(itemID, quantity)
@@ -455,11 +462,14 @@ function EL:ConsumePendingSessionChatLoot(itemID, quantity)
     if not pending then return quantity end
     if (pending.expiresAt or 0) <= GetTime() then
         s.pendingChatLoot[itemID] = nil
+        if self.Debug then self:Debug("Expired pending chat-loot dedupe for item " .. tostring(itemID) .. ".") end
         return quantity
     end
-    local consumed = math.min(quantity, tonumber(pending.quantity) or 0)
-    pending.quantity = (tonumber(pending.quantity) or 0) - consumed
+    local pendingQty = tonumber(pending.quantity) or 0
+    local consumed = math.min(quantity, pendingQty)
+    pending.quantity = pendingQty - consumed
     if pending.quantity <= 0 then s.pendingChatLoot[itemID] = nil end
+    if consumed > 0 and self.Debug then self:Debug("Consumed pending chat-loot dedupe: item " .. tostring(itemID) .. " x" .. tostring(consumed) .. ".") end
     return quantity - consumed
 end
 
@@ -552,6 +562,7 @@ function M:ProcessBagDiff()
     -- bags without being gameplay loot. Refresh the baseline while these UIs
     -- are open so closing them does not create delayed false gains.
     if EL.IsSessionInventoryTransferOpen and EL:IsSessionInventoryTransferOpen() then
+        if EL.Debug then EL:Debug("Session bag baseline refreshed during inventory transfer UI.") end
         if IsShownFrame(_G.MailFrame) and EL.IsTrustedMailRewardTrackingEnabled and EL:IsTrustedMailRewardTrackingEnabled() then
             if EL.RefreshTrustedSessionMailCache and (not s.trustedMailItems or next(s.trustedMailItems) == nil) then
                 EL:RefreshTrustedSessionMailCache()
@@ -579,6 +590,7 @@ function M:ProcessBagDiff()
     if (tonumber(s.baselinePrimingUntil) or 0) > GetTime() then
         s.lastBagCounts = current
         s.bagBaselineReady = false
+        if EL.Debug then EL:Debug("Session bag baseline priming; ignored bag diff during startup/reset window.") end
         return
     end
 
@@ -593,6 +605,7 @@ function M:ProcessBagDiff()
         local prev = tonumber(s.lastBagCounts[itemID]) or 0
         local diff = count - prev
         if diff > 0 then
+            if EL.Debug then EL:Debug("Session bag diff detected: item " .. tostring(itemID) .. " +" .. tostring(diff) .. ".") end
             local crafted = (EL.ConsumePendingSessionCraftedItem and EL:ConsumePendingSessionCraftedItem(itemID, diff)) or 0
             if crafted > 0 then
                 EL:AddSessionLootValue(itemID, crafted, true)
@@ -601,6 +614,7 @@ function M:ProcessBagDiff()
             if remaining > 0 then
                 remaining = EL:ConsumePendingSessionChatLoot(itemID, remaining)
                 if remaining > 0 then
+                    if EL.Debug then EL:Debug("Session bag diff remaining after dedupe: item " .. tostring(itemID) .. " x" .. tostring(remaining) .. ".") end
                     EL:AddSessionLootValue(itemID, remaining)
                 end
             end
@@ -674,6 +688,7 @@ function M:OnEvent(event, ...)
         local previousMoney = tonumber(s.lastMoneyCopper) or currentMoney
         s.lastMoneyCopper = currentMoney
         if EL.IsSessionMoneyTransferOpen and EL:IsSessionMoneyTransferOpen() then
+            if EL.Debug then EL:Debug("Ignored session money delta during transfer UI.") end
             return
         end
         local delta = currentMoney - previousMoney
@@ -701,7 +716,7 @@ function M:OnEvent(event, ...)
             if EL.SyncSessionMoneyBaseline then EL:SyncSessionMoneyBaseline() end
             if EL.Debug then EL:Debug("Session money baseline synced and bag baseline priming started.") end
         end)
-        C_Timer.After(5.5, function()
+        C_Timer.After(6.5, function()
             if not EL or not EL.db then return end
             self:PrimeBagBaseline(true)
             EL:RequestUpdate()

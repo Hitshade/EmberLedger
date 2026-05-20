@@ -4,35 +4,45 @@ EL:RegisterModule("mulch", M)
 
 local function GetItemCountSafe(itemID)
     if C_Item and C_Item.GetItemCount then
-        local count = C_Item.GetItemCount(itemID, false, false, false)
-        if count ~= nil then return count end
+        local ok, count = pcall(C_Item.GetItemCount, itemID, false, false, false)
+        if ok and count ~= nil then return (EL.SafeNumber and EL:SafeNumber(count, 0, "mulch.itemCount")) or tonumber(count) or 0 end
     end
-    if GetItemCount then return GetItemCount(itemID, false, false) or 0 end
+    if GetItemCount then
+        local ok, count = pcall(GetItemCount, itemID, false, false)
+        if ok then return (EL.SafeNumber and EL:SafeNumber(count, 0, "mulch.legacyItemCount")) or tonumber(count) or 0 end
+    end
     return 0
 end
 
 local function IsItemUsableSafe(itemID)
     if C_Item and C_Item.IsUsableItem then
-        local usable = C_Item.IsUsableItem(itemID)
-        return usable and true or false
+        local ok, usable = pcall(C_Item.IsUsableItem, itemID)
+        if ok then return usable and true or false end
     end
     if IsUsableItem then
-        local usable = IsUsableItem(itemID)
-        return usable and true or false
+        local ok, usable = pcall(IsUsableItem, itemID)
+        if ok then return usable and true or false end
     end
     return false
 end
 
 local function GetCooldown(itemID)
+    local startTime, duration
     if C_Item and C_Item.GetItemCooldown then
-        local startTime, duration = C_Item.GetItemCooldown(itemID)
-        return startTime or 0, duration or 0
+        local ok, startValue, durationValue = pcall(C_Item.GetItemCooldown, itemID)
+        if ok then
+            startTime, duration = startValue, durationValue
+        end
     end
-    if GetItemCooldown then
-        local startTime, duration = GetItemCooldown(itemID)
-        return startTime or 0, duration or 0
+    if startTime == nil and GetItemCooldown then
+        local ok, startValue, durationValue = pcall(GetItemCooldown, itemID)
+        if ok then
+            startTime, duration = startValue, durationValue
+        end
     end
-    return 0, 0
+    startTime = (EL.SafeNumber and EL:SafeNumber(startTime, 0, "mulch.cooldownStart")) or tonumber(startTime) or 0
+    duration = (EL.SafeNumber and EL:SafeNumber(duration, 0, "mulch.cooldownDuration")) or tonumber(duration) or 0
+    return startTime, duration
 end
 
 function M:Refresh()

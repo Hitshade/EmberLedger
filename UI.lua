@@ -40,6 +40,15 @@ local ROW_STRIPE_ALPHA = 0.32
 local ROW_STRIPE_ALPHA_COMPACT = 0.28
 local ROW_SEPARATOR_ALPHA = 0.14
 
+local function T(key, ...)
+    if EL and EL.T then return EL:T(key, ...) end
+    if select("#", ...) > 0 then
+        local ok, formatted = pcall(string.format, tostring(key), ...)
+        if ok then return formatted end
+    end
+    return tostring(key)
+end
+
 local function UpdateTickerShouldRun()
     return not EL.HasVisibleUpdateConsumers or EL:HasVisibleUpdateConsumers()
 end
@@ -108,6 +117,15 @@ end
 
 local function GetTrackingEmptyBodyHeight()
     return IsCompactModeEnabled() and TRACKING_COMPACT_EMPTY_BODY_H or TRACKING_EMPTY_BODY_H
+end
+
+local function SetFontStringTextIfChanged(fs, text)
+    if not fs then return end
+    text = text == nil and "" or tostring(text)
+    if fs._emberLastText ~= text then
+        fs._emberLastText = text
+        fs:SetText(text)
+    end
 end
 
 local function ApplyTrackingTextStyle(row)
@@ -275,13 +293,19 @@ function EL:GetVisibleTrackingRowCount()
     return count
 end
 
-function EL:GetTrackingPanelAutoSize()
+function EL:GetTrackingPanelAutoSize(visibleRowCount)
     local settings = self.db and self.db.settings and self.db.settings.panel or {}
     local charShown = settings.charactersShown ~= false
     local actionBarShown = IsAnchoredActionBarShown()
 
     local width = (self.GetTrackingPanelMaxWidth and self:GetTrackingPanelMaxWidth()) or PANEL_MIN_W
-    local rowCount = charShown and self:GetVisibleTrackingRowCount() or 0
+    local rowCount = 0
+    if charShown then
+        rowCount = tonumber(visibleRowCount)
+        if rowCount == nil then
+            rowCount = self:GetVisibleTrackingRowCount()
+        end
+    end
     local tableBodyH = 0
     if charShown then
         tableBodyH = rowCount > 0 and (rowCount * GetTrackingRowHeight()) or GetTrackingEmptyBodyHeight()
@@ -367,12 +391,13 @@ local function RestoreSavedTrackingHeightIfNeeded(panel, rowCount)
     panel._emberRestoredSavedHeightWithRows = true
 end
 
-function EL:AutoSizeTrackingPanel(reason)
+function EL:AutoSizeTrackingPanel(reason, visibleRowCount)
     local panel = self.panel
     local settings = self.db and self.db.settings and self.db.settings.panel
     if not panel or not settings or panel._autoSizingPanel then return end
 
-    local targetW, targetH = self:GetTrackingPanelAutoSize()
+    local rowCount = tonumber(visibleRowCount)
+    local targetW, targetH = self:GetTrackingPanelAutoSize(rowCount)
     local currentW, currentH = panel:GetWidth() or targetW, panel:GetHeight() or targetH
     if math.abs(currentW - targetW) <= 1 and math.abs(currentH - targetH) <= 1 then return end
 
@@ -387,7 +412,10 @@ function EL:AutoSizeTrackingPanel(reason)
 
     settings.width = targetW
     settings.height = targetH
-    if (self.GetVisibleTrackingRowCount and self:GetVisibleTrackingRowCount() or 0) > 0 then
+    if rowCount == nil then
+        rowCount = (self.GetVisibleTrackingRowCount and self:GetVisibleTrackingRowCount() or 0)
+    end
+    if rowCount > 0 then
         settings.expandedHeight = targetH
     end
 end
@@ -426,15 +454,15 @@ function EL:ToggleCharacterSectionCollapsed()
 end
 
 local HEADER_LABELS = {
-    character = "Character",
-    prof1 = "P1",
-    conc1 = "Conc 1",
-    prof2 = "P2",
-    conc2 = "Conc 2",
-    moxie = "Moxie",
-    forecast = "Next",
-    cooldown = "CD",
-    mulch = "Mulch",
+    character = T("Character"),
+    prof1 = T("P1"),
+    conc1 = T("Conc 1"),
+    prof2 = T("P2"),
+    conc2 = T("Conc 2"),
+    moxie = T("Moxie"),
+    forecast = T("Next"),
+    cooldown = T("CD"),
+    mulch = T("Mulch"),
 }
 
 local TRACKING_COLUMN_DEFS = {
@@ -512,6 +540,7 @@ function EL:GetTrackingColumnSettings()
 end
 
 function EL:IsTrackingColumnVisible(key)
+    -- Full UI-layer replacement for the Core fallback used by sort safety checks.
     if key == "prof" then key = "prof1" end
     if key == "conc" then key = "conc1" end
     if key == "character" then return true end
@@ -744,8 +773,8 @@ local function CreateHeaderButton(parent, fontString, sortKey)
     end)
     b:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("Sort by " .. (HEADER_LABELS[self.sortKey] or self.sortKey), 1, 0.82, 0.24)
-        GameTooltip:AddLine("Click again to reverse the order.", 0.7, 0.7, 0.7)
+        GameTooltip:SetText(T("Sort by %s", HEADER_LABELS[self.sortKey] or self.sortKey), 1, 0.82, 0.24)
+        GameTooltip:AddLine(T("Click again to reverse the order."), 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -842,57 +871,57 @@ local function ShowSettingsConfirm(text, acceptText, onAccept, popupKey, require
         }
         StaticPopup_Show(key)
     elseif requireDialog then
-        if EL and EL.Print then EL:Print("Confirmation dialog unavailable. No data was removed.") end
+        if EL and EL.Print then EL:Print(T("Confirmation dialog unavailable. No data was removed.")) end
     else
         onAccept()
     end
 end
 
 function EL:ConfirmResetWindowPositions()
-    ShowSettingsConfirm("Reset all EmberLedger window positions? Scale and visibility settings will be kept.", "Reset", function()
+    ShowSettingsConfirm(T("Reset all EmberLedger window positions? Scale and visibility settings will be kept."), T("Reset"), function()
         if EL.ResetWindowPositions then EL:ResetWindowPositions() end
     end)
 end
 
 function EL:ConfirmResetSession()
-    ShowSettingsConfirm("Reset the current session totals and tracked item list?", "Reset", function()
+    ShowSettingsConfirm(T("Reset the current session totals and tracked item list?"), T("Reset"), function()
         if EL.ResetSession then EL:ResetSession() end
     end)
 end
 
 function EL:ConfirmResetSessionHistory()
-    ShowSettingsConfirm("Clear all saved account-wide session history? This cannot be undone.", "Clear History", function()
+    ShowSettingsConfirm(T("Clear all saved account-wide session history? This cannot be undone."), T("Clear History"), function()
         if EL.ResetSessionHistory then EL:ResetSessionHistory() end
     end)
 end
 
 function EL:ConfirmResetLifetimeSessionStats()
-    ShowSettingsConfirm("Reset EmberLedger lifetime session stats? This cannot be undone. Session history will not be deleted.", "Reset Lifetime", function()
+    ShowSettingsConfirm(T("Reset EmberLedger lifetime session stats? This cannot be undone. Session history will not be deleted."), T("Reset Lifetime"), function()
         if EL.ResetLifetimeSessionStats then EL:ResetLifetimeSessionStats() end
     end)
 end
 
 function EL:ConfirmRestoreHiddenCharacters()
-    ShowSettingsConfirm("Unhide all hidden characters and return them to the main window table?", "Unhide All", function()
+    ShowSettingsConfirm(T("Unhide all hidden characters and return them to the main window table?"), T("Unhide All"), function()
         if EL.RestoreHiddenCharacters then EL:RestoreHiddenCharacters() end
     end)
 end
 
 function EL:ConfirmRemoveHiddenCharacterData()
-    ShowSettingsConfirm("Remove all EmberLedger data for currently hidden characters? This only affects EmberLedger saved data and cannot be undone.", "Remove Data", function()
+    ShowSettingsConfirm(T("Remove all EmberLedger data for currently hidden characters? This only affects EmberLedger saved data and cannot be undone."), T("Remove Data"), function()
         if EL.RemoveHiddenCharacterData then EL:RemoveHiddenCharacterData() end
     end, "EMBERLEDGER_CONFIRM_REMOVE_HIDDEN_DATA", true)
 end
 
 function EL:ConfirmRemoveCharacterData(charKey, displayName)
     if not charKey then return end
-    ShowSettingsConfirm("Remove EmberLedger data for " .. tostring(displayName or charKey) .. "? This only affects EmberLedger saved data and cannot be undone.", "Remove Data", function()
+    ShowSettingsConfirm(T("Remove EmberLedger data for %s? This only affects EmberLedger saved data and cannot be undone.", tostring(displayName or charKey)), T("Remove Data"), function()
         if EL.ResetCharacterData then EL:ResetCharacterData(charKey) end
     end, "EMBERLEDGER_CONFIRM_REMOVE_CHARACTER_DATA", true)
 end
 
 function EL:ConfirmResetPinnedCharacters()
-    ShowSettingsConfirm("Remove all pinned character markers? Character data will not be deleted.", "Reset", function()
+    ShowSettingsConfirm(T("Remove all pinned character markers? Character data will not be deleted."), T("Reset"), function()
         if EL.ResetPinnedCharacters then EL:ResetPinnedCharacters() end
     end)
 end
@@ -1184,7 +1213,7 @@ function EL:CreateSettingsPanel(parent)
 
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     f.title:SetPoint("TOPLEFT", 16, -12)
-    f.title:SetText("EmberLedger Options")
+    f.title:SetText(T("EmberLedger Options"))
     f.title:SetTextColor(1.00, 0.82, 0.24)
 
     f.close = MakeSettingsButton(f, "×", 24, function() f:Hide() end)
@@ -1221,7 +1250,7 @@ function EL:CreateSettingsPanel(parent)
         row.icon:SetTexture(data[2])
         row.text = row:CreateFontString(nil, "OVERLAY", i == 1 and "GameFontNormalSmall" or "GameFontHighlightSmall")
         row.text:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
-        row.text:SetText(data[1])
+        row.text:SetText(T(data[1]))
         row.text:SetTextColor(i == 1 and 1 or 0.86, i == 1 and 0.82 or 0.84, i == 1 and 0.24 or 0.78)
         row:SetScript("OnClick", function(self)
             if EL.SelectSettingsPage then EL:SelectSettingsPage(self.pageName) end
@@ -1507,7 +1536,7 @@ function EL:CreateSettingsPanel(parent)
     SetSettingsTooltip(f.actionWildSeedButton, "Wild Resilient Seed button", {"Allows this seed button to appear on the action bar when available."})
     SetSettingsTooltip(f.actionPrimalSeedButton, "Primal Resilient Seed button", {"Allows this seed button to appear on the action bar when available."})
 
-    f.performanceSection = MakeSettingsSection(f, "Performance", contentX, -42, contentW, 334)
+    f.performanceSection = MakeSettingsSection(f, T("Performance"), contentX, -42, contentW, 334)
     f.performanceWarningTitle = f.performanceSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     f.performanceWarningTitle:SetPoint("TOPLEFT", 12, -36)
     f.performanceWarningTitle:SetText("Warning: read first")
@@ -1554,7 +1583,7 @@ function EL:CreateSettingsPanel(parent)
     f.historyMaxEntriesSlider:SetPoint("TOPLEFT", f.performanceSection, "TOPLEFT", 12, -294)
     SetSettingsTooltip(f.historyMaxEntriesSlider, "Session history cap", {"Limits the visible saved session list after the 30-day retention filter is applied.", "Default: 500. Stats remain accurate through compact aggregates even when old visible list entries are pruned."})
 
-    f.maintenanceSection = MakeSettingsSection(f, "Maintenance / Resets", contentX, -438, contentW, 218)
+    f.maintenanceSection = MakeSettingsSection(f, T("Maintenance / Resets"), contentX, -438, contentW, 218)
     f.hiddenStatus = f.maintenanceSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.hiddenStatus:SetPoint("TOPLEFT", 12, -36)
     f.hiddenStatus:SetWidth(contentW - 24)
@@ -1582,10 +1611,10 @@ function EL:CreateSettingsPanel(parent)
     SetSettingsTooltip(f.resetLifetimeStats, "Reset Lifetime", {"Resets only the lifetime aggregate stats.", "Session history and the current active session are not deleted."})
     SetSettingsTooltip(f.removeHiddenData, "Remove Hidden", {"Deletes EmberLedger saved data for characters currently hidden from the main table.", "This is useful for deleted or permanently retired alts and cannot be undone."})
 
-    f.footerSection = MakeSettingsSection(f, "Information", contentX, -846, contentW, 78)
+    f.footerSection = MakeSettingsSection(f, T("Information"), contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText("Version: " .. tostring(EL.version or "1.22.6"))
+    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.23.0")))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -2218,25 +2247,25 @@ function EL:RegisterBlizzardSettings()
     self.blizzardSettingsRegistered = true
 
     local canvas = CreateFrame("Frame", "EmberLedgerBlizzardSettingsCanvas")
-    canvas.name = "EmberLedger"
+    canvas.name = T("EmberLedger")
     canvas:SetSize(620, 420)
 
     canvas.title = canvas:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     canvas.title:SetPoint("TOP", 0, -55)
-    canvas.title:SetText("EmberLedger")
+    canvas.title:SetText(T("EmberLedger"))
     canvas.title:SetTextColor(1.00, 0.42, 0.08)
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText("Version " .. tostring(self.version or "1.22.6"))
+    canvas.version:SetText(T("Version %s", tostring(self.version or "1.23.0")))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
     canvas.desc:SetWidth(420)
     canvas.desc:SetJustifyH("CENTER")
-    canvas.desc:SetText("Profession tracking, Imbued Mulch cooldowns, and session analytics for your alt army.")
+    canvas.desc:SetText(T("Profession tracking, Imbued Mulch cooldowns, and session analytics for your alt army."))
 
-    canvas.open = MakeSettingsButton(canvas, "Open EmberLedger Settings", 260, function()
+    canvas.open = MakeSettingsButton(canvas, T("Open EmberLedger Settings"), 260, function()
         if EL.ShowSettingsPanel then EL:ShowSettingsPanel() elseif EL.ToggleSettingsPanel then EL:ToggleSettingsPanel() end
     end)
     canvas.open:SetPoint("TOP", canvas.desc, "BOTTOM", 0, -28)
@@ -2247,7 +2276,7 @@ function EL:RegisterBlizzardSettings()
     canvas.reset:SetPoint("TOP", canvas.open, "BOTTOM", 0, -14)
 
     if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
-        local category = Settings.RegisterCanvasLayoutCategory(canvas, "EmberLedger")
+        local category = Settings.RegisterCanvasLayoutCategory(canvas, T("EmberLedger"))
         Settings.RegisterAddOnCategory(category)
         self.settingsCategory = category
     elseif InterfaceOptions_AddCategory then
@@ -2287,7 +2316,7 @@ function EL:CreateSessionHistoryWindow()
 
     frame.title = frame.header:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     frame.title:SetPoint("CENTER", frame.header, "CENTER", 0, 1)
-    frame.title:SetText("EmberLedger - Stats")
+    frame.title:SetText(T("EmberLedger") .. " - Stats")
     frame.title:SetTextColor(1.00, 0.82, 0.24)
 
     frame.close = CreateFrame("Button", nil, frame.header, "UIPanelCloseButton")
@@ -2955,7 +2984,7 @@ function EL:CreateMainButton()
     button.title:SetPoint("TOPLEFT", 10, -7)
     button.title:SetPoint("TOPRIGHT", -10, -7)
     button.title:SetJustifyH("CENTER")
-    button.title:SetText("EmberLedger")
+    button.title:SetText(T("EmberLedger"))
     if button.title.SetFontObject then button.title:SetFontObject(GameFontNormalLarge) end
     button.title:SetTextColor(1.00, 0.82, 0.24)
     button.title:SetShadowColor(0.00, 0.00, 0.00, 1.00)
@@ -3058,7 +3087,7 @@ function EL:CreateSessionPanel(parent)
     session.title:SetPoint("LEFT", session.header, "LEFT", 10, 0)
     session.title:SetPoint("RIGHT", session.header, "RIGHT", -32, 0)
     session.title:SetJustifyH("LEFT")
-    session.title:SetText("EmberLedger Session")
+    session.title:SetText(T("EmberLedger") .. " " .. T("Session"))
     session.title:SetTextColor(1.00, 0.82, 0.24)
 
     session.buttonBar = CreateFrame("Frame", nil, session)
@@ -3347,12 +3376,12 @@ function EL:CreatePanel()
 
     panel.title = panel.topBar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     panel.title:SetPoint("LEFT", panel.topBar, "LEFT", 10, 0)
-    panel.title:SetText("EmberLedger")
+    panel.title:SetText(T("EmberLedger"))
     panel.title:SetTextColor(1.00, 0.82, 0.24)
 
     panel.subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     panel.subtitle:SetPoint("TOPLEFT", panel.topBar, "BOTTOMLEFT", 2, -4)
-    panel.subtitle:SetText("Profession Tracking")
+    panel.subtitle:SetText(T("Profession Tracking"))
     panel.subtitle:SetTextColor(0.78, 0.84, 0.92)
 
     panel.summary = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -3379,13 +3408,13 @@ function EL:CreatePanel()
 
     panel.settings = CreateFrame("Button", nil, panel.topBar, "UIPanelButtonTemplate")
     panel.settings:SetSize(64, 22)
-    panel.settings:SetText("Options")
+    panel.settings:SetText(T("Options"))
     StyleBlizzardButton(panel.settings)
     panel.settings:SetPoint("RIGHT", panel.close, "LEFT", -7, 0)
     panel.settings:SetScript("OnClick", function() EL:ToggleSettingsPanel() end)
     panel.settings:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("EmberLedger options", 1, 0.74, 0.32)
+        GameTooltip:SetText(T("EmberLedger options"), 1, 0.74, 0.32)
         GameTooltip:Show()
     end)
     panel.settings:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -3396,14 +3425,14 @@ function EL:CreatePanel()
 
     panel.restore = CreateFrame("Button", nil, panel.topBar or panel, "UIPanelButtonTemplate")
     panel.restore:SetSize(78, 22)
-    panel.restore:SetText("Restore")
+    panel.restore:SetText(T("Restore"))
     StyleBlizzardButton(panel.restore)
     panel.restore:SetPoint("RIGHT", panel.settings, "LEFT", -6, 0)
     panel.restore:SetScript("OnClick", function() EL:RestoreHiddenCharacters() end)
     panel.restore:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Restore hidden characters", 1, 0.55, 0.15)
-        GameTooltip:AddLine("Right-click a row to hide a character.", 0.7, 0.7, 0.7)
+        GameTooltip:SetText(T("Restore hidden characters"), 1, 0.55, 0.15)
+        GameTooltip:AddLine(T("Right-click a row to hide a character."), 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
     panel.restore:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -3415,7 +3444,7 @@ function EL:CreatePanel()
     panel.characterToggle:SetScript("OnClick", function() EL:ToggleCharacterSectionCollapsed() end)
     panel.characterToggle:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("Collapse or expand character cooldowns", 1, 0.74, 0.32)
+        GameTooltip:SetText(T("Collapse or expand character cooldowns"), 1, 0.74, 0.32)
         GameTooltip:Show()
     end)
     panel.characterToggle:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -3447,15 +3476,15 @@ function EL:CreatePanel()
     panel.header.forecast = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     panel.header.cooldown = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     panel.header.mulch = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    panel.header.name:SetText("Character")
-    panel.header.prof1:SetText("P1")
-    panel.header.conc1:SetText("Conc 1")
-    panel.header.prof2:SetText("P2")
-    panel.header.conc2:SetText("Conc 2")
-    panel.header.moxie:SetText("Moxie")
-    panel.header.forecast:SetText("Next")
-    panel.header.cooldown:SetText("CD")
-    panel.header.mulch:SetText("Mulch")
+    panel.header.name:SetText(T("Character"))
+    panel.header.prof1:SetText(T("P1"))
+    panel.header.conc1:SetText(T("Conc 1"))
+    panel.header.prof2:SetText(T("P2"))
+    panel.header.conc2:SetText(T("Conc 2"))
+    panel.header.moxie:SetText(T("Moxie"))
+    panel.header.forecast:SetText(T("Next"))
+    panel.header.cooldown:SetText(T("CD"))
+    panel.header.mulch:SetText(T("Mulch"))
     for _, fs in pairs({panel.header.name, panel.header.prof1, panel.header.conc1, panel.header.prof2, panel.header.conc2, panel.header.moxie, panel.header.forecast, panel.header.cooldown, panel.header.mulch}) do
         fs:SetTextColor(0.88, 0.84, 0.74)
         fs:SetJustifyH(fs == panel.header.name and "LEFT" or "CENTER")
@@ -3479,7 +3508,7 @@ function EL:CreatePanel()
     panel.rows = {}
 
     panel.empty = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    panel.empty:SetText("No tracked characters yet. Open professions to scan characters.")
+    panel.empty:SetText(T("No tracked characters yet. Open professions to scan characters."))
     panel.empty:SetTextColor(0.68, 0.70, 0.72)
     panel.empty:SetJustifyH("CENTER")
     panel.empty:SetJustifyV("TOP")
@@ -3517,10 +3546,10 @@ function EL:CreatePanel()
     panel.resize:RegisterForClicks("LeftButtonUp")
     panel.resize:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("Resize tracker height", 1, 0.82, 0.24)
-        GameTooltip:AddLine("Drag to change how many character rows are visible.", 0.78, 0.78, 0.72)
-        GameTooltip:AddLine("Width remains automatic based on visible columns.", 0.62, 0.68, 0.76)
-        GameTooltip:AddLine("Double-click to reset automatic height.", 0.62, 0.68, 0.76)
+        GameTooltip:SetText(T("Resize tracker height"), 1, 0.82, 0.24)
+        GameTooltip:AddLine(T("Drag to change how many character rows are visible."), 0.78, 0.78, 0.72)
+        GameTooltip:AddLine(T("Width remains automatic based on visible columns."), 0.62, 0.68, 0.76)
+        GameTooltip:AddLine(T("Double-click to reset automatic height."), 0.62, 0.68, 0.76)
         GameTooltip:Show()
     end)
     panel.resize:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -3823,6 +3852,7 @@ function EL:GetRow(i)
         row.currentHighlightRight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
         row.currentHighlightRight:SetColorTexture(1.00, 0.84, 0.32, 0.00)
         row.currentHighlightRight:Hide()
+        row._highlightLines = { row.currentHighlightTop, row.currentHighlightBottom, row.currentHighlightLeft, row.currentHighlightRight }
         row.pinGlow = row:CreateTexture(nil, "BORDER")
         row.pinGlow:SetPoint("TOPLEFT", row, "TOPLEFT", 3, -2)
         row.pinGlow:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -3, 2)
@@ -3945,36 +3975,35 @@ function EL:RefreshPanel()
     local p = self.panel
     if not p then return end
     local threshold = self.db and self.db.settings and self.db.settings.alerts and self.db.settings.alerts.concentrationThreshold or 360
-    local mulchReady = self.GetMulchReadyCount and self:GetMulchReadyCount() or 0
+    local now = time()
+    local mulchStatus = self.GetMulchStatus and self:GetMulchStatus(now) or nil
+    local mulchReady = mulchStatus and mulchStatus.readyCount or 0
     local concReady, concSoon = 0, 0
-    local nowForSummary = time()
     local soonFloor = math.max(0, math.floor((tonumber(threshold) or 360) * 0.80 + 0.5))
-    local charSummary = {}
+    local concentrationLookup = {}
     for charKey, entries in pairs(self:GetConcentrationIndex() or {}) do
-        if charKey and not self:IsCharacterHidden(charKey) then
-            local summary = charSummary[charKey]
+        if charKey then
+            local lookup = { entries = entries or {}, readyCount = 0, soonCount = 0, best = nil, bestQty = nil }
+            concentrationLookup[charKey] = lookup
             for _, data in ipairs(entries or {}) do
-                if data then
-                    if not summary then
-                        local char = self.db and self.db.characters and self.db.characters[charKey]
-                        summary = { name = (char and (char.name or char.displayName)) or data.charName or "Unknown", ready = false, soon = false }
-                        charSummary[charKey] = summary
-                    end
-                    local qty = self:GetEstimatedConcentration(data, nowForSummary) or 0
-                    if qty >= threshold then
-                        summary.ready = true
-                    elseif qty >= soonFloor then
-                        summary.soon = true
-                    end
+                local qty = self:GetEstimatedConcentration(data, now) or 0
+                if qty >= threshold then
+                    lookup.readyCount = lookup.readyCount + 1
+                elseif qty >= soonFloor then
+                    lookup.soonCount = lookup.soonCount + 1
+                end
+                if not lookup.best or qty > (lookup.bestQty or -1) then
+                    lookup.best = data
+                    lookup.bestQty = qty
                 end
             end
-        end
-    end
-    for _, summary in pairs(charSummary) do
-        if summary.ready then
-            concReady = concReady + 1
-        elseif summary.soon then
-            concSoon = concSoon + 1
+            if not self:IsCharacterHidden(charKey) then
+                if lookup.readyCount > 0 then
+                    concReady = concReady + 1
+                elseif lookup.soonCount > 0 then
+                    concSoon = concSoon + 1
+                end
+            end
         end
     end
     if p.summary then
@@ -3996,7 +4025,6 @@ function EL:RefreshPanel()
         p.restore:SetText(hiddenCount > 0 and ("Restore (" .. hiddenCount .. ")") or "Restore")
     end
 
-    local now = time()
     local allRows = self:GetCharacterRows()
     local rows = {}
     local display = self.db and self.db.settings and self.db.settings.display or {}
@@ -4015,40 +4043,10 @@ function EL:RefreshPanel()
             end
         end
     end
-    local concentrationLookup = {}
-    for charKey, entries in pairs(self:GetConcentrationIndex() or {}) do
-        if charKey then
-            local lookup = { entries = entries or {}, readyCount = 0, best = nil, bestQty = nil }
-            concentrationLookup[charKey] = lookup
-            for _, data in ipairs(entries or {}) do
-                local qty = self:GetEstimatedConcentration(data, now) or 0
-                if qty >= threshold then lookup.readyCount = lookup.readyCount + 1 end
-                if not lookup.best or qty > (lookup.bestQty or -1) then
-                    lookup.best = data
-                    lookup.bestQty = qty
-                end
-            end
-        end
-    end
-
-    local professionLookup = {}
-    for charKey, stored in pairs(self.db and self.db.resources and self.db.resources.professions or {}) do
-        if type(stored) == "table" then
-            local list = {}
-            for _, data in ipairs(stored) do
-                if type(data) == "table" and (data.professionName or data.professionID or data.skillLineID) then
-                    table.insert(list, data)
-                end
-            end
-            if #list > 0 then
-                table.sort(list, SortDashboardProfessionEntries)
-                professionLookup[charKey] = list
-            end
-        end
-    end
+    local professionLookup = self.GetProfessionLookup and self:GetProfessionLookup() or {}
 
     local dashboardLookups = { concentrationLookup = concentrationLookup, professionLookup = professionLookup }
-    self:SortDashboardRows(rows, dashboardLookups)
+    self:SortDashboardRows(rows, dashboardLookups, now)
     self:UpdateSortHeaders()
     local rowH, gap = GetTrackingRowHeight(), 0
     local width = math.max(1, p.scroll and p.scroll:GetWidth() or p:GetWidth() - 40)
@@ -4157,7 +4155,7 @@ function EL:RefreshPanel()
         row.cooldownEntries = cooldownSummary and cooldownSummary.entries or nil
         row.moxieEntries = moxieEntries
         row.mulchData = mulchData
-        row.name:SetText(self:GetCharacterDisplayName(char, charKey))
+        SetFontStringTextIfChanged(row.name, self:GetCharacterDisplayName(char, charKey))
         local r, g, b = self:GetClassColor(char.class)
         row.name:SetTextColor(r, g, b)
         local isPinned = self:IsCharacterPinned(charKey)
@@ -4169,7 +4167,7 @@ function EL:RefreshPanel()
                 row.currentHighlight:SetColorTexture(1.00, 0.78, 0.24, IsCompactModeEnabled() and 0.13 or 0.16)
             end
         end
-        for _, line in ipairs({ row.currentHighlightTop, row.currentHighlightBottom, row.currentHighlightLeft, row.currentHighlightRight }) do
+        for _, line in ipairs(row._highlightLines or {}) do
             if line then
                 line:SetShown(isCurrentCharacter and true or false)
                 if isCurrentCharacter then line:SetColorTexture(1.00, 0.84, 0.32, 0.42) end
@@ -4185,18 +4183,18 @@ function EL:RefreshPanel()
             row.pinAccent:SetShown(isPinned)
             if isPinned then row.pinAccent:SetColorTexture(PIN_GLOW_R, PIN_GLOW_G, PIN_GLOW_B, PIN_ACCENT_ALPHA) end
         end
-        row.prof1:SetText(profValue1)
+        SetFontStringTextIfChanged(row.prof1, profValue1)
         row.prof1:SetTextColor(0.88, 0.86, 0.76)
-        row.prof2:SetText(profValue2)
+        SetFontStringTextIfChanged(row.prof2, profValue2)
         row.prof2:SetTextColor(0.88, 0.86, 0.76)
-        row.conc1:SetText(concValue1)
+        SetFontStringTextIfChanged(row.conc1, concValue1)
         if concData1 then
             local cr, cg, cb = self:GetConcentrationColor(concQ1 or 0, concData1.maxQuantity or self.CONCENTRATION_MAX_DEFAULT)
             row.conc1:SetTextColor(cr, cg, cb)
         else
             row.conc1:SetTextColor(0.7, 0.7, 0.7)
         end
-        row.conc2:SetText(concValue2)
+        SetFontStringTextIfChanged(row.conc2, concValue2)
         if concData2 then
             local cr, cg, cb = self:GetConcentrationColor(concQ2 or 0, concData2.maxQuantity or self.CONCENTRATION_MAX_DEFAULT)
             row.conc2:SetTextColor(cr, cg, cb)
@@ -4208,10 +4206,10 @@ function EL:RefreshPanel()
         local moxieValue = #moxieValues > 0 and table.concat(moxieValues, " • ") or "N/A"
         local useSplitMoxie = visible.moxie and #moxieValues == 2
         row._emberMoxieSplit = useSplitMoxie and true or false
-        row.moxie:SetText(moxieValue)
-        if row.moxieLeft then row.moxieLeft:SetText(moxieValues[1] or "") end
-        if row.moxieSep then row.moxieSep:SetText("•") end
-        if row.moxieRight then row.moxieRight:SetText(moxieValues[2] or "") end
+        SetFontStringTextIfChanged(row.moxie, moxieValue)
+        SetFontStringTextIfChanged(row.moxieLeft, moxieValues[1] or "")
+        SetFontStringTextIfChanged(row.moxieSep, "•")
+        SetFontStringTextIfChanged(row.moxieRight, moxieValues[2] or "")
         SetMoxieCellShown(row, visible.moxie and true or false, useSplitMoxie)
         if moxieValue ~= "N/A" then
             if self.HasMoxieAtThreshold and self:HasMoxieAtThreshold(charKey, moxieEntries) then
@@ -4222,13 +4220,13 @@ function EL:RefreshPanel()
         else
             SetMoxieCellColor(row, 0.70, 0.70, 0.70)
         end
-        row.forecast:SetText(forecastValue)
+        SetFontStringTextIfChanged(row.forecast, forecastValue)
         if forecastValue == "Ready" or forecastValue:match("^%d+x Ready$") then
             row.forecast:SetTextColor(0.35, 1.00, 0.45)
         else
             row.forecast:SetTextColor(0.70, 0.70, 0.70)
         end
-        row.cooldown:SetText(cooldownValue or "-")
+        SetFontStringTextIfChanged(row.cooldown, cooldownValue or "-")
         if cooldownSummary and cooldownSummary.ready and cooldownSummary.ready > 0 then
             row.cooldown:SetTextColor(0.35, 1.00, 0.45)
         elseif cooldownSummary and cooldownSummary.tracked and cooldownSummary.tracked > 0 then
@@ -4236,7 +4234,7 @@ function EL:RefreshPanel()
         else
             row.cooldown:SetTextColor(0.70, 0.70, 0.70)
         end
-        row.mulch:SetText(mulchValue)
+        SetFontStringTextIfChanged(row.mulch, mulchValue)
         if self:HasImbuedMulchAccess(mulchData) then
             local remain = math.max(0, (tonumber(mulchData.readyAt) or 0) - now)
             local mr, mg, mb = self:GetMulchCountdownColor(remain)
@@ -4263,22 +4261,22 @@ function EL:RefreshPanel()
 
         local emptyText
         if #allRows == 0 then
-            emptyText = "No tracked characters yet. Open professions to scan characters."
+            emptyText = T("No tracked characters yet. Open professions to scan characters.")
         elseif visibleRowCount == 0 and hiddenRowCount == #allRows then
-            emptyText = "All tracked characters are hidden. Use Restore to show them."
+            emptyText = T("All tracked characters are hidden. Use Restore to show them.")
         elseif attentionOnly and hiddenRowCount > 0 then
-            emptyText = "No attention rows. Restore hidden or turn off Attention Only."
+            emptyText = T("No attention rows. Restore hidden or turn off Attention Only.")
         elseif attentionOnly then
-            emptyText = "No characters need attention."
+            emptyText = T("No characters need attention.")
         else
-            emptyText = "No visible character data. Open a profession window to refresh."
+            emptyText = T("No visible character data. Open a profession window to refresh.")
         end
         p.empty:SetText(emptyText)
         p.empty:SetShown(#rows == 0)
     end
     p.content:SetHeight(math.max(GetTrackingEmptyBodyHeight(), #rows * (rowH + gap)))
     if #rows > 0 and not p._emberVerticalResizing then RestoreSavedTrackingHeightIfNeeded(p, #rows) end
-    if self.AutoSizeTrackingPanel and not p._emberVerticalResizing then self:AutoSizeTrackingPanel("refresh") end
+    if self.AutoSizeTrackingPanel and not p._emberVerticalResizing then self:AutoSizeTrackingPanel("refresh", #rows) end
 end
 
 function EL:UpdateButton()
@@ -4286,36 +4284,40 @@ function EL:UpdateButton()
     if not b then return end
     local display = self.db and self.db.settings and self.db.settings.display or {}
     local threshold = self.db and self.db.settings and self.db.settings.alerts and self.db.settings.alerts.concentrationThreshold or 360
-    local concReady = self:GetConcentrationReadyCount(threshold)
-    local mulchReady = self:GetMulchReadyCount()
-    local nextMulch = self:GetNextMulchSummary()
+    local now = time()
+    local concReady = self:GetConcentrationReadyCount(threshold, now)
+    local mulchStatus = self.GetMulchStatus and self:GetMulchStatus(now) or nil
+    local mulchReady = mulchStatus and mulchStatus.readyCount or 0
+    local nextMulch = mulchStatus and mulchStatus.next or nil
     ApplyFrameOpacity(b, GetLauncherOpacity())
 
     if b.title then
-        b.title:SetText("EmberLedger")
+        SetFontStringTextIfChanged(b.title, T("EmberLedger"))
         b.title:SetTextColor(1.00, 0.82, 0.24)
         b.title:SetJustifyH("CENTER")
         b.title:SetShadowColor(0.00, 0.00, 0.00, 0.95)
         b.title:SetShadowOffset(1, -1)
     end
 
-    local topParts = {}
+    local line1Text = ""
     if display.showLauncherConc ~= false then
-        topParts[#topParts + 1] = "Conc " .. tostring(concReady or 0)
+        line1Text = "Conc " .. tostring(concReady or 0)
     end
     if display.showLauncherMulch ~= false then
+        local mulchText
         if mulchReady and mulchReady > 0 then
-            topParts[#topParts + 1] = "Mulch " .. tostring(mulchReady)
+            mulchText = "Mulch " .. tostring(mulchReady)
         elseif nextMulch and nextMulch.remaining then
-            topParts[#topParts + 1] = "Mulch " .. self:FormatCountdown(nextMulch.remaining)
+            mulchText = "Mulch " .. self:FormatCountdown(nextMulch.remaining)
         else
-            topParts[#topParts + 1] = "Mulch N/A"
+            mulchText = "Mulch N/A"
         end
+        line1Text = #line1Text > 0 and (line1Text .. "  |  " .. mulchText) or mulchText
     end
 
     if b.line1 then
-        if #topParts > 0 then
-            b.line1:SetText(table.concat(topParts, "  |  "))
+        if #line1Text > 0 then
+            SetFontStringTextIfChanged(b.line1, line1Text)
             if (concReady and concReady > 0) or (mulchReady and mulchReady > 0) then
                 b.line1:SetTextColor(0.35, 1.00, 0.35)
             else
@@ -4323,55 +4325,59 @@ function EL:UpdateButton()
             end
             b.line1:Show()
         else
-            b.line1:SetText("")
+            SetFontStringTextIfChanged(b.line1, "")
             b.line1:Hide()
         end
     end
 
     local sessionEnabled = not self.IsSessionTrackingEnabled or self:IsSessionTrackingEnabled()
-    local bottomParts = {}
+    local line2Text = ""
     if sessionEnabled and display.showLauncherSession ~= false then
-        bottomParts[#bottomParts + 1] = self:FormatMoneyRateText(self:GetSessionGoldPerHour()) .. "/hr"
+        line2Text = self:FormatMoneyRateText(self:GetSessionGoldPerHour()) .. "/hr"
     end
     if sessionEnabled and display.showLauncherSessionTime ~= false then
-        bottomParts[#bottomParts + 1] = FormatSessionTime(self:GetSessionElapsedSeconds())
+        local sessionTimeText = FormatSessionTime(self:GetSessionElapsedSeconds())
+        line2Text = #line2Text > 0 and (line2Text .. "  |  " .. sessionTimeText) or sessionTimeText
     end
     if sessionEnabled and display.showLauncherSessionTotal ~= false and display.showLauncherSessionTime == false then
         local sdb = self.GetSessionDB and self:GetSessionDB() or {}
-        bottomParts[#bottomParts + 1] = self:FormatMoneyText(sdb.totalSilver or 0) .. " total"
+        local totalText = self:FormatMoneyText(sdb.totalSilver or 0) .. " total"
+        line2Text = #line2Text > 0 and (line2Text .. "  |  " .. totalText) or totalText
     end
 
     if b.line2 then
-        if #bottomParts > 0 then
-            b.line2:SetText(table.concat(bottomParts, "  |  "))
+        if #line2Text > 0 then
+            SetFontStringTextIfChanged(b.line2, line2Text)
             b.line2:SetTextColor(0.78, 0.78, 0.72)
             b.line2:Show()
         else
-            b.line2:SetText("")
+            SetFontStringTextIfChanged(b.line2, "")
             b.line2:Hide()
         end
     end
 
-    for _, line in ipairs({ b.line3, b.line4, b.line5 }) do
-        if line then
-            line:SetText("")
-            line:Hide()
-        end
-    end
+    if b.line3 then SetFontStringTextIfChanged(b.line3, ""); b.line3:Hide() end
+    if b.line4 then SetFontStringTextIfChanged(b.line4, ""); b.line4:Hide() end
+    if b.line5 then SetFontStringTextIfChanged(b.line5, ""); b.line5:Hide() end
 
-    local orderedLines = { b.line1, b.line2 }
     local previous = b.title
     local shownLineCount = 0
-    for _, line in ipairs(orderedLines) do
-        if line then
-            line:ClearAllPoints()
-            if line:IsShown() then
-                local yGap = shownLineCount == 0 and -6 or -3
-                line:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, yGap)
-                line:SetPoint("TOPRIGHT", previous, "BOTTOMRIGHT", 0, yGap)
-                previous = line
-                shownLineCount = shownLineCount + 1
-            end
+    if b.line1 then
+        b.line1:ClearAllPoints()
+        if b.line1:IsShown() then
+            b.line1:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -6)
+            b.line1:SetPoint("TOPRIGHT", previous, "BOTTOMRIGHT", 0, -6)
+            previous = b.line1
+            shownLineCount = shownLineCount + 1
+        end
+    end
+    if b.line2 then
+        b.line2:ClearAllPoints()
+        if b.line2:IsShown() then
+            local yGap = shownLineCount == 0 and -6 or -3
+            b.line2:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, yGap)
+            b.line2:SetPoint("TOPRIGHT", previous, "BOTTOMRIGHT", 0, yGap)
+            shownLineCount = shownLineCount + 1
         end
     end
 
@@ -4511,7 +4517,7 @@ end
 
 function EL:ShowButtonTooltip(owner)
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-    GameTooltip:SetText("EmberLedger", 1, 0.82, 0.24)
+    GameTooltip:SetText(T("EmberLedger"), 1, 0.82, 0.24)
     GameTooltip:AddLine("Quick launcher and window toggle.", 0.86, 0.86, 0.78, true)
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine("Left-click: show, hide, or restore EmberLedger windows", 0.72, 0.72, 0.72)

@@ -6,6 +6,9 @@ if not EL then return end
 -- Not intended to become recipe accounting, reagent tracking, or auction analysis.
 -- Stored data is lightweight per-character cooldown state and may be rebuilt from profession scans.
 -- Store setup is centralized through EL:EnsureProfessionCooldownStore so Core and this module share the same path.
+-- Spell IDs below are curated for the current Retail profession cooldown crafts.
+-- If Blizzard changes recipe spells in a future patch, update this table rather than
+-- broadening the feature into generic recipe/cooldown scanning.
 
 local module = {}
 

@@ -1,5 +1,71 @@
 # EmberLedger Changelog
 
+## v1.23.0
+
+### Localization Framework
+
+- Added a lightweight `Localization.lua` framework with English fallback strings.
+- Added shared `EL:T()` localization lookup and formatting helper for future translations.
+- Loaded localization immediately after Core so modules and UI files can use the shared table safely.
+- Routed slash-command help, tracker headers, key empty-state messages, tracker buttons, and several confirmation dialogs through the localization helper.
+- Added README documentation explaining the localization framework and gradual translation approach.
+
+---
+
+## v1.22.10
+
+### Sort Safety & Diagnostic Cleanup
+
+- Tightened concentration estimation fallback handling so missing timestamps are normalized before SafeNumber validation.
+- Added a safe Core fallback and guarded sort-column availability helper for tracker sort paths before the full UI column rules are available.
+- Expanded module self-check coverage to include key Core and UI layout helpers.
+- Added targeted debug visibility around session dedupe queueing, bag-diff processing, and ignored money deltas during transfer UI states.
+- Added a top-level Core load-order comment and a cooldown spell-ID maintenance note for future patch reviews.
+- Updated README wording for guarded sort checks and post-load diagnostics.
+
+---
+
+## v1.22.9
+
+### Defensive Maintenance Pass
+
+- Hardened concentration and Moxie currency reads with guarded API calls and shared SafeNumber handling.
+- Hardened Imbued Mulch item count, usability, cooldown, and access checks against protected or unavailable API values.
+- Expanded module initialization checks so core helper functions are included in the post-load self-check.
+- Improved module initialization warnings with the first detected issue and clearer debug guidance.
+- Added a TOC load-order comment to document why Core, resource modules, UI helpers, UI, and ActionBar load in the current order.
+- Added debug visibility around crafted-item and chat-loot session dedupe consumption.
+- Extended startup/reset bag-baseline priming slightly to reduce false session gains during login or immediate reset bag updates.
+- Expanded inventory-transfer guards for Guild Bank and Void Storage frames where available.
+- Added an extra combat-lockdown guard to floating Action Bar position restoration.
+- Updated README wording for session-window width alignment and defensive session/action-bar safeguards.
+
+---
+
+## v1.22.8
+
+### CPU Optimization Pass
+
+- Cached the profession lookup used by the tracker instead of rebuilding and sorting profession data every refresh tick.
+- Merged concentration summary and row lookup work into one refresh pass to reduce duplicate concentration estimation calls.
+- Combined launcher mulch ready and next-ready checks into one mulch status pass.
+- Reduced small per-tick table allocations in row highlighting and launcher text updates.
+- Shared the current timestamp across related refresh calculations where safe.
+- Added guarded text dirty-checking for tracker and launcher font strings to avoid unnecessary SetText calls when values have not changed.
+- Updated the README version for this performance-focused maintenance release.
+
+---
+
+## v1.22.7
+
+### Row Count Optimization & Documentation
+
+- Reused the already-computed visible tracker row count during refresh autosizing to avoid unnecessary row table rebuilding.
+- Kept saved-height restoration behavior unchanged while reducing duplicate empty-state layout work.
+- Added main tracker row interactions to the README, including pin, hide, remove, restore hidden, and reset pinned shortcuts.
+
+---
+
 ## v1.22.6
 
 ### Empty-State Restoration Polish

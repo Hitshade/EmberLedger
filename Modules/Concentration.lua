@@ -12,10 +12,13 @@ function M:RecordFromTradeSkill()
     local info = GetChildProfessionInfo()
     if not info or not info.professionID then return end
     local skillLineID = info.professionID
-    local currencyID = C_TradeSkillUI.GetConcentrationCurrencyID(skillLineID)
-    if not currencyID or not C_CurrencyInfo or not C_CurrencyInfo.GetCurrencyInfo then return end
-    local currency = C_CurrencyInfo.GetCurrencyInfo(currencyID)
-    if not currency or type(currency.quantity) ~= "number" then return end
+    local okCurrencyID, currencyID = pcall(C_TradeSkillUI.GetConcentrationCurrencyID, skillLineID)
+    if not okCurrencyID or not currencyID or not C_CurrencyInfo or not C_CurrencyInfo.GetCurrencyInfo then return end
+    local okCurrency, currency = pcall(C_CurrencyInfo.GetCurrencyInfo, currencyID)
+    if not okCurrency or type(currency) ~= "table" then return end
+    local quantity = EL.SafeNumber and EL:SafeNumber(currency.quantity, nil, "concentration.currency.quantity") or tonumber(currency.quantity)
+    if quantity == nil then return end
+    local maxQuantity = EL.SafeNumber and EL:SafeNumber(currency.maxQuantity, EL.CONCENTRATION_MAX_DEFAULT, "concentration.currency.maxQuantity") or (tonumber(currency.maxQuantity) or EL.CONCENTRATION_MAX_DEFAULT)
 
     local charKey, char = EL:GetCurrentCharacter()
     if not charKey or type(char) ~= "table" then return end
@@ -29,8 +32,8 @@ function M:RecordFromTradeSkill()
     data.professionID = skillLineID
     data.professionName = info.professionName or "Profession"
     data.currencyID = currencyID
-    data.quantity = currency.quantity or 0
-    data.maxQuantity = currency.maxQuantity or EL.CONCENTRATION_MAX_DEFAULT
+    data.quantity = quantity or 0
+    data.maxQuantity = maxQuantity or EL.CONCENTRATION_MAX_DEFAULT
     data.lastUpdate = time()
     if EL.InvalidateConcentrationIndex then EL:InvalidateConcentrationIndex() end
 end
@@ -43,10 +46,11 @@ function M:RefreshKnownCurrencies()
     local changed = false
     for _, data in pairs(EL.db.resources.concentration or {}) do
         if data.charKey == charKey and data.currencyID then
-            local currency = C_CurrencyInfo.GetCurrencyInfo(data.currencyID)
-            if currency and type(currency.quantity) == "number" then
-                data.quantity = currency.quantity
-                data.maxQuantity = currency.maxQuantity or data.maxQuantity or EL.CONCENTRATION_MAX_DEFAULT
+            local okCurrency, currency = pcall(C_CurrencyInfo.GetCurrencyInfo, data.currencyID)
+            local quantity = okCurrency and type(currency) == "table" and (EL.SafeNumber and EL:SafeNumber(currency.quantity, nil, "concentration.refresh.quantity") or tonumber(currency.quantity)) or nil
+            if quantity ~= nil then
+                data.quantity = quantity
+                data.maxQuantity = (EL.SafeNumber and EL:SafeNumber(currency.maxQuantity, data.maxQuantity or EL.CONCENTRATION_MAX_DEFAULT, "concentration.refresh.maxQuantity")) or data.maxQuantity or EL.CONCENTRATION_MAX_DEFAULT
                 data.lastUpdate = time()
                 changed = true
             end
@@ -67,8 +71,9 @@ function M:RefreshMoxieCurrencies()
     for _, prof in ipairs(EL:GetProfessionEntriesForCharacter(charKey) or {}) do
         local currencyID, professionID = EL:GetMoxieCurrencyIDForProfession(prof)
         if currencyID and professionID then
-            local currency = C_CurrencyInfo.GetCurrencyInfo(currencyID)
-            if currency and type(currency.quantity) == "number" then
+            local okCurrency, currency = pcall(C_CurrencyInfo.GetCurrencyInfo, currencyID)
+            local quantity = okCurrency and type(currency) == "table" and (EL.SafeNumber and EL:SafeNumber(currency.quantity, nil, "moxie.quantity") or tonumber(currency.quantity)) or nil
+            if quantity ~= nil then
                 local entry = EL.db.resources.moxie[charKey][professionID] or {}
                 entry.charKey = charKey
                 entry.charName = char and char.name or prof.charName
@@ -78,8 +83,8 @@ function M:RefreshMoxieCurrencies()
                 entry.professionName = prof.professionName or "Profession"
                 entry.currencyID = currencyID
                 entry.currencyName = currency.name
-                entry.quantity = currency.quantity or 0
-                entry.maxQuantity = currency.maxQuantity
+                entry.quantity = quantity or 0
+                entry.maxQuantity = EL.SafeNumber and EL:SafeNumber(currency.maxQuantity, nil, "moxie.maxQuantity") or tonumber(currency.maxQuantity)
                 entry.lastUpdate = time()
                 EL.db.resources.moxie[charKey][professionID] = entry
             end

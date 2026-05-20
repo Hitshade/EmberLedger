@@ -2,8 +2,25 @@ local addonName, EL = ...
 _G.EmberLedger = EL
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.22.6"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.23.0"
 EL.frame = CreateFrame("Frame")
+EL.L = EL.L or {}
+
+function EL:T(key, ...)
+    local text = (self.L and self.L[key]) or key
+    if select("#", ...) > 0 then
+        local ok, formatted = pcall(string.format, tostring(text), ...)
+        if ok then return formatted end
+    end
+    return tostring(text)
+end
+
+-- Load order note:
+-- Core.lua defines shared state, database normalization, safe numeric conversion,
+-- localization helpers, sorting, and slash-command wiring. Localization.lua
+-- populates the English fallback table. Resource modules register next. UI.lua adds
+-- frame/layout helpers after the shared Core helpers are available, and
+-- ActionBar.lua loads last so secure button setup can use the completed UI layer.
 EL.modules = {}
 EL.DB_KEY_SEP = "\031"
 EL.CONCENTRATION_MAX_DEFAULT = 1000
@@ -943,6 +960,34 @@ function EL:ForEachModule(fn)
 end
 
 EL.REQUIRED_MODULES = {
+    Core = {
+        functions = {
+            "SafeNumber",
+            "InvalidateConcentrationIndex",
+            "GetConcentrationIndex",
+            "GetEstimatedConcentration",
+            "HasImbuedMulchAccess",
+            "InvalidateProfessionLookup",
+            "GetProfessionLookup",
+            "GetMulchStatus",
+            "RequestUpdate",
+            "SetSortKey",
+            "SortDashboardRows",
+            "IsSortColumnAvailable",
+            "T",
+            "GetLocalizationTable",
+        },
+    },
+    UI = {
+        functions = {
+            "IsTrackingColumnVisible",
+            "GetVisibleTrackingRowCount",
+            "AutoSizeTrackingPanel",
+            "LayoutPanel",
+            "RefreshPanel",
+            "RestoreSavedTrackingHeightIfNeeded",
+        },
+    },
     concentration = { registered = true },
     mulch = { registered = true },
     session = { registered = true },
@@ -1024,7 +1069,8 @@ function EL:VerifyModuleInitialization(context, releaseWarning)
             end
         elseif releaseWarning and not self._moduleInitWarningShown then
             self._moduleInitWarningShown = true
-            self:Print("One or more EmberLedger modules did not initialize cleanly. Enable debug mode for details, then /reload.")
+            local first = messages[1] and (" First issue: " .. tostring(messages[1]) .. ".") or ""
+            self:Print("One or more EmberLedger modules or core helpers did not initialize cleanly." .. first .. " Use /el debug for details, then /reload.")
         end
     end
 
@@ -1133,25 +1179,45 @@ function EL:RefreshCurrentProfessionIdentity()
     end
 
     self.db.resources.professions[charKey] = list
+    if self.InvalidateProfessionLookup then self:InvalidateProfessionLookup() end
     if char then
         char.professions = list
     end
     return true
 end
 
-function EL:GetProfessionEntriesForCharacter(charKey)
-    local out = {}
-    local stored = self.db and self.db.resources and self.db.resources.professions and self.db.resources.professions[charKey]
-    if type(stored) == "table" then
-        for _, data in ipairs(stored) do
-            if type(data) == "table" and (data.professionName or data.professionID or data.skillLineID) then
-                table.insert(out, data)
+function EL:InvalidateProfessionLookup()
+    self._professionLookupCache = nil
+end
+
+function EL:GetProfessionLookup()
+    if self._professionLookupCache then return self._professionLookupCache end
+
+    local lookup = {}
+    for charKey, stored in pairs(self.db and self.db.resources and self.db.resources.professions or {}) do
+        if type(stored) == "table" then
+            local list = {}
+            for _, data in ipairs(stored) do
+                if type(data) == "table" and (data.professionName or data.professionID or data.skillLineID) then
+                    list[#list + 1] = data
+                end
+            end
+            if #list > 0 then
+                table.sort(list, SortProfessionEntriesBySlot)
+                lookup[charKey] = list
             end
         end
     end
 
-    if #out > 0 then
-        table.sort(out, SortProfessionEntriesBySlot)
+    self._professionLookupCache = lookup
+    return lookup
+end
+
+function EL:GetProfessionEntriesForCharacter(charKey)
+    if not charKey then return {} end
+    local lookup = self.GetProfessionLookup and self:GetProfessionLookup() or nil
+    local out = lookup and lookup[charKey]
+    if out and #out > 0 then
         return out
     end
 
@@ -1500,6 +1566,7 @@ function EL:ResetCharacterData(charKey, silent)
         end
         if self.db.resources.professions then
             self.db.resources.professions[charKey] = nil
+            if self.InvalidateProfessionLookup then self:InvalidateProfessionLookup() end
         end
         if self.db.resources.moxie then
             self.db.resources.moxie[charKey] = nil
@@ -1602,6 +1669,30 @@ function EL:FormatCountdown(seconds)
     return FormatCompactDuration(seconds, true)
 end
 
+
+function EL:IsTrackingColumnVisible(key)
+    -- UI.lua replaces this fallback with the full column-visibility rules.
+    -- Keep a safe Core implementation so sort requests made before UI setup
+    -- never error or leave a disabled-column sort key behind.
+    if key == "prof" then key = "prof1" end
+    if key == "conc" then key = "conc1" end
+    if key == "character" then return true end
+    return true
+end
+
+function EL:IsSortColumnAvailable(key)
+    if key == "prof" then key = "prof1" end
+    if key == "conc" then key = "conc1" end
+    if key == "character" then return true end
+    if type(self.IsTrackingColumnVisible) ~= "function" then return true end
+    local ok, visible = pcall(self.IsTrackingColumnVisible, self, key)
+    if not ok then
+        if self.Debug then self:Debug("Column visibility check failed for sort key " .. tostring(key) .. ": " .. tostring(visible)) end
+        return true
+    end
+    return visible ~= false
+end
+
 function EL:GetSortSettings()
     self.db.settings.sort = self.db.settings.sort or { key = "character", ascending = true }
     self.db.settings.sort.key = self.db.settings.sort.key or "character"
@@ -1616,7 +1707,7 @@ function EL:SetSortKey(key)
     if not key then return end
     if key == "prof" then key = "prof1" end
     if key == "conc" then key = "conc1" end
-    if self.IsTrackingColumnVisible and not self:IsTrackingColumnVisible(key) then key = "character" end
+    if self.IsSortColumnAvailable and not self:IsSortColumnAvailable(key) then key = "character" end
     local sort = self:GetSortSettings()
     if sort.key == key then
         sort.ascending = not sort.ascending
@@ -1631,7 +1722,8 @@ end
 function EL:GetMulchSortValue(charKey, now)
     local data = self.db and self.db.resources and self.db.resources.mulch and self.db.resources.mulch[charKey]
     if not self:HasImbuedMulchAccess(data) then return nil end
-    return math.max(0, (tonumber(data.readyAt) or 0) - (now or time()))
+    local readyAt = self.SafeNumber and self:SafeNumber(data.readyAt, 0, "mulch.sort.readyAt") or (tonumber(data.readyAt) or 0)
+    return math.max(0, readyAt - (now or time()))
 end
 
 function EL:GetDashboardSortValue(entry, key, now, cache)
@@ -1688,20 +1780,20 @@ function EL:GetDashboardSortValue(entry, key, now, cache)
     return tostring(self:GetCharacterDisplayName(char, charKey)):lower()
 end
 
-function EL:SortDashboardRows(rows, dashboardLookups)
+function EL:SortDashboardRows(rows, dashboardLookups, now)
     if type(rows) ~= "table" then return end
 
     local sort = self:GetSortSettings()
     local key = sort.key or "character"
     if key == "prof" then key = "prof1" end
     if key == "conc" then key = "conc1" end
-    if self.IsTrackingColumnVisible and not self:IsTrackingColumnVisible(key) then
+    if self.IsSortColumnAvailable and not self:IsSortColumnAvailable(key) then
         key = "character"
         sort.key = "character"
         sort.ascending = true
     end
     local ascending = sort.ascending ~= false
-    local now = time()
+    now = now or time()
     local clean = {}
     local sortCache = {}
     local concentrationLookup = dashboardLookups and dashboardLookups.concentrationLookup
@@ -1881,9 +1973,9 @@ function EL:GetConcentrationThreshold()
     return tonumber(alerts and alerts.concentrationThreshold) or 360
 end
 
-function EL:GetConcentrationReadyCount(threshold)
+function EL:GetConcentrationReadyCount(threshold, now)
     threshold = tonumber(threshold) or 800
-    local now = time()
+    now = now or time()
     local count = 0
     for charKey, entries in pairs(self:GetConcentrationIndex() or {}) do
         if charKey and not self:IsCharacterHidden(charKey) then
@@ -1937,21 +2029,39 @@ function EL:GetConcentrationReadyEntries(threshold, limit)
     return entries, #entries
 end
 
-function EL:GetMulchReadyCount()
-    local now = time()
+function EL:GetMulchStatus(now)
+    now = now or time()
     local seen = {}
-    local count = 0
+    local readyCount = 0
+    local nextSummary = nil
+
     for _, data in pairs(self.db and self.db.resources and self.db.resources.mulch or {}) do
         local charKey = data and data.charKey
-        if charKey and not seen[charKey] and not self:IsCharacterHidden(charKey) and self:HasImbuedMulchAccess(data) then
-            local readyAt = tonumber(data.readyAt) or 0
-            if readyAt <= now then
+        if charKey and not self:IsCharacterHidden(charKey) and self:HasImbuedMulchAccess(data) then
+            local readyAt = self.SafeNumber and self:SafeNumber(data.readyAt, 0, "mulch.status.readyAt") or (tonumber(data.readyAt) or 0)
+            local remain = math.max(0, readyAt - now)
+            if readyAt <= now and not seen[charKey] then
                 seen[charKey] = true
-                count = count + 1
+                readyCount = readyCount + 1
+            end
+            if not nextSummary or remain < nextSummary.remaining then
+                local char = self.db and self.db.characters and self.db.characters[charKey]
+                nextSummary = {
+                    charKey = charKey,
+                    displayName = (char and char.name) or data.charName or "Unknown",
+                    remaining = remain,
+                    readyAt = readyAt,
+                }
             end
         end
     end
-    return count
+
+    return { readyCount = readyCount, next = nextSummary }
+end
+
+function EL:GetMulchReadyCount(now)
+    local status = self:GetMulchStatus(now)
+    return status and status.readyCount or 0
 end
 
 function EL:GetMulchReadyEntries(limit)
@@ -1962,7 +2072,7 @@ function EL:GetMulchReadyEntries(limit)
     for _, data in pairs(self.db and self.db.resources and self.db.resources.mulch or {}) do
         local charKey = data and data.charKey
         if charKey and not seen[charKey] and not self:IsCharacterHidden(charKey) and self:HasImbuedMulchAccess(data) then
-            local readyAt = tonumber(data.readyAt) or 0
+            local readyAt = self.SafeNumber and self:SafeNumber(data.readyAt, 0, "mulch.ready.readyAt") or (tonumber(data.readyAt) or 0)
             if readyAt <= now then
                 seen[charKey] = true
                 local char = self.db and self.db.characters and self.db.characters[charKey]
@@ -2026,7 +2136,7 @@ function EL:DoesCharacterNeedAttention(charKey, threshold, now)
 
     local mulchData = self.db and self.db.resources and self.db.resources.mulch and self.db.resources.mulch[charKey]
     if self:HasImbuedMulchAccess(mulchData) then
-        local readyAt = tonumber(mulchData.readyAt) or 0
+        local readyAt = self.SafeNumber and self:SafeNumber(mulchData.readyAt, 0, "mulch.readyAt") or (tonumber(mulchData.readyAt) or 0)
         if readyAt <= now then
             return true
         end
@@ -2036,13 +2146,20 @@ function EL:DoesCharacterNeedAttention(charKey, threshold, now)
 end
 
 function EL:GetEstimatedConcentration(data, now)
-    if not data then return nil end
-    now = now or time()
-    local maxQ = tonumber(data.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
-    local q = tonumber(data.quantity) or 0
-    local last = tonumber(data.lastUpdate) or now
+    if type(data) ~= "table" then return nil end
+    local fallbackNow = time()
+    local rawNow = now ~= nil and now or fallbackNow
+    now = self.SafeNumber and self:SafeNumber(rawNow, fallbackNow, "GetEstimatedConcentration.now") or (tonumber(rawNow) or fallbackNow)
+    local maxQ = self.SafeNumber and self:SafeNumber(data.maxQuantity, self.CONCENTRATION_MAX_DEFAULT, "concentration.maxQuantity") or (tonumber(data.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT)
+    local q = self.SafeNumber and self:SafeNumber(data.quantity, 0, "concentration.quantity") or (tonumber(data.quantity) or 0)
+    local last = self.SafeNumber and self:SafeNumber(data.lastUpdate, now, "concentration.lastUpdate") or (tonumber(data.lastUpdate) or now)
+    local rate = self.SafeNumber and self:SafeNumber(self.CONCENTRATION_RATE_PER_HOUR, 10, "concentration.rate") or (tonumber(self.CONCENTRATION_RATE_PER_HOUR) or 10)
+
+    maxQ = math.max(0, maxQ)
+    q = math.max(0, math.min(maxQ, q))
     if q >= maxQ then return maxQ end
-    local gained = math.floor(math.max(0, now - last) * (self.CONCENTRATION_RATE_PER_HOUR / 3600))
+
+    local gained = math.floor(math.max(0, now - last) * (rate / 3600))
     return math.min(maxQ, q + gained)
 end
 
@@ -2051,9 +2168,9 @@ function EL:GetConcentrationForecastText(data, threshold, now)
     if not data then return "N/A" end
     now = now or time()
     threshold = tonumber(threshold) or (self.db and self.db.settings and self.db.settings.alerts and tonumber(self.db.settings.alerts.concentrationThreshold)) or 360
-    local maxQ = tonumber(data.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
+    local maxQ = self.SafeNumber and self:SafeNumber(data.maxQuantity, self.CONCENTRATION_MAX_DEFAULT, "forecast.maxQuantity") or (tonumber(data.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT)
     local q = self:GetEstimatedConcentration(data, now) or 0
-    local rate = tonumber(self.CONCENTRATION_RATE_PER_HOUR) or 10
+    local rate = self.SafeNumber and self:SafeNumber(self.CONCENTRATION_RATE_PER_HOUR, 10, "forecast.rate") or (tonumber(self.CONCENTRATION_RATE_PER_HOUR) or 10)
 
     if q >= maxQ then
         return "Full"
@@ -2063,18 +2180,19 @@ function EL:GetConcentrationForecastText(data, threshold, now)
         return "Ready"
     end
 
-    local readySeconds = math.ceil((threshold - q) / rate * 3600)
+    local readySeconds = math.ceil((threshold - q) / math.max(1, rate) * 3600)
     return self:FormatDuration(readySeconds)
 end
 
 function EL:GetConcentrationFullIn(data, now)
     if not data then return "N/A" end
     now = now or time()
-    local maxQ = tonumber(data.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
+    local maxQ = self.SafeNumber and self:SafeNumber(data.maxQuantity, self.CONCENTRATION_MAX_DEFAULT, "fullIn.maxQuantity") or (tonumber(data.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT)
     local q = self:GetEstimatedConcentration(data, now) or 0
     if q >= maxQ then return "Full" end
     local missing = maxQ - q
-    local seconds = math.ceil(missing / self.CONCENTRATION_RATE_PER_HOUR * 3600)
+    local rate = self.SafeNumber and self:SafeNumber(self.CONCENTRATION_RATE_PER_HOUR, 10, "fullIn.rate") or (tonumber(self.CONCENTRATION_RATE_PER_HOUR) or 10)
+    local seconds = math.ceil(missing / math.max(1, rate) * 3600)
     return self:FormatDuration(seconds)
 end
 
@@ -2082,7 +2200,8 @@ function EL:HasImbuedMulchAccess(data)
     if type(data) ~= "table" then return false end
     -- Legacy compatibility: only trust the stricter confirmation written by Modules/Mulch.lua.
     -- Older saved values could mark generic Herbalism characters as mulch-ready.
-    return data.confirmedImbuedMulchAccess == true and tonumber(data.confirmationVersion) == 2
+    local version = self.SafeNumber and self:SafeNumber(data.confirmationVersion, 0, "mulch.confirmationVersion") or (tonumber(data.confirmationVersion) or 0)
+    return data.confirmedImbuedMulchAccess == true and version == 2
 end
 
 
@@ -2256,7 +2375,7 @@ function EL:StartFreshSessionOnLogin()
         sessionID = nil,
         historySaved = false,
         bagBaselineReady = false,
-        baselinePrimingUntil = GetTime() + 5,
+        baselinePrimingUntil = GetTime() + 6,
     }
 end
 
@@ -2372,7 +2491,7 @@ function EL:ResetSession()
         sessionID = nil,
         historySaved = false,
         bagBaselineReady = false,
-        baselinePrimingUntil = GetTime() + 2,
+        baselinePrimingUntil = GetTime() + 3,
     }
     self:RequestUpdate()
     self:Print("Session reset.")
@@ -2989,25 +3108,9 @@ function EL:ShowCopySessionSummaryDialog()
     end
 end
 
-function EL:GetNextMulchSummary()
-    local best
-    local now = time()
-    for _, data in pairs(self.db and self.db.resources and self.db.resources.mulch or {}) do
-        if self:HasImbuedMulchAccess(data) and not self:IsCharacterHidden(data.charKey) then
-            local readyAt = tonumber(data.readyAt) or 0
-            local remain = math.max(0, readyAt - now)
-            if not best or remain < best.remaining then
-                local char = self.db and self.db.characters and self.db.characters[data.charKey or ""]
-                best = {
-                    charKey = data.charKey,
-                    displayName = (char and char.name) or data.charName or "Unknown",
-                    remaining = remain,
-                    readyAt = readyAt,
-                }
-            end
-        end
-    end
-    return best
+function EL:GetNextMulchSummary(now)
+    local status = self:GetMulchStatus(now)
+    return status and status.next or nil
 end
 
 function EL:GetCharacterRows()
@@ -3107,23 +3210,23 @@ function EL:Print(msg)
 end
 
 function EL:PrintSlashHelp()
-    self:Print("Commands:")
-    self:Print("/el or /ember - Toggle EmberLedger launcher/main view.")
-    self:Print("/el main - Toggle the main tracking window.")
-    self:Print("/el settings - Open Options.")
-    self:Print("/el session - Toggle the standalone Session window.")
-    self:Print("/el history - Toggle Session History / Stats.")
-    self:Print("/el session start or /el session resume - Resume session tracking.")
-    self:Print("/el session pause - Pause session tracking.")
-    self:Print("/el refresh - Refresh tracked profession data.")
-    self:Print("/el scale - Show the current main window scale.")
-    self:Print("/el scale 0.85 - Set main window scale from 0.60 to 1.40.")
-    self:Print("/el threshold 900 - Set concentration alert threshold.")
-    self:Print("/el lock or /el unlock - Lock or unlock EmberLedger windows.")
-    self:Print("/el reset layout - Reset window positions.")
-    self:Print("/el reset session - Reset current session totals.")
-    self:Print("/el restore or /el restore hidden - Restore hidden characters.")
-    self:Print("/el reset pinned - Remove all pinned markers.")
+    self:Print(self:T("Commands:"))
+    self:Print(self:T("/el or /ember - Toggle EmberLedger launcher/main view."))
+    self:Print(self:T("/el main - Toggle the main tracking window."))
+    self:Print(self:T("/el settings - Open Options."))
+    self:Print(self:T("/el session - Toggle the standalone Session window."))
+    self:Print(self:T("/el history - Toggle Session History / Stats."))
+    self:Print(self:T("/el session start or /el session resume - Resume session tracking."))
+    self:Print(self:T("/el session pause - Pause session tracking."))
+    self:Print(self:T("/el refresh - Refresh tracked profession data."))
+    self:Print(self:T("/el scale - Show the current main window scale."))
+    self:Print(self:T("/el scale 0.85 - Set main window scale from 0.60 to 1.40."))
+    self:Print(self:T("/el threshold 900 - Set concentration alert threshold."))
+    self:Print(self:T("/el lock or /el unlock - Lock or unlock EmberLedger windows."))
+    self:Print(self:T("/el reset layout - Reset window positions."))
+    self:Print(self:T("/el reset session - Reset current session totals."))
+    self:Print(self:T("/el restore or /el restore hidden - Restore hidden characters."))
+    self:Print(self:T("/el reset pinned - Remove all pinned markers."))
 end
 
 SLASH_EMBERLEDGER1 = "/ember"
@@ -3137,41 +3240,41 @@ SlashCmdList.EMBERLEDGER = function(msg)
         if scale and scale >= 0.6 and scale <= 1.4 then
             EL.db.settings.panel.scale = scale
             if EL.ApplyPanelScale then EL:ApplyPanelScale() end
-            EL:Print("Window scale set to " .. string.format("%.2f", scale) .. ".")
+            EL:Print(EL:T("Window scale set to %.2f.", scale))
         else
-            EL:Print("Use /el scale 0.6 through /el scale 1.4")
+            EL:Print(EL:T("Use /el scale 0.6 through /el scale 1.4"))
         end
     elseif msg == "help" or msg == "?" then
         if EL.PrintSlashHelp then EL:PrintSlashHelp() end
     elseif msg == "scale" then
         local current = EL.db and EL.db.settings and EL.db.settings.panel and EL.db.settings.panel.scale or 1
-        EL:Print("Current window scale: " .. string.format("%.2f", current) .. ". Use /el scale 0.85, /el scale 1, etc.")
+        EL:Print(EL:T("Current window scale: %.2f. Use /el scale 0.85, /el scale 1, etc.", current))
     elseif msg == "reset" or msg == "reset windows" or msg == "reset layout" then
         if EL.ResetWindowPositions then EL:ResetWindowPositions() end
     elseif msg == "lock" or msg == "unlock" then
         EL.db.settings.lockWindows = (msg == "lock")
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
-        EL:Print("Windows " .. (EL.db.settings.lockWindows and "locked. Hold Shift and drag to move them." or "unlocked."))
+        EL:Print(EL.db.settings.lockWindows and EL:T("Windows locked. Hold Shift and drag to move them.") or EL:T("Windows unlocked."))
     elseif msg == "debug" then
         if EL.ToggleDebug then EL:ToggleDebug() end
     elseif msg == "refresh" then
         if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
         EL:ForEachModule("Refresh")
         EL:RequestUpdate()
-        EL:Print("Refreshed.")
+        EL:Print(EL:T("Refreshed."))
     elseif msg == "refresh professions" or msg == "professions" then
         if EL.RefreshCurrentProfessionIdentity and EL:RefreshCurrentProfessionIdentity() then
             EL:RequestUpdate()
-            EL:Print("Profession identity refreshed.")
+            EL:Print(EL:T("Profession identity refreshed."))
         else
-            EL:Print("Profession identity could not be refreshed yet.")
+            EL:Print(EL:T("Profession identity could not be refreshed yet."))
         end
     elseif msg == "session start" or msg == "session resume" then
         EL:SetSessionPaused(false)
-        EL:Print("Session tracking resumed.")
+        EL:Print(EL:T("Session tracking resumed."))
     elseif msg == "session pause" then
         EL:SetSessionPaused(true)
-        EL:Print("Session tracking paused.")
+        EL:Print(EL:T("Session tracking paused."))
     elseif msg == "session reset" or msg == "reset session" then
         EL:ResetSession()
     elseif msg == "reset hidden" or msg == "restore hidden" then
@@ -3192,7 +3295,7 @@ SlashCmdList.EMBERLEDGER = function(msg)
             EL.db.settings.alerts = EL.db.settings.alerts or {}
             EL.db.settings.alerts.concentrationThreshold = math.max(0, math.min(1000, value))
             EL:RequestUpdate()
-            EL:Print("Concentration alert threshold set to " .. tostring(EL.db.settings.alerts.concentrationThreshold) .. ".")
+            EL:Print(EL:T("Concentration alert threshold set to %d.", EL.db.settings.alerts.concentrationThreshold))
         end
     elseif msg == "restore" or msg == "unhideall" then
         EL:RestoreHiddenCharacters()

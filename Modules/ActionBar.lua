@@ -73,12 +73,16 @@ end
 
 local function SetFloatingActionBarPoint(bar, pos)
     if not bar then return end
+    if InCombatLockdown and InCombatLockdown() then
+        if EL.QueueCombatDeferredWork then EL:QueueCombatDeferredWork("actionBar") end
+        return false
+    end
     local point = SanitizeAnchorPoint(pos and pos.point, "CENTER")
     local relativePoint = SanitizeAnchorPoint(pos and pos.relativePoint, "CENTER")
     local x = SafeNumber(pos and pos.x, 0)
     local y = SafeNumber(pos and pos.y, -160)
     local ok = pcall(bar.SetPoint, bar, point, UIParent, relativePoint, x, y)
-    if ok then return end
+    if ok then return true end
 
     -- If another addon or a stale saved anchor causes an anchor-family error,
     -- reset to a plain UIParent center anchor instead of throwing a Lua error.
@@ -86,6 +90,7 @@ local function SetFloatingActionBarPoint(bar, pos)
     panelSettings.actionBarPosition = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -160 }
     bar:ClearAllPoints()
     pcall(bar.SetPoint, bar, "CENTER", UIParent, "CENTER", 0, -160)
+    return false
 end
 
 local function ApplyActionBarBackdrop(bar, floating)
