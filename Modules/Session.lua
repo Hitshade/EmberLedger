@@ -410,8 +410,9 @@ function EL:ConsumeTrustedSessionMailItem(itemID, quantity)
 end
 
 function EL:CountSessionItemsInBags()
+    local profile = self.ProfileStart and self:ProfileStart("CountSessionItemsInBags") or nil
     local counts = {}
-    if self.IsSessionTrackingEnabled and not self:IsSessionTrackingEnabled() then return counts end
+    if self.IsSessionTrackingEnabled and not self:IsSessionTrackingEnabled() then if self.ProfileStop then self:ProfileStop("CountSessionItemsInBags", profile) end return counts end
     local maxBag = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
     for bag = 0, maxBag do
         local slots = GetContainerNumSlotsSafe(bag)
@@ -424,6 +425,7 @@ function EL:CountSessionItemsInBags()
             end
         end
     end
+    if self.ProfileStop then self:ProfileStop("CountSessionItemsInBags", profile) end
     return counts
 end
 
@@ -591,9 +593,10 @@ function M:PrimeBagBaseline(forceReady)
 end
 
 function M:ProcessBagDiff()
-    if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then return end
+    local profile = EL.ProfileStart and EL:ProfileStart("ProcessBagDiff") or nil
+    if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then if EL.ProfileStop then EL:ProfileStop("ProcessBagDiff", profile) end return end
     local s = EL:GetSessionDB()
-    if s.isPaused then return end
+    if s.isPaused then if EL.ProfileStop then EL:ProfileStop("ProcessBagDiff", profile) end return end
     local current = EL:CountSessionItemsInBags()
 
     -- Bank, Warband bank, and mailbox transfers can add tracked materials to
@@ -619,6 +622,7 @@ function M:ProcessBagDiff()
         s.lastBagCounts = current
         s.bagBaselineReady = true
         s.baselinePrimingUntil = nil
+        if EL.ProfileStop then EL:ProfileStop("ProcessBagDiff", profile) end
         return
     end
 
@@ -629,6 +633,7 @@ function M:ProcessBagDiff()
         s.lastBagCounts = current
         s.bagBaselineReady = false
         if EL.DebugThrottled then EL:DebugThrottled("session.baseline.priming", 2, "Session bag baseline priming; ignored bag diff during startup/reset window.") elseif EL.Debug then EL:Debug("Session bag baseline priming; ignored bag diff during startup/reset window.") end
+        if EL.ProfileStop then EL:ProfileStop("ProcessBagDiff", profile) end
         return
     end
 
@@ -636,6 +641,7 @@ function M:ProcessBagDiff()
         s.lastBagCounts = current
         s.bagBaselineReady = true
         s.baselinePrimingUntil = nil
+        if EL.ProfileStop then EL:ProfileStop("ProcessBagDiff", profile) end
         return
     end
 
@@ -660,6 +666,7 @@ function M:ProcessBagDiff()
     end
     s.lastBagCounts = current
     EL:RequestUpdate()
+    if EL.ProfileStop then EL:ProfileStop("ProcessBagDiff", profile) end
 end
 
 function M:Refresh()

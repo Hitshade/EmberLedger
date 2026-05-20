@@ -1615,7 +1615,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, T("Information"), contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.24.0")))
+    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.24.5")))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -2258,7 +2258,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText(T("Version %s", tostring(self.version or "1.24.0")))
+    canvas.version:SetText(T("Version %s", tostring(self.version or "1.24.5")))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -3975,8 +3975,18 @@ end
 function EL:RefreshPanel()
     local p = self.panel
     if not p then return end
+    local profileStage = self.ProfileStart and self.ProfileStop and self:IsProfilingEnabled()
+    local stageProfile = nil
+    local function StartStage(label)
+        if not profileStage then return nil end
+        return self:ProfileStart(label)
+    end
+    local function StopStage(label, started)
+        if started then self:ProfileStop(label, started) end
+    end
     local threshold = self.db and self.db.settings and self.db.settings.alerts and self.db.settings.alerts.concentrationThreshold or 360
     local now = time()
+    stageProfile = StartStage("RefreshPanel:Lookups")
     local mulchStatus = self.GetMulchStatus and self:GetMulchStatus(now) or nil
     local mulchReady = mulchStatus and mulchStatus.readyCount or 0
     local concReady, concSoon = 0, 0
@@ -4007,6 +4017,8 @@ function EL:RefreshPanel()
             end
         end
     end
+    StopStage("RefreshPanel:Lookups", stageProfile)
+    stageProfile = StartStage("RefreshPanel:Header")
     if p.summary then
         if IsCompactModeEnabled() then
             SetFontStringTextIfChanged(p.summary, "")
@@ -4025,30 +4037,50 @@ function EL:RefreshPanel()
         p.restore:SetShown(hiddenCount > 0)
         p.restore:SetText(hiddenCount > 0 and ("Restore (" .. hiddenCount .. ")") or "Restore")
     end
+    StopStage("RefreshPanel:Header", stageProfile)
 
+    stageProfile = StartStage("RefreshPanel:GetCharacterRows")
     local allRows = self:GetCharacterRows()
+    StopStage("RefreshPanel:GetCharacterRows", stageProfile)
+
+    stageProfile = StartStage("RefreshPanel:RowsFilter")
     local rows = {}
     local display = self.db and self.db.settings and self.db.settings.display or {}
     local attentionOnly = display.attentionOnly == true
     local visibleRowCount = 0
     local hiddenRowCount = 0
+    local mulchReadyByChar = mulchStatus and mulchStatus.readyByChar or nil
+    local function EntryNeedsAttention(charKey)
+        local concLookup = concentrationLookup and concentrationLookup[charKey]
+        if concLookup and concLookup.readyCount and concLookup.readyCount > 0 then return true end
+        if mulchReadyByChar and mulchReadyByChar[charKey] then return true end
+        return false
+    end
     for _, entry in ipairs(allRows) do
         if entry and entry.key then
             if self:IsCharacterHidden(entry.key) then
                 hiddenRowCount = hiddenRowCount + 1
             else
                 visibleRowCount = visibleRowCount + 1
-                if not attentionOnly or (self.DoesCharacterNeedAttention and self:DoesCharacterNeedAttention(entry.key, threshold, now)) then
-                    table.insert(rows, entry)
+                if not attentionOnly or EntryNeedsAttention(entry.key) then
+                    rows[#rows + 1] = entry
                 end
             end
         end
     end
+    StopStage("RefreshPanel:RowsFilter", stageProfile)
+
+    stageProfile = StartStage("RefreshPanel:ProfessionLookup")
     local professionLookup = self.GetProfessionLookup and self:GetProfessionLookup() or {}
+    StopStage("RefreshPanel:ProfessionLookup", stageProfile)
 
     local dashboardLookups = { concentrationLookup = concentrationLookup, professionLookup = professionLookup }
+    stageProfile = StartStage("RefreshPanel:Sort")
     self:SortDashboardRows(rows, dashboardLookups, now)
     self:UpdateSortHeaders()
+    StopStage("RefreshPanel:Sort", stageProfile)
+
+    stageProfile = StartStage("RefreshPanel:LayoutPrep")
     local rowH, gap = GetTrackingRowHeight(), 0
     local width = math.max(1, p.scroll and p.scroll:GetWidth() or p:GetWidth() - 40)
     local cols = GetColumnLayout(width)
@@ -4059,22 +4091,25 @@ function EL:RefreshPanel()
 
     local currentCharKey = self.GetCharacterKey and self:GetCharacterKey() or nil
     local highlightCurrent = display.highlightCurrentCharacter ~= false
+    StopStage("RefreshPanel:LayoutPrep", stageProfile)
 
+    stageProfile = StartStage("RefreshPanel:RowUpdate")
     for i, entry in ipairs(rows) do
         local row = self:GetRow(i)
         row:SetHeight(rowH)
         ApplyTrackingTextStyle(row)
         local charKey, char = entry.key, entry.char
+        local rowCache = dashboardLookups and dashboardLookups.rowCache and dashboardLookups.rowCache[charKey] or nil
         local concLookup = concentrationLookup[charKey]
-        local concEntries = concLookup and concLookup.entries or {}
-        local profEntries = professionLookup[charKey]
+        local concEntries = rowCache and rowCache.concEntries or (concLookup and concLookup.entries or {})
+        local profEntries = rowCache and rowCache.profEntries or professionLookup[charKey]
         if (not profEntries or #profEntries == 0) and concEntries then
             profEntries = concEntries
         end
-        local slots = self:GetDashboardProfessionSlots(charKey, profEntries, concEntries)
+        local slots = rowCache and rowCache.slots or self:GetDashboardProfessionSlots(charKey, profEntries, concEntries)
         local profData1, concData1 = slots[1] and slots[1].prof or nil, slots[1] and slots[1].conc or nil
         local profData2, concData2 = slots[2] and slots[2].prof or nil, slots[2] and slots[2].conc or nil
-        local moxieEntries = self:GetMoxieEntriesForCharacter(charKey, profEntries)
+        local moxieEntries = rowCache and rowCache.moxieEntries or self:GetMoxieEntriesForCharacter(charKey, profEntries)
         local cooldownValue, cooldownSummary = "-", nil
         if type(self.GetProfessionCooldownDisplayText) == "function" then
             local ok, value, summary = pcall(self.GetProfessionCooldownDisplayText, self, charKey, profEntries)
@@ -4156,7 +4191,7 @@ function EL:RefreshPanel()
         row.cooldownEntries = cooldownSummary and cooldownSummary.entries or nil
         row.moxieEntries = moxieEntries
         row.mulchData = mulchData
-        SetFontStringTextIfChanged(row.name, self:GetCharacterDisplayName(char, charKey))
+        SetFontStringTextIfChanged(row.name, entry.displayName or self:GetCharacterDisplayName(char, charKey))
         local r, g, b = self:GetClassColor(char.class)
         row.name:SetTextColor(r, g, b)
         local isPinned = self:IsCharacterPinned(charKey)
@@ -4250,6 +4285,9 @@ function EL:RefreshPanel()
     for i = #rows + 1, #p.rows do
         p.rows[i]:Hide()
     end
+    StopStage("RefreshPanel:RowUpdate", stageProfile)
+
+    stageProfile = StartStage("RefreshPanel:EmptyAutoSize")
     if p.empty then
         local compactMode = IsCompactModeEnabled()
         p.empty:ClearAllPoints()
@@ -4278,6 +4316,7 @@ function EL:RefreshPanel()
     p.content:SetHeight(math.max(GetTrackingEmptyBodyHeight(), #rows * (rowH + gap)))
     if #rows > 0 and not p._emberVerticalResizing then RestoreSavedTrackingHeightIfNeeded(p, #rows) end
     if self.AutoSizeTrackingPanel and not p._emberVerticalResizing then self:AutoSizeTrackingPanel("refresh", #rows) end
+    StopStage("RefreshPanel:EmptyAutoSize", stageProfile)
 end
 
 function EL:UpdateButton()

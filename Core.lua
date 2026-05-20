@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.24.0"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.24.5"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -291,6 +291,8 @@ local defaults = {
         performance = {
             sessionTracking = true,
             actionBar = true,
+            profile = false,
+            profileSlowMs = 1.0,
         },
         minimap = {
             hide = false,
@@ -478,9 +480,18 @@ local function SortSessionHistoryNewestFirst(a, b)
 end
 
 local function SortCharacterRowsByName(a, b)
-    local an = EL:GetCharacterDisplayName(a and a.char, a and a.key)
-    local bn = EL:GetCharacterDisplayName(b and b.char, b and b.key)
-    return (an or ""):lower() < (bn or ""):lower()
+    local an = a and a.displayNameLower
+    local bn = b and b.displayNameLower
+    if not an then
+        an = EL:GetCharacterDisplayName(a and a.char, a and a.key)
+        an = tostring(an or ""):lower()
+    end
+    if not bn then
+        bn = EL:GetCharacterDisplayName(b and b.char, b and b.key)
+        bn = tostring(bn or ""):lower()
+    end
+    if an ~= bn then return an < bn end
+    return tostring(a and a.key or "") < tostring(b and b.key or "")
 end
 
 local function FormatCompactDuration(seconds, showSecondsUnderHour)
@@ -709,6 +720,90 @@ function EL:DebugThrottled(key, seconds, msg)
     if self._debugThrottle[key] and now - self._debugThrottle[key] < seconds then return end
     self._debugThrottle[key] = now
     self:Debug(msg)
+end
+
+function EL:IsProfilingEnabled()
+    local perf = self.db and self.db.settings and self.db.settings.performance or {}
+    return perf.profile == true
+end
+
+function EL:GetProfileSlowThresholdMs()
+    local perf = self.db and self.db.settings and self.db.settings.performance or {}
+    return self:SafeNumber(perf.profileSlowMs, 1.0, "profile.slowMs") or 1.0
+end
+
+function EL:SetProfilingEnabled(enabled)
+    self.db = self.db or {}
+    self.db.settings = self.db.settings or {}
+    self.db.settings.performance = self.db.settings.performance or {}
+    self.db.settings.performance.profile = enabled and true or false
+    if self.db.settings.performance.profile then
+        self._profileStats = self._profileStats or {}
+        self:Print("Performance profiling enabled. Slow sections will be reported in chat.")
+    else
+        self:Print("Performance profiling disabled.")
+    end
+end
+
+function EL:ResetProfileStats()
+    self._profileStats = {}
+    self._profileThrottle = {}
+    self:Print("Performance profile counters reset.")
+end
+
+local function ProfileNowMs()
+    if debugprofilestop then
+        local ok, value = pcall(debugprofilestop)
+        if ok and value then return value end
+    end
+    if GetTime then return GetTime() * 1000 end
+    return time() * 1000
+end
+
+function EL:ProfileStart(label)
+    if not self:IsProfilingEnabled() then return nil end
+    return ProfileNowMs()
+end
+
+function EL:ProfileStop(label, started)
+    if not started or not self:IsProfilingEnabled() then return end
+    local nowMs = ProfileNowMs()
+    local elapsedMs = math.max(0, nowMs - started)
+    label = tostring(label or "unknown")
+    self._profileStats = self._profileStats or {}
+    local stat = self._profileStats[label] or { count = 0, total = 0, peak = 0, overSlow = 0 }
+    stat.count = stat.count + 1
+    stat.total = stat.total + elapsedMs
+    if elapsedMs > stat.peak then stat.peak = elapsedMs end
+    local threshold = self:GetProfileSlowThresholdMs()
+    if elapsedMs >= threshold then
+        stat.overSlow = stat.overSlow + 1
+        self._profileThrottle = self._profileThrottle or {}
+        local last = self._profileThrottle[label] or 0
+        if nowMs - last >= 5000 then
+            self._profileThrottle[label] = nowMs
+            self:Print(string.format("Profile: %s took %.3fms", label, elapsedMs))
+        end
+    end
+    self._profileStats[label] = stat
+end
+
+function EL:PrintProfileReport()
+    if type(self._profileStats) ~= "table" or next(self._profileStats) == nil then
+        self:Print("No profile data recorded yet. Use /el profile on, then play normally for a few minutes.")
+        return
+    end
+    self:Print("Performance profile summary:")
+    local rows = {}
+    for label, stat in pairs(self._profileStats) do
+        table.insert(rows, { label = label, count = stat.count or 0, total = stat.total or 0, peak = stat.peak or 0, overSlow = stat.overSlow or 0 })
+    end
+    table.sort(rows, function(a, b) return (a.total or 0) > (b.total or 0) end)
+    for i = 1, math.min(#rows, 18) do
+        local row = rows[i]
+        local avg = row.count > 0 and (row.total / row.count) or 0
+        self:Print(string.format("%s: avg %.3fms, peak %.3fms, total %.1fms, slow %dx/%dx", row.label, avg, row.peak, row.total, row.overSlow, row.count))
+    end
 end
 
 function EL:SafeNumber(value, fallback, context)
@@ -942,12 +1037,15 @@ function EL:GetCurrentCharacter()
     local _, classFile = UnitClass("player")
     self.db.characters[key] = self.db.characters[key] or {}
     local c = self.db.characters[key]
+    local displayName = name .. "-" .. realm
+    local characterRowsChanged = c.key ~= key or c.name ~= name or c.realm ~= realm or c.displayName ~= displayName or c.class ~= (classFile or c.class)
     c.key = key
     c.name = name
     c.realm = realm
-    c.displayName = name .. "-" .. realm
+    c.displayName = displayName
     c.class = classFile or c.class
     c.lastSeen = time()
+    if characterRowsChanged and self.InvalidateCharacterRows then self:InvalidateCharacterRows() end
     self.currentCharKey = key
     return key, c
 end
@@ -1648,6 +1746,7 @@ function EL:ResetCharacterData(charKey, silent)
 
     if self.db.characters then
         self.db.characters[charKey] = nil
+        if self.InvalidateCharacterRows then self:InvalidateCharacterRows() end
     end
     if self.db.settings and self.db.settings.favoriteCharacters then
         self.db.settings.favoriteCharacters[charKey] = nil
@@ -1884,6 +1983,15 @@ end
 function EL:SortDashboardRows(rows, dashboardLookups, now)
     if type(rows) ~= "table" then return end
 
+    local profileStage = self.ProfileStart and self.ProfileStop and self:IsProfilingEnabled()
+    local function StartSortStage(label)
+        if not profileStage then return nil end
+        return self:ProfileStart(label)
+    end
+    local function StopSortStage(label, started)
+        if started then self:ProfileStop(label, started) end
+    end
+
     local sort = self:GetSortSettings()
     local key = sort.key or "character"
     if key == "prof" then key = "prof1" end
@@ -1896,7 +2004,8 @@ function EL:SortDashboardRows(rows, dashboardLookups, now)
     local ascending = sort.ascending ~= false
     now = now or time()
     local clean = {}
-    local sortCache = {}
+    local sortCache = dashboardLookups and dashboardLookups.rowCache or {}
+    if dashboardLookups then dashboardLookups.rowCache = sortCache end
     local concentrationLookup = dashboardLookups and dashboardLookups.concentrationLookup
     local professionLookup = dashboardLookups and dashboardLookups.professionLookup
 
@@ -1945,9 +2054,10 @@ function EL:SortDashboardRows(rows, dashboardLookups, now)
         return "string", tostring(v):lower()
     end
 
+    local sortStageProfile = StartSortStage("SortDashboardRows:WrapRows")
     for i, entry in ipairs(rows) do
         if type(entry) == "table" and entry.key then
-            local displayNameLower = tostring(self:GetCharacterDisplayName(entry.char, entry.key)):lower()
+            local displayNameLower = entry.displayNameLower or tostring(self:GetCharacterDisplayName(entry.char, entry.key)):lower()
             local cache = getSortCache(entry.key, displayNameLower)
             local valueType, value
             if key == "character" then
@@ -1968,6 +2078,7 @@ function EL:SortDashboardRows(rows, dashboardLookups, now)
             })
         end
     end
+    StopSortStage("SortDashboardRows:WrapRows", sortStageProfile)
 
     local display = self.db and self.db.settings and self.db.settings.display or {}
     local showCurrentCharacterFirst = display.showCurrentCharacterFirst == true
@@ -1984,12 +2095,16 @@ function EL:SortDashboardRows(rows, dashboardLookups, now)
     CORE_SORT_CONTEXT.showCurrentCharacterFirst = showCurrentCharacterFirst
     CORE_SORT_CONTEXT.showPinnedFirst = display.showPinnedFirst ~= false
     CORE_SORT_CONTEXT.ascending = ascending
+    sortStageProfile = StartSortStage("SortDashboardRows:Sort")
     table.sort(clean, SortWrappedCharacterRows)
+    StopSortStage("SortDashboardRows:Sort", sortStageProfile)
 
+    sortStageProfile = StartSortStage("SortDashboardRows:UnwrapRows")
     wipe(rows)
     for i, wrapped in ipairs(clean) do
         rows[i] = wrapped.row
     end
+    StopSortStage("SortDashboardRows:UnwrapRows", sortStageProfile)
 end
 
 function EL:InvalidateConcentrationIndex()
@@ -2143,6 +2258,7 @@ end
 function EL:GetMulchStatus(now)
     now = now or time()
     local seen = {}
+    local readyByChar = {}
     local readyCount = 0
     local nextSummary = nil
 
@@ -2153,6 +2269,7 @@ function EL:GetMulchStatus(now)
             local remain = math.max(0, readyAt - now)
             if readyAt <= now and not seen[charKey] then
                 seen[charKey] = true
+                readyByChar[charKey] = true
                 readyCount = readyCount + 1
             end
             if not nextSummary or remain < nextSummary.remaining then
@@ -2167,7 +2284,7 @@ function EL:GetMulchStatus(now)
         end
     end
 
-    return { readyCount = readyCount, next = nextSummary }
+    return { readyCount = readyCount, next = nextSummary, readyByChar = readyByChar }
 end
 
 function EL:GetMulchReadyCount(now)
@@ -3224,12 +3341,37 @@ function EL:GetNextMulchSummary(now)
     return status and status.next or nil
 end
 
+function EL:InvalidateCharacterRows()
+    self._characterRowsCache = nil
+    self._characterRowsVersion = (self._characterRowsVersion or 0) + 1
+end
+
 function EL:GetCharacterRows()
+    local chars = self.db and self.db.characters or {}
+    local display = self.db and self.db.settings and self.db.settings.display or {}
+    local showRealm = display.showCharacterRealm ~= false
+    local cache = self._characterRowsCache
+    if cache and cache.source == chars and cache.showRealm == showRealm and cache.version == (self._characterRowsVersion or 0) then
+        return cache.rows
+    end
+
     local rows = {}
-    for key, char in pairs(self.db and self.db.characters or {}) do
-        table.insert(rows, { key = key, char = char })
+    for key, char in pairs(chars) do
+        local displayName = self:GetCharacterDisplayName(char, key)
+        rows[#rows + 1] = {
+            key = key,
+            char = char,
+            displayName = displayName,
+            displayNameLower = tostring(displayName or key or ""):lower(),
+        }
     end
     table.sort(rows, SortCharacterRowsByName)
+    self._characterRowsCache = {
+        rows = rows,
+        source = chars,
+        showRealm = showRealm,
+        version = self._characterRowsVersion or 0,
+    }
     return rows
 end
 
@@ -3269,25 +3411,41 @@ function EL:HasVisibleUpdateConsumers()
 end
 
 function EL:PerformUpdate()
+    local profileAll = self:ProfileStart("PerformUpdate")
     if self.HasVisibleUpdateConsumers and not self:HasVisibleUpdateConsumers() then
         if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
+        self:ProfileStop("PerformUpdate", profileAll)
         return
     end
 
     if self:IsCombatLocked() then
         self:QueueCombatDeferredWork("ui")
+        self:ProfileStop("PerformUpdate", profileAll)
         return
     end
 
-    if self.UpdateButton then self:UpdateButton() end
+    if self.UpdateButton then
+        local profile = self:ProfileStart("UpdateButton")
+        self:UpdateButton()
+        self:ProfileStop("UpdateButton", profile)
+    end
 
     local panelShown = self.panel and self.panel:IsShown()
-    if panelShown and self.RefreshPanel then self:RefreshPanel() end
+    if panelShown and self.RefreshPanel then
+        local profile = self:ProfileStart("RefreshPanel")
+        self:RefreshPanel()
+        self:ProfileStop("RefreshPanel", profile)
+    end
 
     local sessionShown = self:IsSessionTrackingEnabled() and self.sessionWindow and self.sessionWindow:IsShown()
-    if sessionShown and self.RefreshSessionPanel then self:RefreshSessionPanel() end
+    if sessionShown and self.RefreshSessionPanel then
+        local profile = self:ProfileStart("RefreshSessionPanel")
+        self:RefreshSessionPanel()
+        self:ProfileStop("RefreshSessionPanel", profile)
+    end
 
     if self:ShouldRefreshActionBar() and self.RequestActionBarRefresh then self:RequestActionBarRefresh() end
+    self:ProfileStop("PerformUpdate", profileAll)
 end
 
 function EL:RequestUpdate(immediate)
@@ -3321,31 +3479,13 @@ function EL:Print(msg)
 end
 
 function EL:PrintSlashHelp()
-    self:Print(self:T("EmberLedger commands:"))
-    self:Print(self:T("General:"))
-    self:Print(self:T("/el - Toggle EmberLedger launcher/main view."))
-    self:Print(self:T("/el main - Toggle the main tracking window."))
-    self:Print(self:T("/el settings - Open Options."))
-    self:Print(self:T("/el help - Show this command list."))
-    self:Print(self:T("Sessions:"))
-    self:Print(self:T("/el session - Toggle the standalone Session window."))
-    self:Print(self:T("/el history - Toggle Session History / Stats."))
-    self:Print(self:T("/el session start or /el session resume - Resume session tracking."))
-    self:Print(self:T("/el session pause - Pause session tracking."))
-    self:Print(self:T("/el reset session - Reset current session totals."))
-    self:Print(self:T("Characters:"))
-    self:Print(self:T("/el restore or /el restore hidden - Restore hidden characters."))
-    self:Print(self:T("/el reset pinned - Remove all pinned markers."))
-    self:Print(self:T("Display:"))
-    self:Print(self:T("/el scale - Show the current main window scale."))
-    self:Print(self:T("/el scale 0.85 - Set main window scale from 0.60 to 1.40."))
-    self:Print(self:T("/el lock or /el unlock - Lock or unlock EmberLedger windows."))
-    self:Print(self:T("/el reset layout - Reset window positions."))
-    self:Print(self:T("Maintenance:"))
-    self:Print(self:T("/el refresh - Refresh tracked profession data."))
-    self:Print(self:T("/el refresh professions - Refresh current character profession identity."))
-    self:Print(self:T("/el threshold 900 - Set concentration alert threshold."))
-    self:Print(self:T("/el debug - Toggle debug output."))
+    self:Print(self:T("Commands:"))
+    self:Print(self:T("General: /el, /el main, /el settings, /el help"))
+    self:Print(self:T("Sessions: /el session, /el history, /el session start, /el session pause, /el reset session"))
+    self:Print(self:T("Characters: /el restore, /el restore hidden, /el reset pinned"))
+    self:Print(self:T("Display: /el scale, /el scale 0.85, /el lock, /el unlock, /el threshold 900"))
+    self:Print(self:T("Maintenance: /el refresh, /el refresh professions, /el debug"))
+    self:Print(self:T("Profiling: /el profile on, /el profile off, /el profile report, /el profile dump, /el profile reset"))
 end
 
 SLASH_EMBERLEDGER1 = "/ember"
@@ -3376,6 +3516,18 @@ SlashCmdList.EMBERLEDGER = function(msg)
         EL:Print(EL.db.settings.lockWindows and EL:T("Windows locked. Hold Shift and drag to move them.") or EL:T("Windows unlocked."))
     elseif msg == "debug" then
         if EL.ToggleDebug then EL:ToggleDebug() end
+    elseif msg == "profile" or msg == "profile status" then
+        local enabled = EL.IsProfilingEnabled and EL:IsProfilingEnabled()
+        EL:Print(enabled and EL:T("Performance profiling is enabled.") or EL:T("Performance profiling is disabled. Use /el profile on to enable it."))
+        if EL.PrintProfileReport then EL:PrintProfileReport() end
+    elseif msg == "profile on" or msg == "profile start" then
+        if EL.SetProfilingEnabled then EL:SetProfilingEnabled(true) end
+    elseif msg == "profile off" or msg == "profile stop" then
+        if EL.SetProfilingEnabled then EL:SetProfilingEnabled(false) end
+    elseif msg == "profile reset" then
+        if EL.ResetProfileStats then EL:ResetProfileStats() end
+    elseif msg == "profile report" or msg == "profile summary" or msg == "profile dump" then
+        if EL.PrintProfileReport then EL:PrintProfileReport() end
     elseif msg == "refresh" then
         if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
         EL:ForEachModule("Refresh")

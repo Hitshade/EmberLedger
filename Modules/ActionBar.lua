@@ -697,17 +697,20 @@ function EL:LayoutActionBar()
 end
 
 function EL:UpdateActionBar()
+    local profile = self.ProfileStart and self:ProfileStart("UpdateActionBar") or nil
     if self:IsCombatLocked() then
         if self.QueueCombatDeferredWork then self:QueueCombatDeferredWork("actionBar") end
+        if self.ProfileStop then self:ProfileStop("UpdateActionBar", profile) end
         return
     end
     if self.IsActionBarEnabled and not self:IsActionBarEnabled() then
         local bar = self.GetActionBarFrame and self:GetActionBarFrame() or (self.panel and self.panel.actionBar)
         if bar then bar:Hide() end
+        if self.ProfileStop then self:ProfileStop("UpdateActionBar", profile) end
         return
     end
     local bar = self.GetActionBarFrame and self:GetActionBarFrame() or (self.panel and self.panel.actionBar)
-    if not bar or not bar.itemButtons then return end
+    if not bar or not bar.itemButtons then if self.ProfileStop then self:ProfileStop("UpdateActionBar", profile) end return end
     if self.LayoutActionBar then self:LayoutActionBar() end
 
     local lastVisible
@@ -769,5 +772,6 @@ function EL:UpdateActionBar()
         local dynamicW = 6 + (visibleCount * 29) + 3 + 72 + 34
         bar:SetWidth(math.max(ACTION_BAR_FLOATING_W, dynamicW))
     end
+    if self.ProfileStop then self:ProfileStop("UpdateActionBar", profile) end
 end
 

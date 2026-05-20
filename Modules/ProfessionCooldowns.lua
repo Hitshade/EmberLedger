@@ -351,14 +351,15 @@ local function CopyCooldownRecord(record)
 end
 
 function EL:RefreshCurrentProfessionCooldowns()
+    local profile = self.ProfileStart and self:ProfileStart("RefreshCurrentProfessionCooldowns") or nil
     self._hasCooldownColumnData = nil
     local cooldownStore = EnsureProfessionCooldownStore()
-    if not cooldownStore then return false end
+    if not cooldownStore then if self.ProfileStop then self:ProfileStop("RefreshCurrentProfessionCooldowns", profile) end return false end
     if self.PruneProfessionCooldownStore then self:PruneProfessionCooldownStore() end
 
     local charKey, char = self:GetCurrentCharacter()
     charKey = charKey or (char and char.key) or (self.GetCharacterKey and self:GetCharacterKey())
-    if not charKey then return false end
+    if not charKey then if self.ProfileStop then self:ProfileStop("RefreshCurrentProfessionCooldowns", profile) end return false end
 
     local professions = self:GetProfessionEntriesForCharacter(charKey) or {}
     if #professions == 0 and self.RefreshCurrentProfessionIdentity then
@@ -414,6 +415,7 @@ function EL:RefreshCurrentProfessionCooldowns()
 
     records._lastUpdated = Now()
     cooldownStore[charKey] = records
+    if self.ProfileStop then self:ProfileStop("RefreshCurrentProfessionCooldowns", profile) end
     return true
 end
 

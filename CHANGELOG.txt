@@ -1,15 +1,71 @@
 # EmberLedger Changelog
 
+## v1.24.5
+
+### Final Tracker Profiling Pass
+
+- Added deeper RefreshPanel profiling markers for character row generation, row filtering, and profession lookup.
+- Added SortDashboardRows profiling markers for row wrapping, sorting, and row unwrapping.
+- Increased profile report output to show more profiling sections in one report.
+- Kept this as a diagnostics-only pass with no intended gameplay behavior changes.
+
+---
+
+## v1.24.4
+
+### Large-Roster Tracker Optimization
+
+- Cached character row lists until character identity data or display-name settings require rebuilding.
+- Reused cached display-name text and lowercase sort keys during tracker refreshes.
+- Reused the dashboard sort cache during row updates to avoid rebuilding profession slots and Moxie entries twice per refresh.
+- Optimized Attention Only filtering to reuse already-computed concentration and mulch readiness.
+- Added per-character mulch readiness results to the shared mulch status pass.
+- Kept visible tracker behavior unchanged while reducing repeated work for large alt rosters.
+
+---
+
+## v1.24.3
+
+### Tracker Refresh Profiling
+
+- Added deeper optional profiling markers inside the main tracker refresh path.
+- Split tracker profiling into lookup, header, row filtering, sorting, layout preparation, row update, and empty-state/autosize stages.
+- Fixed duplicate rows in `/el profile report` output.
+- Increased profile report output so tracker sub-stages are easier to compare.
+- No gameplay behavior changes.
+
+---
+
+## v1.24.2
+
+### Profile Timer Fix
+
+- Switched optional performance profiling from `GetTime()` deltas to WoW's `debugprofilestop()` timer.
+- Fixed profile reports showing call counts with `0.000ms` totals during idle and active tests.
+- Added `/el profile dump` as an alias for `/el profile report`.
+- Updated README profiling notes.
+
+---
+
+## v1.24.1
+
+### Performance Diagnostics
+
+- Added optional in-game performance profiling commands.
+- Added `/el profile on`, `/el profile off`, `/el profile report`, and `/el profile reset`.
+- Added timing markers for the main update loop, tracker refresh, launcher refresh, session refresh, Action Bar refresh, profession cooldown scanning, bag counting, and bag-diff processing.
+- Slow sections are reported only when profiling is enabled, with throttling to avoid chat spam.
+- No normal gameplay behavior is changed when profiling is disabled.
+
+---
+
 ## v1.24.0
 
-### Modularity and Discoverability
+### Modularity & Discoverability
 
-- Reworked README/CurseForge description to emphasize EmberLedger's modular design.
-- Restored the fuller feature overview, row interaction guidance, session details, Action Bar details, localization note, and lightweight design explanation.
-- Reduced decorative icon usage inside feature lists while keeping section headers visually distinct.
-- Simplified README slash command documentation around `/el help` to reduce documentation drift.
-- Improved `/el help` output with grouped command categories.
-- Updated the TOC notes field to better reflect the current addon scope.
+- Added /el help command.
+- README updated to emphasize modular design and optional systems.
+- Reduced decorative icon usage in documentation.
 
 ---
 
