@@ -8,10 +8,12 @@ local BORDER_R, BORDER_G, BORDER_B = THEME.BORDER_R or 0.82, THEME.BORDER_G or 0
 local EL_BG_R, EL_BG_G, EL_BG_B = THEME.BG_R or 0.030, THEME.BG_G or 0.024, THEME.BG_B or 0.075
 
 function Style:ColorTextByRGB(text, r, g, b)
+    text = tostring(text or "")
     r = math.max(0, math.min(1, tonumber(r) or 1))
     g = math.max(0, math.min(1, tonumber(g) or 1))
     b = math.max(0, math.min(1, tonumber(b) or 1))
-    return string.format("|cff%02x%02x%02x%s|r", math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5), tostring(text or ""))
+    local ri, gi, bi = math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5)
+    return string.format("|cff%02x%02x%02x%s|r", ri, gi, bi, text)
 end
 
 function Style:AddBackdrop(frame, alpha, borderAlpha)

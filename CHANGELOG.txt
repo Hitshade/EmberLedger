@@ -1,5 +1,41 @@
 # EmberLedger Changelog
 
+## v1.23.3
+
+### Final Micro-Polish Pass
+
+- Updated remaining UI fallback version strings for consistency.
+- Sorted profession expansion-prefix matching by longest prefix first to make future expansion entries safer.
+- Reduced unnecessary Action Bar availability checks for disabled buttons.
+- Avoided repeated secure spell-button attribute writes when the resolved macro text has not changed.
+- Added dirty-checking for Action Bar cooldown text updates.
+
+---
+
+## v1.23.2
+
+### Cleanup Polish
+
+- Removed unused colored-text cache scaffolding while preserving the simple styling helper for future use.
+- Removed an unused UI wrapper around the colored-text helper.
+- Clarified the profession expansion-prefix maintenance comment to describe the actual substring ordering rule.
+
+---
+
+## v1.23.1
+
+### Localization & Micro-Optimization Polish
+
+- Precomputed lowercase character display names during dashboard sorting to reduce repeated string allocations in sort comparisons.
+- Added local global-function upvalues in ActionBar and UI paths used by layout and drag handlers.
+- Added lightweight caching for repeated colored text formatting.
+- Replaced the copy-session popup's global EmberLedger lookup with the shared addon namespace.
+- Optimized profession-name expansion prefix stripping while preserving cached results.
+- Routed session bag table headers and the tracker summary strip through the localization helper.
+- Applied dirty-checking to the tracker summary strip text.
+
+---
+
 ## v1.23.0
 
 ### Localization Framework

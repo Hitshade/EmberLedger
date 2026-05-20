@@ -1,5 +1,9 @@
 local addonName, EL = ...
 
+local CreateFrame = _G.CreateFrame
+local IsShiftKeyDown = _G.IsShiftKeyDown
+local UIParent = _G.UIParent
+
 local ticker
 local UIC = EL.UI_CONSTANTS or {}
 local PANEL_MIN_W = UIC.PANEL_MIN_W or 352
@@ -136,9 +140,6 @@ local function ApplyTrackingTextStyle(row)
     end
 end
 
-local function ColorTextByRGB(text, r, g, b)
-    return EL.Style:ColorTextByRGB(text, r, g, b)
-end
 
 local VALID_FRAME_POINTS = {
     TOPLEFT = true, TOP = true, TOPRIGHT = true,
@@ -1614,7 +1615,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, T("Information"), contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.23.0")))
+    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.23.3")))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -2257,7 +2258,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText(T("Version %s", tostring(self.version or "1.23.0")))
+    canvas.version:SetText(T("Version %s", tostring(self.version or "1.23.3")))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -2703,10 +2704,10 @@ function EL:CreateSessionHistoryWindow()
 
     frame.bagHeaders = {}
     local bagColumns = {
-        { key = "item", label = "Item", left = 16, width = 300, justify = "LEFT" },
-        { key = "qty", label = "Qty", right = -404, width = 78, justify = "RIGHT" },
-        { key = "unit", label = "Value", right = -268, width = 112, justify = "RIGHT" },
-        { key = "total", label = "Total", right = -16, width = 230, justify = "RIGHT" },
+        { key = "item", label = T("Item"), left = 16, width = 300, justify = "LEFT" },
+        { key = "qty", label = T("Qty"), right = -404, width = 78, justify = "RIGHT" },
+        { key = "unit", label = T("Value"), right = -268, width = 112, justify = "RIGHT" },
+        { key = "total", label = T("Total"), right = -16, width = 230, justify = "RIGHT" },
     }
     frame.bagColumns = bagColumns
 
@@ -4008,10 +4009,10 @@ function EL:RefreshPanel()
     end
     if p.summary then
         if IsCompactModeEnabled() then
-            p.summary:SetText("")
+            SetFontStringTextIfChanged(p.summary, "")
             p.summary:Hide()
         else
-            p.summary:SetText(string.format("Ready: %d | Soon: %d | Mulch: %d", concReady, concSoon, mulchReady))
+            SetFontStringTextIfChanged(p.summary, T("Ready: %d | Soon: %d | Mulch: %d", concReady, concSoon, mulchReady))
             p.summary:SetTextColor(0.82, 0.80, 0.72)
             p.summary:Show()
         end

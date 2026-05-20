@@ -1,8 +1,11 @@
 local addonName, EL = ...
 _G.EmberLedger = EL
 
+local GetTime = _G.GetTime
+local time = _G.time
+
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.23.0"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.23.3"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -1370,24 +1373,38 @@ end
 
 -- Expansion prefixes to strip from profession names so the UI stays
 -- expansion-neutral. Add new expansion names here as they release.
+-- Do not add a prefix that is the leading substring of another entry unless the
+-- longer entry is checked first.
 local EXPANSION_PREFIXES = {
-    "Midnight", "Khaz Algar", "Dragon Isles", "Shadowlands",
-    "Battle for Azeroth", "Legion", "Warlords", "Pandaria",
-    "Cataclysm", "Northrend", "Outland", "Classic",
+    "Battle for Azeroth", "Warlords", "Dragon Isles", "Shadowlands",
+    "Khaz Algar", "Cataclysm", "Northrend", "Pandaria",
+    "Midnight", "Outland", "Classic", "Legion",
 }
+local EXPANSION_PREFIX_DATA = {}
+for i, prefix in ipairs(EXPANSION_PREFIXES) do
+    EXPANSION_PREFIX_DATA[i] = { text = prefix, lower = prefix:lower(), len = #prefix }
+end
+table.sort(EXPANSION_PREFIX_DATA, function(a, b) return (a.len or 0) > (b.len or 0) end)
 local cleanProfessionNameCache = {}
+
+local function StripProfessionExpansionPrefix(name)
+    local trimmed = tostring(name or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if trimmed == "" then return "" end
+    local lower = trimmed:lower()
+    for _, prefix in ipairs(EXPANSION_PREFIX_DATA) do
+        if lower:sub(1, prefix.len) == prefix.lower and trimmed:sub(prefix.len + 1, prefix.len + 1) == " " then
+            return trimmed:sub(prefix.len + 2):gsub("^%s+", ""):gsub("%s+$", "")
+        end
+    end
+    return trimmed
+end
 
 function EL:GetCleanProfessionName(name)
     name = tostring(name or "")
     if name == "" then return "Profession" end
     local cached = cleanProfessionNameCache[name]
     if cached then return cached end
-    local clean = name
-    -- Store the full profession name internally, but keep the UI expansion-neutral.
-    for _, prefix in ipairs(EXPANSION_PREFIXES) do
-        clean = clean:gsub("^" .. prefix .. "%s+", "")
-    end
-    clean = clean:gsub("^%s+", ""):gsub("%s+$", "")
+    local clean = StripProfessionExpansionPrefix(name)
     if clean == "" then clean = name end
     cleanProfessionNameCache[name] = clean
     return clean
@@ -1732,7 +1749,7 @@ function EL:GetDashboardSortValue(entry, key, now, cache)
     local charKey, char = entry.key, entry.char
     if not charKey then return nil end
     if key == "character" then
-        return tostring(self:GetCharacterDisplayName(char, charKey)):lower()
+        return cache and cache.displayNameLower or tostring(self:GetCharacterDisplayName(char, charKey)):lower()
     elseif key == "prof" or key == "prof1" then
         local slot = cache and cache.slots and cache.slots[1]
         local prof = slot and slot.prof or self:GetDashboardProfessionData(charKey, 1)
@@ -1777,7 +1794,7 @@ function EL:GetDashboardSortValue(entry, key, now, cache)
         end
         return nil
     end
-    return tostring(self:GetCharacterDisplayName(char, charKey)):lower()
+    return cache and cache.displayNameLower or tostring(self:GetCharacterDisplayName(char, charKey)):lower()
 end
 
 function EL:SortDashboardRows(rows, dashboardLookups, now)
@@ -1799,10 +1816,13 @@ function EL:SortDashboardRows(rows, dashboardLookups, now)
     local concentrationLookup = dashboardLookups and dashboardLookups.concentrationLookup
     local professionLookup = dashboardLookups and dashboardLookups.professionLookup
 
-    local function getSortCache(charKey)
+    local function getSortCache(charKey, displayNameLower)
         if not charKey then return nil end
         local cached = sortCache[charKey]
-        if cached then return cached end
+        if cached then
+            if displayNameLower and not cached.displayNameLower then cached.displayNameLower = displayNameLower end
+            return cached
+        end
         local concLookup = concentrationLookup and concentrationLookup[charKey]
         local concEntries = concLookup and concLookup.entries or self:GetConcentrationEntriesForCharacter(charKey)
         local profEntries = professionLookup and professionLookup[charKey] or self:GetProfessionEntriesForCharacter(charKey)
@@ -1822,7 +1842,7 @@ function EL:SortDashboardRows(rows, dashboardLookups, now)
                 end
             end
         end
-        cached = { concEntries = concEntries, profEntries = profEntries, slots = slots, moxieEntries = moxieEntries, bestConc = bestConc }
+        cached = { concEntries = concEntries, profEntries = profEntries, slots = slots, moxieEntries = moxieEntries, bestConc = bestConc, displayNameLower = displayNameLower }
         sortCache[charKey] = cached
         return cached
     end
@@ -1843,14 +1863,21 @@ function EL:SortDashboardRows(rows, dashboardLookups, now)
 
     for i, entry in ipairs(rows) do
         if type(entry) == "table" and entry.key then
-            local rawValue = self:GetDashboardSortValue(entry, key, now, getSortCache(entry.key))
-            local valueType, value = normalizeSortValue(rawValue)
+            local displayNameLower = tostring(self:GetCharacterDisplayName(entry.char, entry.key)):lower()
+            local cache = getSortCache(entry.key, displayNameLower)
+            local valueType, value
+            if key == "character" then
+                valueType, value = "string", displayNameLower
+            else
+                local rawValue = self:GetDashboardSortValue(entry, key, now, cache)
+                valueType, value = normalizeSortValue(rawValue)
+            end
             table.insert(clean, {
                 row = entry,
                 originalIndex = i,
                 valueType = valueType,
                 value = value,
-                name = tostring(self:GetCharacterDisplayName(entry.char, entry.key)):lower(),
+                name = displayNameLower,
                 key = tostring(entry.key or ""),
                 pinned = self:IsCharacterPinned(entry.key),
                 current = false,
@@ -3091,8 +3118,8 @@ local function EnsureCopySessionPopupDefinition()
         -- Blizzard StaticPopup button2 dispatches through OnCancel with reason == "clicked".
         -- Use that path for the optional Print Chat action while button1 simply closes.
         OnCancel = function(_, data, reason)
-            if reason == "clicked" and EmberLedger and EmberLedger.PrintSessionSummaryToChat then
-                EmberLedger:PrintSessionSummaryToChat(data)
+            if reason == "clicked" and EL and type(EL.PrintSessionSummaryToChat) == "function" then
+                EL:PrintSessionSummaryToChat(data)
             end
         end,
     }

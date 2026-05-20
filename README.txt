@@ -1,8 +1,10 @@
-# 🔥 EmberLedger v1.23.0
+# 🔥 EmberLedger v1.23.3
 
 **EmberLedger** is a lightweight Retail World of Warcraft profession dashboard for players managing profession alts across multiple characters.
 
 It helps you quickly check concentration, Artisan Moxie, Imbued Mulch, profession cooldown readiness, and gathering-session value without turning into a full auction house suite, crafting simulator, or inventory manager.
+
+EmberLedger uses safe lookup caching, localization-ready labels, and small micro-optimizations while staying focused.
 
 EmberLedger is built for one simple purpose: giving profession-focused players a fast, readable overview of which characters need attention.
 

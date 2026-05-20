@@ -28,6 +28,12 @@ local enUS = {
     ["CD"] = "CD",
     ["Mulch"] = "Mulch",
 
+    ["Item"] = "Item",
+    ["Qty"] = "Qty",
+    ["Value"] = "Value",
+    ["Total"] = "Total",
+    ["Ready: %d | Soon: %d | Mulch: %d"] = "Ready: %d | Soon: %d | Mulch: %d",
+
     ["No tracked characters yet. Open professions to scan characters."] = "No tracked characters yet. Open professions to scan characters.",
     ["All tracked characters are hidden. Use Restore to show them."] = "All tracked characters are hidden. Use Restore to show them.",
     ["No attention rows. Restore hidden or turn off Attention Only."] = "No attention rows. Restore hidden or turn off Attention Only.",

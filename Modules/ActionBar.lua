@@ -1,5 +1,11 @@
 local addonName, EL = ...
 
+local CreateFrame = _G.CreateFrame
+local GetTime = _G.GetTime
+local InCombatLockdown = _G.InCombatLockdown
+local IsShiftKeyDown = _G.IsShiftKeyDown
+local UIParent = _G.UIParent
+
 local UIC = EL.UI_CONSTANTS or {}
 local ACTION_BAR_H = UIC.ACTION_BAR_H or 36
 local ACTION_BAR_FLOATING_W = UIC.ACTION_BAR_FLOATING_W or 244
@@ -21,6 +27,14 @@ local function SafeNumber(value, fallback)
         if okParsed and parsed ~= nil then return parsed end
     end
     return fallback ~= nil and fallback or 0
+end
+
+local function SetTextIfChanged(fontString, text)
+    if not fontString or not fontString.SetText then return end
+    text = tostring(text or "")
+    if fontString._emberLastText == text then return end
+    fontString._emberLastText = text
+    fontString:SetText(text)
 end
 
 local function AddBackdrop(frame, alpha, borderAlpha)
@@ -397,10 +411,13 @@ local function SetSpellButtonAttributes(button, info)
     local resolved = ResolveActionSpell(info)
     local spellName = (resolved and resolved.name) or info.name or info.label or ""
     local macrotext = "/cast " .. tostring(spellName)
-    button:SetAttribute("type", "macro")
-    button:SetAttribute("type1", "macro")
-    button:SetAttribute("macrotext", macrotext)
-    button:SetAttribute("macrotext1", macrotext)
+    if button._emberMacrotext ~= macrotext then
+        button:SetAttribute("type", "macro")
+        button:SetAttribute("type1", "macro")
+        button:SetAttribute("macrotext", macrotext)
+        button:SetAttribute("macrotext1", macrotext)
+        button._emberMacrotext = macrotext
+    end
     button.resolvedSpell = resolved
 end
 
@@ -700,7 +717,7 @@ function EL:UpdateActionBar()
         if b then
             local actionButtons = self.db and self.db.settings and self.db.settings.panel and self.db.settings.panel.actionButtons
             local enabled = (not actionButtons) or actionButtons[info.key] ~= false
-            local available = GetActionAvailable(info)
+            local available = enabled and GetActionAvailable(info) or false
             local show = enabled and ((not b.hideWhenMissing) or available)
             if info.kind == "spell" then SetSpellButtonAttributes(b, info) end
             b:SetShown(show)
@@ -738,7 +755,7 @@ function EL:UpdateActionBar()
                     if start and duration and duration > 1 then
                         remaining = math.max(0, (start + duration) - GetTime())
                     end
-                    b.cooldownText:SetText(FormatActionCooldownText(remaining))
+                    SetTextIfChanged(b.cooldownText, FormatActionCooldownText(remaining))
                 end
             end
         end
