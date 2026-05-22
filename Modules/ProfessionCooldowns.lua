@@ -227,6 +227,23 @@ local function IsCooldownDefinitionInDisplayScope(def)
     return expansionID >= currentExpansionID
 end
 
+local function GetHiddenCooldownSettings()
+    local display = EL and EL.db and EL.db.settings and EL.db.settings.display or nil
+    if not display then return nil end
+    display.hiddenCooldowns = type(display.hiddenCooldowns) == "table" and display.hiddenCooldowns or {}
+    return display.hiddenCooldowns
+end
+
+local function IsCooldownDefinitionUserVisible(def)
+    if not def or not def.key then return false end
+    local hidden = GetHiddenCooldownSettings()
+    return not (hidden and hidden[def.key] == true)
+end
+
+local function ShouldDisplayCooldownDefinition(def)
+    return IsCooldownDefinitionInDisplayScope(def) and IsCooldownDefinitionUserVisible(def)
+end
+
 function EL:GetCooldownDisplayScope()
     return GetCooldownDisplayScope()
 end
@@ -239,6 +256,38 @@ function EL:SetCooldownDisplayScope(scope)
     if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
     if self.RequestUpdate then self:RequestUpdate() end
     return true
+end
+
+function EL:IsProfessionCooldownHidden(key)
+    if type(key) ~= "string" or key == "" then return false end
+    local hidden = GetHiddenCooldownSettings()
+    return hidden and hidden[key] == true or false
+end
+
+function EL:SetProfessionCooldownHidden(key, hidden)
+    if type(key) ~= "string" or key == "" then return false end
+    if not (self.db and self.db.settings and self.db.settings.display) then return false end
+    local hiddenCooldowns = GetHiddenCooldownSettings()
+    if not hiddenCooldowns then return false end
+    if hidden then
+        hiddenCooldowns[key] = true
+    else
+        hiddenCooldowns[key] = nil
+    end
+    self._hasCooldownColumnData = nil
+    if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+    if self.RequestUpdate then self:RequestUpdate() end
+    return true
+end
+
+function EL:GetProfessionCooldownVisibilityDefinitions()
+    local defs = {}
+    for _, def in ipairs(self.PROFESSION_COOLDOWN_DEFS or {}) do
+        if IsCooldownDefinitionInDisplayScope(def) then
+            table.insert(defs, def)
+        end
+    end
+    return defs
 end
 
 local function GetSpellName(spellID)
@@ -440,7 +489,7 @@ function EL:GetProfessionCooldownDefinitionsForProfession(professionID)
     local defs = COOLDOWN_DEFS_BY_PROFESSION[SafeNumber(professionID)] or {}
     local filtered = {}
     for _, def in ipairs(defs) do
-        if IsCooldownDefinitionInDisplayScope(def) then
+        if ShouldDisplayCooldownDefinition(def) then
             table.insert(filtered, def)
         end
     end
@@ -536,7 +585,7 @@ function EL:GetProfessionCooldownEntriesForCharacter(charKey, professions)
     if type(stored) == "table" then
         for _, def in ipairs(self.PROFESSION_COOLDOWN_DEFS or {}) do
             local record = stored[def.key]
-            if type(record) == "table" and IsCooldownDefinitionInDisplayScope(def) then
+            if type(record) == "table" and ShouldDisplayCooldownDefinition(def) then
                 local copy = {}
                 for k, v in pairs(record) do copy[k] = v end
                 copy.definition = def
@@ -558,7 +607,7 @@ function EL:GetProfessionCooldownEntriesForCharacter(charKey, professions)
     for _, prof in ipairs(professions or self:GetProfessionEntriesForCharacter(charKey) or {}) do
         local profID = SafeNumber(prof and (prof.professionID or prof.skillLineID or prof.skillLine))
         for _, def in ipairs(COOLDOWN_DEFS_BY_PROFESSION[profID] or {}) do
-            if not included[def.key] and IsCooldownDefinitionInDisplayScope(def) then
+            if not included[def.key] and ShouldDisplayCooldownDefinition(def) then
                 table.insert(results, {
                     key = def.key,
                     label = def.label,

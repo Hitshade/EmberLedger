@@ -1,3 +1,25 @@
+## v1.29.1
+
+### Main Window Options Layout Polish
+
+- Tightened Main Window options section spacing so the new cooldown controls fit cleanly.
+- Changed the Tracked Cooldowns list to a compact three-column layout.
+- Shortened cooldown helper text while preserving the same meaning.
+- No cooldown filtering, saved data, tracking logic, or user-facing behavior changed.
+
+---
+
+## v1.29.0
+
+### Cooldown Visibility Controls
+- Added global Tracked Cooldowns checkboxes under Expansion Scope.
+- Hidden cooldowns are ignored in the CD column, row tooltips, summaries, sorting, and cooldown-ready counts.
+- Cooldown visibility is account-wide, not per-character, to avoid configuration bloat.
+- Expansion Scope is applied first, then individual cooldown visibility is applied.
+- Hidden cooldown settings do not delete saved cooldown data, and newly added cooldown definitions remain visible by default.
+
+---
+
 ## v1.28.9
 
 ### Hardening and Event Coalescing

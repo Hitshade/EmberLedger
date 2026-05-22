@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.28.9"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.29.1"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -187,14 +187,14 @@ EL.UI_CONSTANTS = {
     OPTIONS_COLUMN_DESC_TOP = -36,
     OPTIONS_COLUMN_DESC_RIGHT = -12,
     OPTIONS_NEXT_COLUMN_Y = -926,
-    OPTIONS_NEXT_COLUMN_H = 88,
-    OPTIONS_NEXT_COLUMN_CHECK_Y = -62,
+    OPTIONS_NEXT_COLUMN_H = 92,
+    OPTIONS_NEXT_COLUMN_CHECK_Y = -58,
     OPTIONS_COOLDOWN_COLUMN_Y = -1026,
-    OPTIONS_COOLDOWN_COLUMN_H = 138,
-    OPTIONS_COOLDOWN_COLUMN_CHECK_Y = -68,
+    OPTIONS_COOLDOWN_COLUMN_H = 300,
+    OPTIONS_COOLDOWN_COLUMN_CHECK_Y = -62,
 }
 
-EL.DB_VERSION = 11604
+EL.DB_VERSION = 11606
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -351,6 +351,7 @@ local defaults = {
             showMulchColumn = true,
             showCooldownColumn = true,
             cooldownDisplayScope = "current",
+            hiddenCooldowns = {},
             showForecastColumn = false,
             showCharacterRealm = true,
             attentionOnly = false,
@@ -685,6 +686,7 @@ local function NormalizeDisplaySettings(self, settings)
     if settings.display.showMulchColumn == nil then settings.display.showMulchColumn = true end
     if settings.display.showCooldownColumn == nil then settings.display.showCooldownColumn = true end
     if settings.display.cooldownDisplayScope == nil then settings.display.cooldownDisplayScope = "current" end
+    settings.display.hiddenCooldowns = type(settings.display.hiddenCooldowns) == "table" and settings.display.hiddenCooldowns or {}
     if settings.display.showForecastColumn == nil then settings.display.showForecastColumn = false end
     if settings.display.showCharacterRealm == nil then settings.display.showCharacterRealm = true end
     if settings.display.attentionOnly == nil then settings.display.attentionOnly = false end
@@ -704,6 +706,11 @@ local function NormalizeDisplaySettings(self, settings)
     settings.display.showCooldownColumn = settings.display.showCooldownColumn ~= false
     if settings.display.cooldownDisplayScope ~= "current_previous" and settings.display.cooldownDisplayScope ~= "all" then
         settings.display.cooldownDisplayScope = "current"
+    end
+    for key, value in pairs(settings.display.hiddenCooldowns) do
+        if type(key) ~= "string" or value ~= true then
+            settings.display.hiddenCooldowns[key] = nil
+        end
     end
     settings.display.showForecastColumn = settings.display.showForecastColumn == true
     settings.display.showCharacterRealm = settings.display.showCharacterRealm ~= false
@@ -1209,6 +1216,9 @@ EL.REQUIRED_MODULES = {
             "PruneProfessionCooldownStore",
             "GetCooldownDisplayScope",
             "SetCooldownDisplayScope",
+            "IsProfessionCooldownHidden",
+            "SetProfessionCooldownHidden",
+            "GetProfessionCooldownVisibilityDefinitions",
         },
     },
     SessionWindow = {

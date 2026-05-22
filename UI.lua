@@ -540,6 +540,7 @@ local TRACKING_COLUMN_DEFAULT_SETTINGS = {
     showMulchColumn = true,
     showCooldownColumn = true,
     cooldownDisplayScope = "current",
+    hiddenCooldowns = {},
     showForecastColumn = false,
     showCharacterRealm = true,
     showProfessionColumn = true,
@@ -1251,7 +1252,7 @@ function EL:CreateSettingsPanel(parent)
         end
         f._emberLedgerEscRegistered = true
     end
-    f:SetSize(660, 650)
+    f:SetSize(660, 735)
     f:SetScale(1)
     f:SetFrameStrata("DIALOG")
     f:SetMovable(true)
@@ -1285,7 +1286,7 @@ function EL:CreateSettingsPanel(parent)
 
     f.nav = CreateFrame("Frame", nil, f, "BackdropTemplate")
     f.nav:SetPoint("TOPLEFT", 14, -42)
-    f.nav:SetSize(140, 560)
+    f.nav:SetSize(140, 645)
     AddBackdrop(f.nav, 0.28, 0.35)
 
     local navItems = {
@@ -1437,21 +1438,21 @@ function EL:CreateSettingsPanel(parent)
         if control then control:Hide() end
     end
 
-    f.mainWindowTogglesSection = MakeSettingsSection(f, "Main Window Toggles", contentX, -498, contentW, 122)
+    f.mainWindowTogglesSection = MakeSettingsSection(f, "Main Window Toggles", contentX, -498, contentW, 112)
     local mainWindowToggleLeftX = 12
     local mainWindowToggleRightX = 250
     f.toggleCompactMode = MakeSettingsCheck(f.mainWindowTogglesSection, "Compact Mode", function() EL:ToggleDisplaySetting("compactMode") end)
-    f.toggleCompactMode:SetPoint("TOPLEFT", mainWindowToggleLeftX, -34)
+    f.toggleCompactMode:SetPoint("TOPLEFT", mainWindowToggleLeftX, -32)
     f.toggleCharacterRealm = MakeSettingsCheck(f.mainWindowTogglesSection, "Show character realm", function() EL:ToggleDisplaySetting("showCharacterRealm") end)
-    f.toggleCharacterRealm:SetPoint("TOPLEFT", mainWindowToggleRightX, -34)
+    f.toggleCharacterRealm:SetPoint("TOPLEFT", mainWindowToggleRightX, -32)
     f.togglePinnedFirst = MakeSettingsCheck(f.mainWindowTogglesSection, "Show pinned first", function() EL:ToggleDisplaySetting("showPinnedFirst") end)
-    f.togglePinnedFirst:SetPoint("TOPLEFT", mainWindowToggleLeftX, -60)
+    f.togglePinnedFirst:SetPoint("TOPLEFT", mainWindowToggleLeftX, -56)
     f.toggleCurrentCharacterFirst = MakeSettingsCheck(f.mainWindowTogglesSection, "Current character first", function() EL:ToggleDisplaySetting("showCurrentCharacterFirst") end)
-    f.toggleCurrentCharacterFirst:SetPoint("TOPLEFT", mainWindowToggleRightX, -60)
+    f.toggleCurrentCharacterFirst:SetPoint("TOPLEFT", mainWindowToggleRightX, -56)
     f.toggleCurrentCharacterHighlight = MakeSettingsCheck(f.mainWindowTogglesSection, "Highlight current character", function() EL:ToggleDisplaySetting("highlightCurrentCharacter") end)
-    f.toggleCurrentCharacterHighlight:SetPoint("TOPLEFT", mainWindowToggleLeftX, -86)
+    f.toggleCurrentCharacterHighlight:SetPoint("TOPLEFT", mainWindowToggleLeftX, -80)
     f.toggleAttentionOnly = MakeSettingsCheck(f.mainWindowTogglesSection, "Attention Only view", function() EL:ToggleDisplaySetting("attentionOnly") end)
-    f.toggleAttentionOnly:SetPoint("TOPLEFT", mainWindowToggleRightX, -86)
+    f.toggleAttentionOnly:SetPoint("TOPLEFT", mainWindowToggleRightX, -80)
 
     f.thresholdSection = MakeSettingsSection(f, "Resource Thresholds", contentX, -42, contentW, 122)
     f.thresholdSlider = MakeSettingsSlider(f.thresholdSection, "Concentration ready threshold", 0, 1000, 10, function(v) return tostring(math.floor(v + 0.5)) end, function(v)
@@ -1489,21 +1490,21 @@ function EL:CreateSettingsPanel(parent)
         thresholdY = thresholdY - 30
     end
 
-    f.trackingColumnsSection = MakeSettingsSection(f, "Main Window Columns", contentX, -766, contentW, 122)
+    f.trackingColumnsSection = MakeSettingsSection(f, "Main Window Columns", contentX, -766, contentW, 112)
     local trackingColumnLeftX = 12
     local trackingColumnRightX = 250
     f.toggleProf1Column = MakeSettingsCheck(f.trackingColumnsSection, "Show Prof 1 column", function() EL:ToggleTrackingColumn("prof1") end)
-    f.toggleProf1Column:SetPoint("TOPLEFT", trackingColumnLeftX, -34)
+    f.toggleProf1Column:SetPoint("TOPLEFT", trackingColumnLeftX, -32)
     f.toggleConc1Column = MakeSettingsCheck(f.trackingColumnsSection, "Show Conc 1 column", function() EL:ToggleTrackingColumn("conc1") end)
-    f.toggleConc1Column:SetPoint("TOPLEFT", trackingColumnRightX, -34)
+    f.toggleConc1Column:SetPoint("TOPLEFT", trackingColumnRightX, -32)
     f.toggleProf2Column = MakeSettingsCheck(f.trackingColumnsSection, "Allow Prof 2 column", function() EL:ToggleTrackingColumn("prof2") end)
-    f.toggleProf2Column:SetPoint("TOPLEFT", trackingColumnLeftX, -60)
+    f.toggleProf2Column:SetPoint("TOPLEFT", trackingColumnLeftX, -56)
     f.toggleConc2Column = MakeSettingsCheck(f.trackingColumnsSection, "Allow Conc 2 column", function() EL:ToggleTrackingColumn("conc2") end)
-    f.toggleConc2Column:SetPoint("TOPLEFT", trackingColumnRightX, -60)
+    f.toggleConc2Column:SetPoint("TOPLEFT", trackingColumnRightX, -56)
     f.toggleMoxieColumn = MakeSettingsCheck(f.trackingColumnsSection, "Show Moxie column", function() EL:ToggleTrackingColumn("moxie") end)
-    f.toggleMoxieColumn:SetPoint("TOPLEFT", trackingColumnLeftX, -86)
+    f.toggleMoxieColumn:SetPoint("TOPLEFT", trackingColumnLeftX, -80)
     f.toggleMulchColumn = MakeSettingsCheck(f.trackingColumnsSection, "Show Imbued Mulch column", function() EL:ToggleTrackingColumn("mulch") end)
-    f.toggleMulchColumn:SetPoint("TOPLEFT", trackingColumnRightX, -86)
+    f.toggleMulchColumn:SetPoint("TOPLEFT", trackingColumnRightX, -80)
     SetSettingsTooltip(f.toggleMulchColumn, "Imbued Mulch column", {"Shows or hides the Mulch readiness column without changing saved Mulch tracking data."})
 
     f.nextColumnSection = MakeSettingsSection(f, "Next Column", contentX, (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_NEXT_COLUMN_Y) or -926, contentW, (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_NEXT_COLUMN_H) or 88)
@@ -1529,7 +1530,7 @@ function EL:CreateSettingsPanel(parent)
     f.toggleCooldownColumn:SetPoint("TOPLEFT", (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_COLUMN_DESC_LEFT) or 12, (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_COOLDOWN_COLUMN_CHECK_Y) or -68)
     SetSettingsTooltip(f.toggleCooldownColumn, "Profession cooldown readiness", {"Adds a compact CD column for supported profession cooldown crafts.", "Details appear in the row tooltip."})
     f.cooldownScopeLabel = f.cooldownColumnSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    f.cooldownScopeLabel:SetPoint("TOPLEFT", 14, -96)
+    f.cooldownScopeLabel:SetPoint("TOPLEFT", 14, -90)
     f.cooldownScopeLabel:SetText("Expansion Scope")
     f.cooldownScopeDropdown = MakeSettingsDropdown(f.cooldownColumnSection, 218, {
         { label = "Current Expansion Only", value = "current" },
@@ -1542,6 +1543,38 @@ function EL:CreateSettingsPanel(parent)
     end)
     f.cooldownScopeDropdown:SetPoint("LEFT", f.cooldownScopeLabel, "RIGHT", -4, -2)
     SetSettingsTooltip(f.cooldownScopeDropdown, "Cooldown expansion scope", {"Controls which expansion's profession cooldowns appear in the CD column, row tooltips, and summaries.", "Saved cooldown data is not deleted."})
+
+    f.cooldownVisibilityLabel = f.cooldownColumnSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.cooldownVisibilityLabel:SetPoint("TOPLEFT", 14, -120)
+    f.cooldownVisibilityLabel:SetText("Tracked Cooldowns")
+    f.cooldownVisibilityDesc = f.cooldownColumnSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.cooldownVisibilityDesc:SetPoint("TOPLEFT", 14, -138)
+    f.cooldownVisibilityDesc:SetWidth(contentW - 28)
+    f.cooldownVisibilityDesc:SetJustifyH("LEFT")
+    if f.cooldownVisibilityDesc.SetWordWrap then f.cooldownVisibilityDesc:SetWordWrap(true) end
+    f.cooldownVisibilityDesc:SetTextColor(0.82, 0.82, 0.76)
+    f.cooldownVisibilityDesc:SetText("Choose which cooldowns appear after Expansion Scope is applied. Account-wide; saved data is not deleted.")
+    f.cooldownVisibilityChecks = {}
+    local cooldownCheckY = -172
+    local cooldownCheckColumns = {12, 168, 324}
+    local cooldownCheckIndex = 0
+    for _, def in ipairs(EL.PROFESSION_COOLDOWN_DEFS or {}) do
+        if def and def.key then
+            cooldownCheckIndex = cooldownCheckIndex + 1
+            local cb = MakeSettingsCheck(f.cooldownColumnSection, def.label or def.key, function(self)
+                if EL.SetProfessionCooldownHidden then
+                    EL:SetProfessionCooldownHidden(def.key, not (self and self:GetChecked()))
+                end
+            end)
+            local colX = cooldownCheckColumns[((cooldownCheckIndex - 1) % #cooldownCheckColumns) + 1]
+            local rowY = cooldownCheckY - (math.floor((cooldownCheckIndex - 1) / #cooldownCheckColumns) * 24)
+            cb:SetPoint("TOPLEFT", colX, rowY)
+            cb.cooldownKey = def.key
+            cb.cooldownDefinition = def
+            SetSettingsTooltip(cb, def.label or "Profession cooldown", {"Unchecked cooldowns are hidden everywhere in EmberLedger.", "This setting is account-wide and does not remove saved cooldown data."})
+            f.cooldownVisibilityChecks[#f.cooldownVisibilityChecks + 1] = cb
+        end
+    end
     f.launcherSection = MakeSettingsSection(f, "Launcher Display", contentX, -598, contentW, 88)
     f.toggleConc = MakeSettingsCheck(f.launcherSection, "Concentration alert", function() EL:ToggleDisplaySetting("showLauncherConc") end)
     f.toggleConc:SetPoint("TOPLEFT", 12, -34)
@@ -1807,7 +1840,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, T("Information"), contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.28.9")))
+    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.29.1")))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -1952,6 +1985,22 @@ function EL:RefreshSettingsPanel()
     setToggle(f.toggleCooldownColumn, trackingDisplay.showCooldownColumn ~= false)
     if f.cooldownScopeDropdown and f.cooldownScopeDropdown.RefreshSelection then
         f.cooldownScopeDropdown:RefreshSelection()
+    end
+    local visibleCooldownDefs = {}
+    if self.GetProfessionCooldownVisibilityDefinitions then
+        for _, def in ipairs(self:GetProfessionCooldownVisibilityDefinitions() or {}) do
+            if def and def.key then visibleCooldownDefs[def.key] = true end
+        end
+    end
+    if f.cooldownVisibilityChecks then
+        for _, cb in ipairs(f.cooldownVisibilityChecks) do
+            local key = cb and cb.cooldownKey
+            local shown = key and visibleCooldownDefs[key] == true
+            if cb.SetShown then cb:SetShown(shown) elseif shown and cb.Show then cb:Show() elseif cb.Hide then cb:Hide() end
+            if shown then
+                setToggle(cb, not (self.IsProfessionCooldownHidden and self:IsProfessionCooldownHidden(key)))
+            end
+        end
     end
     setToggle(f.toggleForecastColumn, trackingDisplay.showForecastColumn == true)
     setToggle(f.toggleCharacterRealm, display.showCharacterRealm ~= false)
@@ -2489,7 +2538,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText(T("Version %s", tostring(self.version or "1.28.9")))
+    canvas.version:SetText(T("Version %s", tostring(self.version or "1.29.1")))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
