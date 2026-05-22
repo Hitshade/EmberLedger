@@ -486,7 +486,7 @@ local TRACKING_COLUMN_DEFS = {
     { key = "conc2", label = "Conc 2", width = 86, minWidth = 86, compactWidth = 68, compactMinWidth = 68, justify = "RIGHT", sortKey = "conc2", setting = "showConcentration2Column", toggleLabel = "Conc 2 column", secondary = true },
     { key = "forecast", label = "Next", width = 84, minWidth = 72, compactWidth = 72, compactMinWidth = 64, justify = "RIGHT", sortKey = "forecast", setting = "showForecastColumn", toggleLabel = "Next column" },
     { key = "moxie", label = "Moxie", width = 82, minWidth = 78, compactWidth = 70, compactMinWidth = 64, justify = "RIGHT", sortKey = "moxie", setting = "showMoxieColumn", toggleLabel = "Moxie column" },
-    { key = "cooldown", label = "CD", width = 42, minWidth = 36, compactWidth = 34, compactMinWidth = 30, justify = "CENTER", sortKey = "cooldown", setting = "showCooldownColumn", toggleLabel = "Cooldown readiness column", autoHide = true },
+    { key = "cooldown", label = "CD", width = 42, minWidth = 36, compactWidth = 34, compactMinWidth = 30, justify = "CENTER", sortKey = "cooldown", setting = "showCooldownColumn", toggleLabel = "Cooldown readiness column" },
     { key = "mulch", label = "Mulch", width = 68, minWidth = 64, compactWidth = 60, compactMinWidth = 58, justify = "RIGHT", sortKey = "mulch", setting = "showMulchColumn", toggleLabel = "Mulch column" },
 }
 
@@ -539,6 +539,7 @@ local TRACKING_COLUMN_DEFAULT_SETTINGS = {
     showMoxieColumn = false,
     showMulchColumn = true,
     showCooldownColumn = true,
+    cooldownDisplayScope = "current",
     showForecastColumn = false,
     showCharacterRealm = true,
     showProfessionColumn = true,
@@ -873,6 +874,50 @@ local function MakeSettingsButton(parent, text, width, onClick)
     return b
 end
 
+
+local settingsDropdownCounter = 0
+local function MakeSettingsDropdown(parent, width, options, getValue, setValue)
+    settingsDropdownCounter = settingsDropdownCounter + 1
+    local name = "EmberLedgerSettingsDropdown" .. tostring(settingsDropdownCounter)
+    local dd = CreateFrame("Frame", name, parent, "UIDropDownMenuTemplate")
+    dd.options = options or {}
+    dd.getValue = getValue
+    dd.setValue = setValue
+
+    local function getLabel(value)
+        for _, opt in ipairs(dd.options) do
+            if opt.value == value then return opt.label end
+        end
+        return dd.options[1] and dd.options[1].label or ""
+    end
+
+    function dd:RefreshSelection()
+        local value = self.getValue and self.getValue() or (self.options[1] and self.options[1].value)
+        if UIDropDownMenu_SetSelectedValue then UIDropDownMenu_SetSelectedValue(self, value) end
+        if UIDropDownMenu_SetText then UIDropDownMenu_SetText(self, getLabel(value)) end
+    end
+
+    if UIDropDownMenu_SetWidth then UIDropDownMenu_SetWidth(dd, width or 190) end
+    if UIDropDownMenu_Initialize then
+        UIDropDownMenu_Initialize(dd, function(self, level)
+            local selected = self.getValue and self.getValue() or (self.options[1] and self.options[1].value)
+            for _, opt in ipairs(self.options) do
+                local info = UIDropDownMenu_CreateInfo and UIDropDownMenu_CreateInfo() or {}
+                info.text = opt.label
+                info.value = opt.value
+                info.checked = selected == opt.value
+                info.func = function()
+                    if self.setValue then self.setValue(opt.value) end
+                    if CloseDropDownMenus then CloseDropDownMenus() end
+                    if self.RefreshSelection then self:RefreshSelection() end
+                end
+                if UIDropDownMenu_AddButton then UIDropDownMenu_AddButton(info, level) end
+            end
+        end)
+    end
+    dd:RefreshSelection()
+    return dd
+end
 
 local function ShowSettingsConfirm(text, acceptText, onAccept, popupKey, requireDialog)
     if not onAccept then return end
@@ -1459,6 +1504,7 @@ function EL:CreateSettingsPanel(parent)
     f.toggleMoxieColumn:SetPoint("TOPLEFT", trackingColumnLeftX, -86)
     f.toggleMulchColumn = MakeSettingsCheck(f.trackingColumnsSection, "Show Imbued Mulch column", function() EL:ToggleTrackingColumn("mulch") end)
     f.toggleMulchColumn:SetPoint("TOPLEFT", trackingColumnRightX, -86)
+    SetSettingsTooltip(f.toggleMulchColumn, "Imbued Mulch column", {"Shows or hides the Mulch readiness column without changing saved Mulch tracking data."})
 
     f.nextColumnSection = MakeSettingsSection(f, "Next Column", contentX, (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_NEXT_COLUMN_Y) or -926, contentW, (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_NEXT_COLUMN_H) or 88)
     f.nextColumnDesc = f.nextColumnSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1478,10 +1524,24 @@ function EL:CreateSettingsPanel(parent)
     f.cooldownColumnDesc:SetJustifyH("LEFT")
     if f.cooldownColumnDesc.SetWordWrap then f.cooldownColumnDesc:SetWordWrap(true) end
     f.cooldownColumnDesc:SetTextColor(0.82, 0.82, 0.76)
-    f.cooldownColumnDesc:SetText("Shows readiness for supported profession cooldown crafts. Hover character rows for details and timers.")
+    f.cooldownColumnDesc:SetText("Shows readiness for supported profession cooldown crafts. Use Expansion Scope to reduce older-expansion cooldown clutter.")
     f.toggleCooldownColumn = MakeSettingsCheck(f.cooldownColumnSection, "Show CD column", function() EL:ToggleTrackingColumn("cooldown") end)
     f.toggleCooldownColumn:SetPoint("TOPLEFT", (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_COLUMN_DESC_LEFT) or 12, (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_COOLDOWN_COLUMN_CHECK_Y) or -68)
     SetSettingsTooltip(f.toggleCooldownColumn, "Profession cooldown readiness", {"Adds a compact CD column for supported profession cooldown crafts.", "Details appear in the row tooltip."})
+    f.cooldownScopeLabel = f.cooldownColumnSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.cooldownScopeLabel:SetPoint("TOPLEFT", 14, -96)
+    f.cooldownScopeLabel:SetText("Expansion Scope")
+    f.cooldownScopeDropdown = MakeSettingsDropdown(f.cooldownColumnSection, 218, {
+        { label = "Current Expansion Only", value = "current" },
+        { label = "Current + Previous Expansion", value = "current_previous" },
+        { label = "All Supported Cooldowns", value = "all" },
+    }, function()
+        return (EL.GetCooldownDisplayScope and EL:GetCooldownDisplayScope()) or "current"
+    end, function(value)
+        if EL.SetCooldownDisplayScope then EL:SetCooldownDisplayScope(value) end
+    end)
+    f.cooldownScopeDropdown:SetPoint("LEFT", f.cooldownScopeLabel, "RIGHT", -4, -2)
+    SetSettingsTooltip(f.cooldownScopeDropdown, "Cooldown expansion scope", {"Controls which expansion's profession cooldowns appear in the CD column, row tooltips, and summaries.", "Saved cooldown data is not deleted."})
     f.launcherSection = MakeSettingsSection(f, "Launcher Display", contentX, -598, contentW, 88)
     f.toggleConc = MakeSettingsCheck(f.launcherSection, "Concentration alert", function() EL:ToggleDisplaySetting("showLauncherConc") end)
     f.toggleConc:SetPoint("TOPLEFT", 12, -34)
@@ -1747,7 +1807,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, T("Information"), contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.27.2")))
+    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.28.6")))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -1890,6 +1950,9 @@ function EL:RefreshSettingsPanel()
     setToggle(f.toggleMoxieColumn, trackingDisplay.showMoxieColumn == true)
     setToggle(f.toggleMulchColumn, trackingDisplay.showMulchColumn ~= false)
     setToggle(f.toggleCooldownColumn, trackingDisplay.showCooldownColumn ~= false)
+    if f.cooldownScopeDropdown and f.cooldownScopeDropdown.RefreshSelection then
+        f.cooldownScopeDropdown:RefreshSelection()
+    end
     setToggle(f.toggleForecastColumn, trackingDisplay.showForecastColumn == true)
     setToggle(f.toggleCharacterRealm, display.showCharacterRealm ~= false)
     setToggle(f.toggleAttentionOnly, display.attentionOnly == true)
@@ -2426,7 +2489,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText(T("Version %s", tostring(self.version or "1.27.2")))
+    canvas.version:SetText(T("Version %s", tostring(self.version or "1.28.6")))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)

@@ -1,17 +1,111 @@
-v1.27.2
+# EmberLedger Changelog
+
+## v1.28.6
+
+### Maintenance Cache and Expansion Helper Fixes
+
+- Fixed stale cooldown-column cache data when removing a character's saved data.
+- Updated previous-expansion helper logic to respect the shared PREVIOUS_EXPANSION_ID constant.
+- Routed cooldown Current + Previous filtering through the shared previous-expansion helper instead of subtracting from the current expansion ID inline.
+- Added comments for forward-looking expansion helper functions.
+- Changed module failure logging to use debug output so hidden module errors remain available when Debug Mode is enabled without showing normal users extra chat messages.
+- No tracking behavior, saved cooldown data, user-facing options, or display-scope defaults were changed.
+
+---
+
+## v1.28.5
+
+### Attention Only Threshold Fix
+
+- Fixed a Lua error that could occur when enabling Attention Only view.
+- Corrected the per-profession concentration threshold lookup so the threshold value is converted safely without passing the override flag into tonumber().
+- No cooldown filtering, saved data, or display-scope behavior was changed.
+
+---
+
+## v1.28.4
+
+### Midnight Cooldown Scope Fix
+
+- Fixed Current Expansion Only cooldown filtering so the curated Midnight profession cooldowns are treated as current-expansion cooldowns.
+- Updated the shared expansion defaults so Midnight is current and The War Within is previous for cooldown display-scope logic.
+- Current + Previous and All Cooldowns behavior remains unchanged.
+- No cooldown scanning, saved data, or user-facing option behavior was changed.
+
+---
+
+## v1.28.3
+
+### Cooldown Column Visibility Fix
+
+- Fixed a regression where the Show CD column setting could be blocked by cooldown display-scope auto-hide logic.
+- The CD column now respects the explicit Show CD column toggle consistently.
+- No cooldown scanning, saved data, expansion metadata, or scope-filter behavior was changed.
+
+---
+
+## v1.28.2
+
+### Future-Proofing and Maintenance Polish
+
+- Centralized expansion IDs, names, and profession-name prefixes in Core.lua for easier next-expansion maintenance.
+- Updated profession cooldown scope filtering to use the shared current-expansion helper instead of local expansion fallback logic.
+- Added a cooldown maintenance checklist for future expansion updates.
+- Added debug-only validation helpers for curated profession cooldown definitions.
+- Added a maintenance note around zone-gated Action Bar utility actions.
+- No tracking behavior, saved data format, cooldown scanning, or user-facing options were changed.
+
+---
+
+## v1.28.1
+
+### Cooldown Options Polish
+
+- Renamed the cooldown filter label from Display scope to Expansion Scope for clearer meaning.
+- Replaced the cooldown scope button group with a cleaner dropdown-style control.
+- Updated the cooldown scope description and tooltip wording to better explain what the setting affects.
+- No cooldown tracking, scanning, saved data, or expansion-filter behavior was changed.
+
+---
+
+## v1.28.0
+
+### Cooldown Display Scope & Column Flexibility
+
+- Added expansion-aware profession cooldown display filtering with Current, Current + Previous, and All cooldown scope options.
+- Tagged curated profession cooldown definitions with expansion metadata so future expansion cooldowns can be added without rewriting display logic.
+- Defaulted cooldown display scope to Current Expansion Only for both new and existing users to reduce older-cooldown clutter.
+- Cooldown filtering affects display, summaries, sorting, tooltips, and column auto-hide checks without deleting saved cooldown data or changing scan behavior.
+- Confirmed the Imbued Mulch column remains user-toggleable from Main Window column visibility and added clearer tooltip guidance for that control.
+- No slash command expansion or new tracking systems were added.
+
+---
+
+## v1.27.2
+
+### Action Bar Tooltip Correction
+
 - Restored the main tracker Restore button tooltip.
 - Removed the redundant secure Logout action button tooltip from the Action Bar.
+- Left the main-window Options button and resize grip tooltips removed.
+- No tracking logic, slash commands, or core feature systems were changed.
 
-# EmberLedger Changelog
+---
 
 ## v1.27.1
 
+### Main Window Tooltip & Empty-State Polish
+
 - Corrected the Character column tooltip so row interactions are described accurately.
 - Tightened main-window empty-state wording for first scans and visible-data refresh guidance.
-- Removed unnecessary main-window tooltips from the Restore button, Options button, and resize grip.
+- Removed unnecessary main-window tooltips from the Options button and resize grip.
 - No tracking logic, slash commands, or core feature systems were changed.
 
+---
+
 ## v1.27.0
+
+### UI Clarity Polish
 
 - Added clearer main-window column header tooltips with per-column explanations while preserving existing sort behavior.
 - Improved main-window empty-state messages for first scans, hidden characters, Attention Only, and refresh guidance.
@@ -19,18 +113,28 @@ v1.27.2
 - Added Appearance convenience buttons to match launcher/session opacity to the main window or restore default opacity values.
 - No tracking logic, slash commands, or core feature systems were changed.
 
+---
+
 ## v1.26.2
+
+### Threshold Consistency & Tooltip Polish
 
 - Updated concentration max-quantity fallback handling to use the normalized global concentration threshold helper.
 - Added shared tooltips to per-profession concentration threshold sliders explaining that 0 uses the global threshold.
 - No slash command behavior changes.
 
+---
+
 ## v1.26.1
+
+### Onboarding & Threshold Consistency Fixes
 
 - Refined first-time onboarding wording for clearer Trade Skill window setup instructions.
 - Registered the onboarding panel with Escape-key dismissal and marks onboarding as seen when the panel is hidden.
 - Fixed Attention Only empty-state and auto-height checks so per-profession concentration threshold overrides are respected consistently.
 - Removed unnecessary refresh updates for hidden legacy module controls.
+
+---
 
 ## v1.26.0
 

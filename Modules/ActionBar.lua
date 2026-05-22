@@ -181,6 +181,8 @@ local function GetToyIconSafe(itemID, itemName, fallback)
 end
 
 
+-- Zone-gated utility actions are intentionally grouped here so future expansion
+-- action buttons can be maintained in one compact table without affecting tracking systems.
 local ACTION_ZONE_GROUPS = {
     khazAlgar = {
         ["Khaz Algar"] = true,

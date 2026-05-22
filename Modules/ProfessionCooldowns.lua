@@ -6,14 +6,23 @@ if not EL then return end
 -- Not intended to become recipe accounting, reagent tracking, or auction analysis.
 -- Stored data is lightweight per-character cooldown state and may be rebuilt from profession scans.
 -- Store setup is centralized through EL:EnsureProfessionCooldownStore so Core and this module share the same path.
--- Spell IDs below are curated for the current Retail profession cooldown crafts.
+-- Spell IDs below are curated for Retail profession cooldown crafts.
 -- If Blizzard changes recipe spells in a future patch, update this table rather than
 -- broadening the feature into generic recipe/cooldown scanning.
+-- Expansion metadata supports display-scope filtering while preserving all scanned data.
+--
+-- Expansion maintenance checklist:
+-- 1. Update EL.CURRENT_EXPANSION_ID, EL.PREVIOUS_EXPANSION_ID, EL.EXPANSION_NAMES,
+--    and EL.PROFESSION_EXPANSION_PREFIXES in Core.lua when a new expansion becomes current.
+-- 2. Add or retire curated cooldown definitions below as Blizzard changes profession cooldowns.
+-- 3. Assign expansionID to every definition so default Current Expansion filtering stays clean.
+-- 4. Keep saved cooldown data expansion-neutral; filters should hide data, not delete it.
 
 local module = {}
 
 local PROF_ALCHEMY = 171
 local PROF_TAILORING = 197
+local EXPANSION_MIDNIGHT = EL.EXPANSION_IDS and EL.EXPANSION_IDS.MIDNIGHT or 11
 
 EL.PROFESSION_COOLDOWN_DEFS = EL.PROFESSION_COOLDOWN_DEFS or {
     {
@@ -24,6 +33,7 @@ EL.PROFESSION_COOLDOWN_DEFS = EL.PROFESSION_COOLDOWN_DEFS or {
         shortLabel = "WS",
         spellID = 1230856,
         category = "Alchemy",
+        expansionID = EXPANSION_MIDNIGHT,
     },
     {
         key = "bouquet_of_herbs",
@@ -33,6 +43,7 @@ EL.PROFESSION_COOLDOWN_DEFS = EL.PROFESSION_COOLDOWN_DEFS or {
         shortLabel = "Herbs",
         spellID = 1230892,
         category = "Alchemy",
+        expansionID = EXPANSION_MIDNIGHT,
     },
     {
         key = "box_of_rocks",
@@ -42,6 +53,7 @@ EL.PROFESSION_COOLDOWN_DEFS = EL.PROFESSION_COOLDOWN_DEFS or {
         shortLabel = "Rocks",
         spellID = 1230891,
         category = "Alchemy",
+        expansionID = EXPANSION_MIDNIGHT,
     },
     {
         key = "school_of_gems",
@@ -51,6 +63,7 @@ EL.PROFESSION_COOLDOWN_DEFS = EL.PROFESSION_COOLDOWN_DEFS or {
         shortLabel = "Gems",
         spellID = 1230893,
         category = "Alchemy",
+        expansionID = EXPANSION_MIDNIGHT,
     },
     {
         key = "dawnweave_bolt",
@@ -60,6 +73,7 @@ EL.PROFESSION_COOLDOWN_DEFS = EL.PROFESSION_COOLDOWN_DEFS or {
         shortLabel = "Dawn",
         spellID = 446928,
         category = "Tailoring",
+        expansionID = EXPANSION_MIDNIGHT,
     },
     {
         key = "duskweave_bolt",
@@ -69,6 +83,7 @@ EL.PROFESSION_COOLDOWN_DEFS = EL.PROFESSION_COOLDOWN_DEFS or {
         shortLabel = "Dusk",
         spellID = 446927,
         category = "Tailoring",
+        expansionID = EXPANSION_MIDNIGHT,
     },
     {
         key = "arcanoweave_bolt",
@@ -78,6 +93,7 @@ EL.PROFESSION_COOLDOWN_DEFS = EL.PROFESSION_COOLDOWN_DEFS or {
         shortLabel = "Arcane",
         spellID = 1227926,
         category = "Tailoring",
+        expansionID = EXPANSION_MIDNIGHT,
     },
     {
         key = "sunfire_silk_bolt",
@@ -87,6 +103,7 @@ EL.PROFESSION_COOLDOWN_DEFS = EL.PROFESSION_COOLDOWN_DEFS or {
         shortLabel = "Sunfire",
         spellID = 1228060,
         category = "Tailoring",
+        expansionID = EXPANSION_MIDNIGHT,
     },
 }
 
@@ -101,6 +118,29 @@ for _, def in ipairs(EL.PROFESSION_COOLDOWN_DEFS) do
             COOLDOWN_DEFS_BY_PROFESSION[def.professionID] = COOLDOWN_DEFS_BY_PROFESSION[def.professionID] or {}
             table.insert(COOLDOWN_DEFS_BY_PROFESSION[def.professionID], def)
         end
+    end
+end
+
+local function ValidateCooldownDefinition(def, index)
+    if not (EL and EL.db and EL.db.settings and EL.db.settings.debug) then return end
+    local missing = {}
+    if not def then
+        missing[#missing + 1] = "definition"
+    else
+        if not def.key or def.key == "" then missing[#missing + 1] = "key" end
+        if not def.professionID then missing[#missing + 1] = "professionID" end
+        if not def.spellID then missing[#missing + 1] = "spellID" end
+        if not def.label or def.label == "" then missing[#missing + 1] = "label" end
+        if not def.expansionID then missing[#missing + 1] = "expansionID" end
+    end
+    if #missing > 0 and EL.Debug then
+        EL:Debug("Profession cooldown definition " .. tostring(index or "?") .. " missing: " .. table.concat(missing, ", "))
+    end
+end
+
+function EL:ValidateProfessionCooldownDefinitions()
+    for index, def in ipairs(self.PROFESSION_COOLDOWN_DEFS or {}) do
+        ValidateCooldownDefinition(def, index)
     end
 end
 
@@ -143,6 +183,62 @@ local function SafeNumber(value, fallback)
         end
     end
     return fallback
+end
+
+local function GetLatestExpansionID()
+    if EL and type(EL.GetCurrentExpansionID) == "function" then
+        return EL:GetCurrentExpansionID()
+    end
+    local level
+    if type(GetExpansionLevel) == "function" then
+        level = SafeNumber(GetExpansionLevel())
+    end
+    if not level and type(LE_EXPANSION_WAR_WITHIN) == "number" then
+        level = SafeNumber(LE_EXPANSION_WAR_WITHIN)
+    end
+    return level or EXPANSION_MIDNIGHT
+end
+
+local function GetPreviousExpansionID()
+    if EL and type(EL.GetPreviousExpansionID) == "function" then
+        return EL:GetPreviousExpansionID()
+    end
+    local latest = GetLatestExpansionID()
+    return math.max(0, (SafeNumber(latest) or EXPANSION_MIDNIGHT) - 1)
+end
+
+local function GetCooldownDisplayScope()
+    local display = EL and EL.db and EL.db.settings and EL.db.settings.display or nil
+    local scope = display and display.cooldownDisplayScope or "current"
+    if scope ~= "current_previous" and scope ~= "all" then scope = "current" end
+    return scope
+end
+
+local function IsCooldownDefinitionInDisplayScope(def)
+    if not def then return false end
+    local scope = GetCooldownDisplayScope()
+    if scope == "all" then return true end
+    local expansionID = SafeNumber(def.expansionID)
+    if not expansionID then return true end
+    local currentExpansionID = GetLatestExpansionID()
+    if scope == "current_previous" then
+        return expansionID >= GetPreviousExpansionID()
+    end
+    return expansionID >= currentExpansionID
+end
+
+function EL:GetCooldownDisplayScope()
+    return GetCooldownDisplayScope()
+end
+
+function EL:SetCooldownDisplayScope(scope)
+    if scope ~= "current_previous" and scope ~= "all" then scope = "current" end
+    if not (self.db and self.db.settings and self.db.settings.display) then return false end
+    self.db.settings.display.cooldownDisplayScope = scope
+    self._hasCooldownColumnData = nil
+    if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+    if self.RequestUpdate then self:RequestUpdate() end
+    return true
 end
 
 local function GetSpellName(spellID)
@@ -306,6 +402,7 @@ local function BuildCooldownRecord(def)
         professionID = def.professionID,
         professionName = def.professionName,
         spellID = def.spellID,
+        expansionID = def.expansionID,
         spellName = name,
         currentCharges = currentCharges,
         maxCharges = maxCharges,
@@ -340,7 +437,14 @@ function EL:PruneProfessionCooldownStore()
 end
 
 function EL:GetProfessionCooldownDefinitionsForProfession(professionID)
-    return COOLDOWN_DEFS_BY_PROFESSION[SafeNumber(professionID)] or {}
+    local defs = COOLDOWN_DEFS_BY_PROFESSION[SafeNumber(professionID)] or {}
+    local filtered = {}
+    for _, def in ipairs(defs) do
+        if IsCooldownDefinitionInDisplayScope(def) then
+            table.insert(filtered, def)
+        end
+    end
+    return filtered
 end
 
 local function CopyCooldownRecord(record)
@@ -383,6 +487,7 @@ function EL:RefreshCurrentProfessionCooldowns()
                     professionID = def.professionID,
                     professionName = def.professionName,
                     spellID = def.spellID,
+                    expansionID = def.expansionID,
                     unlearned = true,
                     ready = false,
                     remaining = 0,
@@ -393,6 +498,7 @@ function EL:RefreshCurrentProfessionCooldowns()
                 if previous then
                     previous.unknownScan = true
                     previous.lastScanAttempt = Now()
+                    previous.expansionID = previous.expansionID or def.expansionID
                     records[def.key] = previous
                 else
                     records[def.key] = {
@@ -403,6 +509,7 @@ function EL:RefreshCurrentProfessionCooldowns()
                         professionID = def.professionID,
                         professionName = def.professionName,
                         spellID = def.spellID,
+                        expansionID = def.expansionID,
                         unknown = true,
                         ready = false,
                         remaining = 0,
@@ -429,7 +536,7 @@ function EL:GetProfessionCooldownEntriesForCharacter(charKey, professions)
     if type(stored) == "table" then
         for _, def in ipairs(self.PROFESSION_COOLDOWN_DEFS or {}) do
             local record = stored[def.key]
-            if type(record) == "table" then
+            if type(record) == "table" and IsCooldownDefinitionInDisplayScope(def) then
                 local copy = {}
                 for k, v in pairs(record) do copy[k] = v end
                 copy.definition = def
@@ -438,6 +545,7 @@ function EL:GetProfessionCooldownEntriesForCharacter(charKey, professions)
                 copy.category = copy.category or def.category or def.professionName
                 copy.professionID = copy.professionID or def.professionID
                 copy.spellID = copy.spellID or def.spellID
+                copy.expansionID = copy.expansionID or def.expansionID
                 copy.unlearned = copy.unlearned and true or false
                 table.insert(results, copy)
                 included[def.key] = true
@@ -450,7 +558,7 @@ function EL:GetProfessionCooldownEntriesForCharacter(charKey, professions)
     for _, prof in ipairs(professions or self:GetProfessionEntriesForCharacter(charKey) or {}) do
         local profID = SafeNumber(prof and (prof.professionID or prof.skillLineID or prof.skillLine))
         for _, def in ipairs(COOLDOWN_DEFS_BY_PROFESSION[profID] or {}) do
-            if not included[def.key] then
+            if not included[def.key] and IsCooldownDefinitionInDisplayScope(def) then
                 table.insert(results, {
                     key = def.key,
                     label = def.label,
@@ -458,6 +566,7 @@ function EL:GetProfessionCooldownEntriesForCharacter(charKey, professions)
                     category = def.category or def.professionName,
                     professionID = def.professionID,
                     spellID = def.spellID,
+                    expansionID = def.expansionID,
                     unknown = true,
                     ready = false,
                 })
@@ -598,6 +707,7 @@ function EL:AddProfessionCooldownTooltipLines(tooltip, charKey, professions)
 end
 
 function module:OnLoad()
+    if EL.ValidateProfessionCooldownDefinitions then EL:ValidateProfessionCooldownDefinitions() end
     if EL.EnsureProfessionCooldownStore then EL:EnsureProfessionCooldownStore() end
     if EL.PruneProfessionCooldownStore then EL:PruneProfessionCooldownStore() end
     if EL.RefreshCurrentProfessionCooldowns then EL:RefreshCurrentProfessionCooldowns() end

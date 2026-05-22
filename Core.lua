@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.27.2"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.28.6"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -47,6 +47,61 @@ EL.TRADEGOODS_CLASS = Enum.ItemClass and Enum.ItemClass.Tradegoods or 7
 EL.CONSUMABLE_CLASS = Enum.ItemClass and Enum.ItemClass.Consumable or 0
 EL.SESSION_DEDUPE_SECONDS = 5
 EL.HERBALISM_ID = 182
+
+EL.EXPANSION_IDS = EL.EXPANSION_IDS or {
+    CLASSIC = 0,
+    BURNING_CRUSADE = 1,
+    WRATH = 2,
+    CATACLYSM = 3,
+    PANDARIA = 4,
+    WARLORDS = 5,
+    LEGION = 6,
+    BATTLE_FOR_AZEROTH = 7,
+    SHADOWLANDS = 8,
+    DRAGONFLIGHT = 9,
+    WAR_WITHIN = 10,
+    MIDNIGHT = 11,
+}
+EL.CURRENT_EXPANSION_ID = EL.CURRENT_EXPANSION_ID or EL.EXPANSION_IDS.MIDNIGHT
+EL.PREVIOUS_EXPANSION_ID = EL.PREVIOUS_EXPANSION_ID or EL.EXPANSION_IDS.WAR_WITHIN
+EL.EXPANSION_NAMES = EL.EXPANSION_NAMES or {
+    [EL.EXPANSION_IDS.CLASSIC] = "Classic",
+    [EL.EXPANSION_IDS.BURNING_CRUSADE] = "Outland",
+    [EL.EXPANSION_IDS.WRATH] = "Northrend",
+    [EL.EXPANSION_IDS.CATACLYSM] = "Cataclysm",
+    [EL.EXPANSION_IDS.PANDARIA] = "Pandaria",
+    [EL.EXPANSION_IDS.WARLORDS] = "Warlords",
+    [EL.EXPANSION_IDS.LEGION] = "Legion",
+    [EL.EXPANSION_IDS.BATTLE_FOR_AZEROTH] = "Battle for Azeroth",
+    [EL.EXPANSION_IDS.SHADOWLANDS] = "Shadowlands",
+    [EL.EXPANSION_IDS.DRAGONFLIGHT] = "Dragonflight",
+    [EL.EXPANSION_IDS.WAR_WITHIN] = "The War Within",
+    [EL.EXPANSION_IDS.MIDNIGHT] = "Midnight",
+}
+EL.PROFESSION_EXPANSION_PREFIXES = EL.PROFESSION_EXPANSION_PREFIXES or {
+    "Battle for Azeroth", "Warlords", "Dragon Isles", "Dragonflight",
+    "Shadowlands", "The War Within", "Khaz Algar", "Midnight",
+    "Cataclysm", "Northrend", "Pandaria", "Outland", "Classic", "Legion",
+}
+
+function EL:GetCurrentExpansionID()
+    return self.CURRENT_EXPANSION_ID or (self.EXPANSION_IDS and self.EXPANSION_IDS.MIDNIGHT) or 11
+end
+
+-- Forward-looking helper for expansion-aware display systems. Prefer the explicit
+-- PREVIOUS_EXPANSION_ID value so future non-sequential expansion IDs only need
+-- one constant update.
+function EL:GetPreviousExpansionID()
+    local previous = self.PREVIOUS_EXPANSION_ID or (self.EXPANSION_IDS and self.EXPANSION_IDS.WAR_WITHIN) or 10
+    return self:SafeNumber(previous, 10, "expansion.previous") or 10
+end
+
+-- Forward-looking helper for user-facing/debug expansion labels.
+function EL:GetExpansionName(expansionID)
+    local id = self:SafeNumber(expansionID, nil, "expansion.name")
+    return (id and self.EXPANSION_NAMES and self.EXPANSION_NAMES[id]) or (id and ("Expansion " .. tostring(id))) or "Unknown Expansion"
+end
+
 
 EL.THEME_COLORS = {
     BORDER_R = 0.82,
@@ -135,11 +190,11 @@ EL.UI_CONSTANTS = {
     OPTIONS_NEXT_COLUMN_H = 88,
     OPTIONS_NEXT_COLUMN_CHECK_Y = -62,
     OPTIONS_COOLDOWN_COLUMN_Y = -1026,
-    OPTIONS_COOLDOWN_COLUMN_H = 94,
+    OPTIONS_COOLDOWN_COLUMN_H = 138,
     OPTIONS_COOLDOWN_COLUMN_CHECK_Y = -68,
 }
 
-EL.DB_VERSION = 11602
+EL.DB_VERSION = 11604
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -295,6 +350,7 @@ local defaults = {
             showMoxieColumn = false,
             showMulchColumn = true,
             showCooldownColumn = true,
+            cooldownDisplayScope = "current",
             showForecastColumn = false,
             showCharacterRealm = true,
             attentionOnly = false,
@@ -628,6 +684,7 @@ local function NormalizeDisplaySettings(self, settings)
     if settings.display.showMoxieColumn == nil then settings.display.showMoxieColumn = false end
     if settings.display.showMulchColumn == nil then settings.display.showMulchColumn = true end
     if settings.display.showCooldownColumn == nil then settings.display.showCooldownColumn = true end
+    if settings.display.cooldownDisplayScope == nil then settings.display.cooldownDisplayScope = "current" end
     if settings.display.showForecastColumn == nil then settings.display.showForecastColumn = false end
     if settings.display.showCharacterRealm == nil then settings.display.showCharacterRealm = true end
     if settings.display.attentionOnly == nil then settings.display.attentionOnly = false end
@@ -645,6 +702,9 @@ local function NormalizeDisplaySettings(self, settings)
     settings.display.showMoxieColumn = settings.display.showMoxieColumn == true
     settings.display.showMulchColumn = settings.display.showMulchColumn ~= false
     settings.display.showCooldownColumn = settings.display.showCooldownColumn ~= false
+    if settings.display.cooldownDisplayScope ~= "current_previous" and settings.display.cooldownDisplayScope ~= "all" then
+        settings.display.cooldownDisplayScope = "current"
+    end
     settings.display.showForecastColumn = settings.display.showForecastColumn == true
     settings.display.showCharacterRealm = settings.display.showCharacterRealm ~= false
     settings.display.attentionOnly = settings.display.attentionOnly == true
@@ -1097,8 +1157,8 @@ function EL:ForEachModule(fn)
     for _, module in pairs(self.modules) do
         if module and module[fn] then
             local ok, err = pcall(module[fn], module)
-            if not ok and self.db and self.db.settings and self.db.settings.debug then
-                self:Print("Module error [" .. tostring(module.name or "?") .. "." .. tostring(fn) .. "]: " .. tostring(err))
+            if not ok and self.Debug then
+                self:Debug("Module error [" .. tostring(module.name or "?") .. "." .. tostring(fn) .. "]: " .. tostring(err))
             end
         end
     end
@@ -1147,6 +1207,8 @@ EL.REQUIRED_MODULES = {
             "GetProfessionCooldownSortValue",
             "HasProfessionCooldownColumnData",
             "PruneProfessionCooldownStore",
+            "GetCooldownDisplayScope",
+            "SetCooldownDisplayScope",
         },
     },
     SessionWindow = {
@@ -1556,14 +1618,11 @@ function EL:GetMoxieSortValue(charKey, moxieEntries)
 end
 
 -- Expansion prefixes to strip from profession names so the UI stays
--- expansion-neutral. Add new expansion names here as they release.
+-- expansion-neutral. Update EL.PROFESSION_EXPANSION_PREFIXES with new expansion
+-- profession prefixes rather than maintaining local copies in display code.
 -- Do not add a prefix that is the leading substring of another entry unless the
 -- longer entry is checked first.
-local EXPANSION_PREFIXES = {
-    "Battle for Azeroth", "Warlords", "Dragon Isles", "Shadowlands",
-    "Khaz Algar", "Cataclysm", "Northrend", "Pandaria",
-    "Midnight", "Outland", "Classic", "Legion",
-}
+local EXPANSION_PREFIXES = EL.PROFESSION_EXPANSION_PREFIXES or {}
 local EXPANSION_PREFIX_DATA = {}
 for i, prefix in ipairs(EXPANSION_PREFIXES) do
     EXPANSION_PREFIX_DATA[i] = { text = prefix, lower = prefix:lower(), len = #prefix }
@@ -1800,6 +1859,7 @@ function EL:ResetCharacterData(charKey, silent)
         end
         if self.db.resources.professionCooldowns then
             self.db.resources.professionCooldowns[charKey] = nil
+            self._hasCooldownColumnData = nil
         end
     end
 
@@ -2420,7 +2480,8 @@ function EL:DoesCharacterNeedAttention(charKey, threshold, now)
     for _, data in ipairs(self:GetConcentrationEntriesForCharacter(charKey) or {}) do
         local entryThreshold = fallbackThreshold
         if self.GetProfessionConcentrationThreshold then
-            entryThreshold = tonumber(self:GetProfessionConcentrationThreshold(data)) or fallbackThreshold
+            local rawEntryThreshold = self:GetProfessionConcentrationThreshold(data)
+            entryThreshold = tonumber(rawEntryThreshold) or fallbackThreshold
         end
         local qty = self:GetEstimatedConcentration(data, now) or 0
         if qty >= entryThreshold then
