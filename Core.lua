@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.24.5"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.27.2"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -25,6 +25,20 @@ end
 -- frame/layout helpers after the shared Core helpers are available, and
 -- ActionBar.lua loads last so secure button setup can use the completed UI layer.
 EL.modules = {}
+-- Concentration threshold overrides only apply to crafting professions that use
+-- concentration. Gathering professions such as Herbalism, Mining, and Skinning are
+-- intentionally excluded because they do not have concentration values.
+EL.PROFESSION_THRESHOLD_PROFESSIONS = {
+    { id = 171, key = "alchemy", label = "Alchemy" },
+    { id = 164, key = "blacksmithing", label = "Blacksmithing" },
+    { id = 333, key = "enchanting", label = "Enchanting" },
+    { id = 202, key = "engineering", label = "Engineering" },
+    { id = 773, key = "inscription", label = "Inscription" },
+    { id = 755, key = "jewelcrafting", label = "Jewelcrafting" },
+    { id = 165, key = "leatherworking", label = "Leatherworking" },
+    { id = 197, key = "tailoring", label = "Tailoring" },
+}
+
 EL.DB_KEY_SEP = "\031"
 EL.CONCENTRATION_MAX_DEFAULT = 1000
 EL.CONCENTRATION_RATE_PER_HOUR = 10
@@ -261,6 +275,7 @@ local defaults = {
         alerts = {
             concentrationThreshold = 360,
             moxieThreshold = 600,
+            professionThresholds = {},
         },
         display = {
             panelOpacity = 0.55,
@@ -309,6 +324,7 @@ local defaults = {
         },
         lockWindows = false,
         debug = false,
+        onboardingSeen = false,
     },
 }
 
@@ -647,6 +663,16 @@ end
 local function NormalizeAlertAndScaleSettings(self, settings)
     settings.alerts.concentrationThreshold = math.floor(ClampNumber(settings.alerts.concentrationThreshold, 0, self.CONCENTRATION_MAX_DEFAULT, 360))
     settings.alerts.moxieThreshold = math.floor(ClampNumber(settings.alerts.moxieThreshold, 0, 1000, 600))
+    if type(settings.alerts.professionThresholds) ~= "table" then settings.alerts.professionThresholds = {} end
+    local normalizedThresholds = {}
+    for k, v in pairs(settings.alerts.professionThresholds) do
+        local id = tonumber(k)
+        local threshold = tonumber(v)
+        if id and threshold and threshold > 0 then
+            normalizedThresholds[id] = math.floor(ClampNumber(threshold, 0, self.CONCENTRATION_MAX_DEFAULT, settings.alerts.concentrationThreshold))
+        end
+    end
+    settings.alerts.professionThresholds = normalizedThresholds
 
     local ui = self.UI_CONSTANTS or {}
     local minScale = ui.PANEL_MIN_SCALE or 0.6
@@ -655,6 +681,7 @@ local function NormalizeAlertAndScaleSettings(self, settings)
     settings.session.scale = ClampNumber(settings.session.scale, minScale, maxScale, 1)
 
     settings.minimap.hide = settings.minimap.hide == true
+    settings.onboardingSeen = settings.onboardingSeen == true
     settings.minimap.minimapPos = ClampNumber(settings.minimap.minimapPos, 0, 360, 220)
 
     settings.panel.width = math.floor(ClampNumber(settings.panel.width, ui.TRACKING_DYNAMIC_MIN_W or ui.PANEL_MIN_W or 352, ui.PANEL_MAX_W or 900, 352))
@@ -1812,11 +1839,11 @@ function EL:RemoveHiddenCharacterData()
     return removed
 end
 
-function EL:GetEffectiveMaxQuantity(maxQuantity)
+function EL:GetEffectiveMaxQuantity(maxQuantity, thresholdOverride)
     local maxQ = tonumber(maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
     if maxQ <= 0 then maxQ = self.CONCENTRATION_MAX_DEFAULT end
 
-    local threshold = self.db and self.db.settings and self.db.settings.alerts and tonumber(self.db.settings.alerts.concentrationThreshold)
+    local threshold = tonumber(thresholdOverride) or (self.GetConcentrationThreshold and self:GetConcentrationThreshold())
     if threshold and threshold > 0 then
         return math.max(1, math.min(maxQ, threshold))
     end
@@ -1824,8 +1851,8 @@ function EL:GetEffectiveMaxQuantity(maxQuantity)
     return math.max(1, maxQ)
 end
 
-function EL:GetConcentrationColor(quantity, maxQuantity)
-    local maxQ = self:GetEffectiveMaxQuantity(maxQuantity)
+function EL:GetConcentrationColor(quantity, maxQuantity, thresholdOverride)
+    local maxQ = self:GetEffectiveMaxQuantity(maxQuantity, thresholdOverride)
     local q = tonumber(quantity) or 0
     local percentage = math.max(0, math.min(100, (q / maxQ) * 100))
     local r, g, b
@@ -1961,7 +1988,7 @@ function EL:GetDashboardSortValue(entry, key, now, cache)
         if not conc then return nil end
         local maxQ = tonumber(conc.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
         local q = self:GetEstimatedConcentration(conc, now) or 0
-        local threshold = self.db and self.db.settings and self.db.settings.alerts and tonumber(self.db.settings.alerts.concentrationThreshold) or 360
+        local threshold = self:GetProfessionConcentrationThreshold(conc)
         if q >= threshold then return 0 end
         return math.ceil((threshold - q) / self.CONCENTRATION_RATE_PER_HOUR * 3600)
     elseif key == "moxie" then
@@ -2152,13 +2179,14 @@ end
 
 function EL:GetReadyConcentrationCountForCharacter(charKey, threshold, now)
     if not charKey then return 0 end
-    threshold = tonumber(threshold) or (self.db and self.db.settings and self.db.settings.alerts and tonumber(self.db.settings.alerts.concentrationThreshold)) or 360
+    threshold = tonumber(threshold)
     now = now or time()
 
     local count = 0
     for _, data in ipairs(self:GetConcentrationEntriesForCharacter(charKey) or {}) do
         local qty = self:GetEstimatedConcentration(data, now) or 0
-        if qty >= threshold then
+        local required = self:GetProfessionConcentrationThreshold(data) or threshold or 360
+        if qty >= required then
             count = count + 1
         end
     end
@@ -2199,15 +2227,49 @@ function EL:GetConcentrationThreshold()
     return tonumber(alerts and alerts.concentrationThreshold) or 360
 end
 
+function EL:GetConcentrationThresholdProfessionID(profOrData)
+    if type(profOrData) ~= "table" then return tonumber(profOrData) end
+    return tonumber(profOrData.parentProfessionID)
+        or tonumber(profOrData.professionID)
+        or tonumber(profOrData.skillLineID)
+        or tonumber(profOrData.skillLine)
+end
+
+function EL:GetProfessionConcentrationThreshold(profOrID)
+    local id = self:GetConcentrationThresholdProfessionID(profOrID)
+    local alerts = self.db and self.db.settings and self.db.settings.alerts
+    local overrides = alerts and alerts.professionThresholds
+    local value = id and type(overrides) == "table" and tonumber(overrides[id]) or nil
+    if value and value > 0 then
+        return math.max(1, math.min(self.CONCENTRATION_MAX_DEFAULT or 1000, math.floor(value + 0.5))), true
+    end
+    return self:GetConcentrationThreshold(), false
+end
+
+function EL:SetProfessionConcentrationThreshold(profOrID, value)
+    local id = self:GetConcentrationThresholdProfessionID(profOrID)
+    if not id then return false end
+    self.db.settings.alerts.professionThresholds = self.db.settings.alerts.professionThresholds or {}
+    local numeric = tonumber(value)
+    if not numeric or numeric <= 0 then
+        self.db.settings.alerts.professionThresholds[id] = nil
+    else
+        self.db.settings.alerts.professionThresholds[id] = math.max(1, math.min(self.CONCENTRATION_MAX_DEFAULT or 1000, math.floor(numeric + 0.5)))
+    end
+    self:RequestUpdate()
+    return true
+end
+
 function EL:GetConcentrationReadyCount(threshold, now)
-    threshold = tonumber(threshold) or 800
+    threshold = tonumber(threshold)
     now = now or time()
     local count = 0
     for charKey, entries in pairs(self:GetConcentrationIndex() or {}) do
         if charKey and not self:IsCharacterHidden(charKey) then
             for _, data in ipairs(entries or {}) do
                 local qty = self:GetEstimatedConcentration(data, now) or 0
-                if qty >= threshold then
+                local required = self:GetProfessionConcentrationThreshold(data) or threshold or 360
+                if qty >= required then
                     count = count + 1
                     break
                 end
@@ -2219,7 +2281,7 @@ end
 
 
 function EL:GetConcentrationReadyEntries(threshold, limit)
-    threshold = tonumber(threshold) or 360
+    threshold = tonumber(threshold)
     local now = time()
     local entries = {}
 
@@ -2228,7 +2290,8 @@ function EL:GetConcentrationReadyEntries(threshold, limit)
             local char = self.db and self.db.characters and self.db.characters[charKey]
             for _, data in ipairs(concEntries or {}) do
                 local qty = self:GetEstimatedConcentration(data, now) or 0
-                if qty >= threshold then
+                local required = self:GetProfessionConcentrationThreshold(data) or threshold or 360
+                if qty >= required then
                     entries[#entries + 1] = {
                         type = "concentration",
                         charKey = charKey,
@@ -2237,7 +2300,7 @@ function EL:GetConcentrationReadyEntries(threshold, limit)
                         abbrev = self:GetProfessionAbbreviation(data),
                         quantity = qty,
                         maxQuantity = data.maxQuantity or self.CONCENTRATION_MAX_DEFAULT,
-                        threshold = threshold,
+                        threshold = required,
                     }
                 end
             end
@@ -2326,9 +2389,8 @@ function EL:GetMulchReadyEntries(limit)
 end
 
 function EL:GetNeedsAttentionEntries(limit)
-    local threshold = self.db and self.db.settings and self.db.settings.alerts and self.db.settings.alerts.concentrationThreshold or 360
     local combined = {}
-    local concEntries = self:GetConcentrationReadyEntries(threshold)
+    local concEntries = self:GetConcentrationReadyEntries(nil)
     local mulchEntries = self:GetMulchReadyEntries()
 
     for _, entry in ipairs(concEntries or {}) do
@@ -2352,12 +2414,16 @@ end
 
 function EL:DoesCharacterNeedAttention(charKey, threshold, now)
     if not charKey or self:IsCharacterHidden(charKey) then return false end
-    threshold = tonumber(threshold) or (self.db and self.db.settings and self.db.settings.alerts and self.db.settings.alerts.concentrationThreshold) or 360
+    local fallbackThreshold = tonumber(threshold) or (self.db and self.db.settings and self.db.settings.alerts and self.db.settings.alerts.concentrationThreshold) or 360
     now = now or time()
 
     for _, data in ipairs(self:GetConcentrationEntriesForCharacter(charKey) or {}) do
+        local entryThreshold = fallbackThreshold
+        if self.GetProfessionConcentrationThreshold then
+            entryThreshold = tonumber(self:GetProfessionConcentrationThreshold(data)) or fallbackThreshold
+        end
         local qty = self:GetEstimatedConcentration(data, now) or 0
-        if qty >= threshold then
+        if qty >= entryThreshold then
             return true
         end
     end
@@ -2395,7 +2461,7 @@ end
 function EL:GetConcentrationForecastText(data, threshold, now)
     if not data then return "N/A" end
     now = now or time()
-    threshold = tonumber(threshold) or (self.db and self.db.settings and self.db.settings.alerts and tonumber(self.db.settings.alerts.concentrationThreshold)) or 360
+    threshold = self:GetProfessionConcentrationThreshold(data) or tonumber(threshold) or self:GetConcentrationThreshold()
     local maxQ = self.SafeNumber and self:SafeNumber(data.maxQuantity, self.CONCENTRATION_MAX_DEFAULT, "forecast.maxQuantity") or (tonumber(data.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT)
     local q = self:GetEstimatedConcentration(data, now) or 0
     local rate = self.SafeNumber and self:SafeNumber(self.CONCENTRATION_RATE_PER_HOUR, 10, "forecast.rate") or (tonumber(self.CONCENTRATION_RATE_PER_HOUR) or 10)
@@ -3478,12 +3544,61 @@ function EL:Print(msg)
     print("|cffff7a1aEmberLedger:|r " .. tostring(msg))
 end
 
+function EL:GetProfessionThresholdDefinition(token)
+    if not token then return nil end
+    local needle = tostring(token):lower():gsub("%s+", "")
+    for _, def in ipairs(self.PROFESSION_THRESHOLD_PROFESSIONS or {}) do
+        local key = tostring(def.key or ""):lower()
+        local label = tostring(def.label or ""):lower():gsub("%s+", "")
+        if needle == key or needle == label or needle == tostring(def.id) then
+            return def
+        end
+    end
+    return nil
+end
+
+
+function EL:HasScannedProfessionData()
+    local resources = self.db and self.db.resources or nil
+    if type(resources) ~= "table" then return false end
+    local professions = resources.professions
+    if type(professions) == "table" then
+        for _, list in pairs(professions) do
+            if type(list) == "table" and #list > 0 then return true end
+        end
+    end
+    local concentration = resources.concentration
+    if type(concentration) == "table" then
+        for _, list in pairs(concentration) do
+            if type(list) == "table" and #list > 0 then return true end
+        end
+    end
+    return false
+end
+
+function EL:CaptureOnboardingLoadState()
+    self._hadTrackedDataOnLoad = self:HasScannedProfessionData() == true
+end
+
+function EL:ShouldShowFirstRunOnboarding()
+    local settings = self.db and self.db.settings or nil
+    if type(settings) ~= "table" then return false end
+    if settings.onboardingSeen == true then return false end
+    return self._hadTrackedDataOnLoad ~= true
+end
+
+function EL:MarkOnboardingSeen()
+    if self.db and self.db.settings then
+        self.db.settings.onboardingSeen = true
+    end
+end
+
 function EL:PrintSlashHelp()
     self:Print(self:T("Commands:"))
-    self:Print(self:T("General: /el, /el main, /el settings, /el help"))
+    self:Print(self:T("General: /el, /el main, /el settings, /el help, /el welcome"))
     self:Print(self:T("Sessions: /el session, /el history, /el session start, /el session pause, /el reset session"))
     self:Print(self:T("Characters: /el restore, /el restore hidden, /el reset pinned"))
-    self:Print(self:T("Display: /el scale, /el scale 0.85, /el lock, /el unlock, /el threshold 900"))
+    self:Print(self:T("Display: /el scale, /el scale 0.85, /el lock, /el unlock, /el threshold 900, /el threshold alchemy 900"))
     self:Print(self:T("Maintenance: /el refresh, /el refresh professions, /el debug"))
     self:Print(self:T("Profiling: /el profile on, /el profile off, /el profile report, /el profile dump, /el profile reset"))
 end
@@ -3505,6 +3620,8 @@ SlashCmdList.EMBERLEDGER = function(msg)
         end
     elseif msg == "help" or msg == "?" then
         if EL.PrintSlashHelp then EL:PrintSlashHelp() end
+    elseif msg == "welcome" or msg == "onboarding" or msg == "getting started" then
+        if EL.ShowOnboardingPanel then EL:ShowOnboardingPanel(true) end
     elseif msg == "scale" then
         local current = EL.db and EL.db.settings and EL.db.settings.panel and EL.db.settings.panel.scale or 1
         EL:Print(EL:T("Current window scale: %.2f. Use /el scale 0.85, /el scale 1, etc.", current))
@@ -3560,6 +3677,24 @@ SlashCmdList.EMBERLEDGER = function(msg)
         if EL.ToggleSessionHistoryWindow then EL:ToggleSessionHistoryWindow() end
     elseif msg == "settings" or msg == "options" then
         if EL.ToggleSettingsPanel then EL:ToggleSettingsPanel() end
+    elseif msg:match("^threshold%s+[%a%d_%-]+%s+%d+$") then
+        local token, value = msg:match("^threshold%s+([%a%d_%-]+)%s+(%d+)$")
+        local def = EL.GetProfessionThresholdDefinition and EL:GetProfessionThresholdDefinition(token) or nil
+        if def and EL.SetProfessionConcentrationThreshold then
+            EL:SetProfessionConcentrationThreshold(def.id, tonumber(value))
+            EL:Print((def.label or token) .. " concentration threshold set to " .. tostring(EL:GetProfessionConcentrationThreshold(def.id)) .. ".")
+        else
+            EL:Print("Unknown profession. Example: /el threshold alchemy 900")
+        end
+    elseif msg:match("^threshold%s+[%a%d_%-]+%s+default$") or msg:match("^threshold%s+[%a%d_%-]+%s+reset$") then
+        local token = msg:match("^threshold%s+([%a%d_%-]+)%s+")
+        local def = EL.GetProfessionThresholdDefinition and EL:GetProfessionThresholdDefinition(token) or nil
+        if def and EL.SetProfessionConcentrationThreshold then
+            EL:SetProfessionConcentrationThreshold(def.id, nil)
+            EL:Print((def.label or token) .. " concentration threshold reset to global default.")
+        else
+            EL:Print("Unknown profession. Example: /el threshold alchemy default")
+        end
     elseif msg:match("^threshold%s+%d+$") then
         local value = tonumber(msg:match("^threshold%s+(%d+)$"))
         if value then
@@ -3580,6 +3715,7 @@ EL.frame:SetScript("OnEvent", function(_, event, ...)
         local loaded = ...
         if loaded ~= addonName then return end
         EL:EnsureDB()
+        if EL.CaptureOnboardingLoadState then EL:CaptureOnboardingLoadState() end
         EL:GetCurrentCharacter()
         if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
         EL:ForEachModule("OnLoad")
@@ -3590,6 +3726,10 @@ EL.frame:SetScript("OnEvent", function(_, event, ...)
         EL:RequestUpdate()
     elseif event == "PLAYER_REGEN_ENABLED" then
         if EL.FlushCombatDeferredWork then EL:FlushCombatDeferredWork() end
+        if EL._pendingOnboarding and EL.ShowOnboardingPanel then
+            EL._pendingOnboarding = nil
+            EL:ShowOnboardingPanel(false)
+        end
     elseif event == "PLAYER_LOGOUT" then
         if EL.SaveCurrentSessionHistory then EL:SaveCurrentSessionHistory("logout") end
         if EL.ClearProfessionNameCache then EL:ClearProfessionNameCache() end

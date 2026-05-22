@@ -1,4 +1,107 @@
+v1.27.2
+- Restored the main tracker Restore button tooltip.
+- Removed the redundant secure Logout action button tooltip from the Action Bar.
+
 # EmberLedger Changelog
+
+## v1.27.1
+
+- Corrected the Character column tooltip so row interactions are described accurately.
+- Tightened main-window empty-state wording for first scans and visible-data refresh guidance.
+- Removed unnecessary main-window tooltips from the Restore button, Options button, and resize grip.
+- No tracking logic, slash commands, or core feature systems were changed.
+
+## v1.27.0
+
+- Added clearer main-window column header tooltips with per-column explanations while preserving existing sort behavior.
+- Improved main-window empty-state messages for first scans, hidden characters, Attention Only, and refresh guidance.
+- Added Options helper text when Session Tracking or Action Bar controls are dimmed because the module is disabled.
+- Added Appearance convenience buttons to match launcher/session opacity to the main window or restore default opacity values.
+- No tracking logic, slash commands, or core feature systems were changed.
+
+## v1.26.2
+
+- Updated concentration max-quantity fallback handling to use the normalized global concentration threshold helper.
+- Added shared tooltips to per-profession concentration threshold sliders explaining that 0 uses the global threshold.
+- No slash command behavior changes.
+
+## v1.26.1
+
+- Refined first-time onboarding wording for clearer Trade Skill window setup instructions.
+- Registered the onboarding panel with Escape-key dismissal and marks onboarding as seen when the panel is hidden.
+- Fixed Attention Only empty-state and auto-height checks so per-profession concentration threshold overrides are respected consistently.
+- Removed unnecessary refresh updates for hidden legacy module controls.
+
+## v1.26.0
+
+### First-Time Onboarding
+
+- Added a setup-focused first-time welcome guide for new EmberLedger installs.
+- The guide explains that users need to log into each profession character and open that character's profession window once so EmberLedger can scan profession data.
+- Added `/el welcome` and `/el onboarding` to reopen the getting started guide.
+- Added a Maintenance button to reopen the welcome guide from Options.
+- The guide only appears automatically for installs that did not already have tracked profession data, so existing users should not be interrupted.
+
+---
+
+## v1.25.5
+
+### Options Placement Cleanup
+
+- Moved Attention Only view from General into Main Window options.
+- Kept tracker display behavior controls grouped with Main Window settings.
+- No gameplay or SavedVariables behavior changes.
+
+---
+
+## v1.25.4
+
+### Options Navigation Cleanup
+
+- Moved Performance options into the Maintenance page.
+- Removed the separate Performance sidebar tab.
+- Moved Thresholds below Main Window in the Options sidebar so threshold overrides read more like a main-window subsection.
+- Kept the Modules page limited to true top-level system toggles.
+
+---
+
+## v1.25.3
+
+### Options Scope Cleanup
+
+- Tightened the Modules Options page to show only true top-level systems: Main tracker, Session tracking, Action Bar, Launcher, and Minimap button.
+- Kept session-window behavior tied to Session tracking rather than exposing it as a separate module toggle.
+- Left column visibility controls on the Main Window page where they belong.
+- Limited profession threshold overrides to crafting professions that actually use concentration.
+- Excluded Herbalism, Mining, and Skinning from concentration threshold overrides.
+
+---
+
+## v1.25.2
+
+### Options Modularity Fix
+
+- Fixed the Options sidebar so the Modules and Thresholds pages are visible and selectable.
+- Consolidated the main module and feature switches onto the Modules page.
+- Added Session window and Next forecast column controls to the Modules page.
+- Moved duplicate Session Tracking and Action Bar module switches out of the Performance page.
+- Kept the Performance page focused on history limits and performance tuning.
+- No SavedVariables reset is required.
+
+---
+
+## v1.25.0
+
+### Modularity & UI Polish
+
+- Added a Modules page in Options to collect the main feature visibility and processing toggles.
+- Added optional per-profession concentration threshold overrides.
+- Added Thresholds options for global concentration, Moxie, and profession-specific concentration alerts.
+- Updated concentration ready/soon counts, Attention Only, forecasts, and row highlighting to respect profession overrides.
+- Improved row tooltip interaction hints.
+- Kept display presets deferred to avoid overriding custom user layouts.
+
+---
 
 ## v1.24.5
 

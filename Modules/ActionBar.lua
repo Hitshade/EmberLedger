@@ -543,14 +543,6 @@ local function MakeLogoutButton(parent)
     secure:SetAttribute("macrotext", "/logout")
     secure:SetAttribute("macrotext1", "/logout")
 
-    secure:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("Logout", 1, 0.82, 0.24)
-        GameTooltip:AddLine("Secure logout button.", 0.72, 0.72, 0.72)
-        GameTooltip:Show()
-    end)
-    secure:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
     button.secure = secure
     return button
 end
