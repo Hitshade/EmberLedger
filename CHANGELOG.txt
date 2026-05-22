@@ -1,4 +1,36 @@
+## v1.28.9
+
+### Hardening and Event Coalescing
+
+- Added pending guards to profession cooldown event refreshes so noisy event bursts coalesce into a single delayed scan.
+- Added pending guards to concentration and Moxie refresh timers for noisy trade skill and currency event bursts.
+- Wrapped trusted mail header/count reads in protected calls for consistency with the addon-wide defensive API pattern.
+- No tracking behavior, saved data, cooldown filtering, or user-facing options changed.
+
+---
+
+## v1.28.8
+
+### Safety Hardening
+
+- Hardened fallback SafeNumber helpers in ActionBar and ProfessionCooldowns.
+- Removed unsafe empty-string comparisons from module fallback number parsing.
+- No tracking behavior, cooldown filtering, saved data, or user-facing options changed.
+
+---
+
 # EmberLedger Changelog
+
+## v1.28.7
+
+### Protected Value and Cooldown Debounce Fixes
+
+- Fixed a BugSack error in SafeNumber caused by comparing protected or secret string values returned by Blizzard APIs.
+- Removed the empty-string comparison from SafeNumber and now lets tonumber() safely reject nonnumeric strings.
+- Increased the profession cooldown event debounce from 0.2s to 0.5s to reduce refresh pressure during noisy SPELLS_CHANGED and SKILL_LINES_CHANGED bursts.
+- No saved data, cooldown filtering, tracking behavior, or user-facing options were changed.
+
+---
 
 ## v1.28.6
 

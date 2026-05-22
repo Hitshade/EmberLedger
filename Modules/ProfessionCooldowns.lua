@@ -175,7 +175,7 @@ local function SafeNumber(value, fallback)
         if okUsable and type(usable) == "number" then return usable end
     end
     local okText, text = pcall(tostring, value)
-    if okText and text and text ~= "" then
+    if okText and type(text) == "string" then
         local okParsed, parsed = pcall(tonumber, text)
         if okParsed and type(parsed) == "number" then
             local okUsable, usable = pcall(function() return parsed + 0 end)
@@ -722,7 +722,10 @@ function module:OnEvent(event)
     -- Handle only profession/cooldown-specific changes here to avoid duplicate login scans.
     if event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_DATA_SOURCE_CHANGED" or event == "SKILL_LINES_CHANGED" or event == "SPELLS_CHANGED" then
         if C_Timer and C_Timer.After then
-            C_Timer.After(0.2, function()
+            if EL._cooldownRefreshPending then return end
+            EL._cooldownRefreshPending = true
+            C_Timer.After(0.5, function()
+                if EL then EL._cooldownRefreshPending = nil end
                 if not EL or not EL.db then return end
                 if EL.RefreshCurrentProfessionCooldowns then EL:RefreshCurrentProfessionCooldowns() end
                 if EL.RequestUpdate then EL:RequestUpdate() end

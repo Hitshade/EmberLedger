@@ -378,10 +378,11 @@ function EL:RefreshTrustedSessionMailCache()
     if not IsShownFrame(_G.MailFrame) then return end
     if not GetInboxNumItems or not GetInboxHeaderInfo or not GetInboxItemLink then return end
 
-    local numItems = GetInboxNumItems() or 0
+    local okCount, numItems = pcall(GetInboxNumItems)
+    numItems = okCount and (tonumber(numItems) or 0) or 0
     for mailIndex = 1, numItems do
-        local _, _, sender, subject, _, codAmount, _, itemCount, _, _, _, _, isGM = GetInboxHeaderInfo(mailIndex)
-        if self:IsTrustedSessionRewardMail(sender, subject, codAmount, itemCount, isGM) then
+        local okHeader, _, _, sender, subject, _, codAmount, _, itemCount, _, _, _, _, isGM = pcall(GetInboxHeaderInfo, mailIndex)
+        if okHeader and self:IsTrustedSessionRewardMail(sender, subject, codAmount, itemCount, isGM) then
             for attachmentIndex = 1, tonumber(itemCount) or 0 do
                 local itemLink = GetInboxItemLink(mailIndex, attachmentIndex)
                 local itemID = itemLink and GetItemInfoInstantSafe(itemLink)

@@ -116,18 +116,36 @@ end
 
 function M:OnEvent(event, ...)
     if event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_DATA_SOURCE_CHANGED" or event == "TRADE_SKILL_ITEM_CRAFTED_RESULT" then
-        C_Timer.After(0.2, function()
-            if not EL or not EL.db then return end
+        if C_Timer and C_Timer.After then
+            if EL._concentrationTradeSkillRefreshPending then return end
+            EL._concentrationTradeSkillRefreshPending = true
+            C_Timer.After(0.2, function()
+                if EL then EL._concentrationTradeSkillRefreshPending = nil end
+                if not EL or not EL.db then return end
+                self:RecordFromTradeSkill()
+                self:RefreshMoxieCurrencies()
+                EL:RequestUpdate()
+            end)
+        else
             self:RecordFromTradeSkill()
             self:RefreshMoxieCurrencies()
             EL:RequestUpdate()
-        end)
+        end
     elseif event == "CURRENCY_DISPLAY_UPDATE" then
-        C_Timer.After(0.1, function()
-            if not EL or not EL.db or not self then return end
+        if C_Timer and C_Timer.After then
+            if EL._concentrationCurrencyRefreshPending then return end
+            EL._concentrationCurrencyRefreshPending = true
+            C_Timer.After(0.1, function()
+                if EL then EL._concentrationCurrencyRefreshPending = nil end
+                if not EL or not EL.db or not self then return end
+                if self.RefreshKnownCurrencies then self:RefreshKnownCurrencies() end
+                if self.RefreshMoxieCurrencies then self:RefreshMoxieCurrencies() end
+                EL:RequestUpdate()
+            end)
+        else
             if self.RefreshKnownCurrencies then self:RefreshKnownCurrencies() end
             if self.RefreshMoxieCurrencies then self:RefreshMoxieCurrencies() end
             EL:RequestUpdate()
-        end)
+        end
     end
 end

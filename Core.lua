@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.28.6"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.28.9"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -906,7 +906,7 @@ function EL:SafeNumber(value, fallback, context)
     end
 
     local okText, text = pcall(tostring, value)
-    if okText and text and text ~= "" then
+    if okText and type(text) == "string" then
         local okParsed, parsed = pcall(tonumber, text)
         if okParsed and type(parsed) == "number" then
             local okUsable, usable = pcall(function() return parsed + 0 end)

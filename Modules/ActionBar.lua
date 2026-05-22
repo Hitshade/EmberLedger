@@ -22,7 +22,7 @@ local function SafeNumber(value, fallback)
     local okNumber, direct = pcall(tonumber, value)
     if okNumber and direct ~= nil then return direct end
     local okText, text = pcall(tostring, value)
-    if okText and text and text ~= "" then
+    if okText and type(text) == "string" then
         local okParsed, parsed = pcall(tonumber, text)
         if okParsed and parsed ~= nil then return parsed end
     end
