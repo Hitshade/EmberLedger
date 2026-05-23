@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.29.1"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.29.16"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -187,14 +187,14 @@ EL.UI_CONSTANTS = {
     OPTIONS_COLUMN_DESC_TOP = -36,
     OPTIONS_COLUMN_DESC_RIGHT = -12,
     OPTIONS_NEXT_COLUMN_Y = -926,
-    OPTIONS_NEXT_COLUMN_H = 92,
+    OPTIONS_NEXT_COLUMN_H = 80,
     OPTIONS_NEXT_COLUMN_CHECK_Y = -58,
     OPTIONS_COOLDOWN_COLUMN_Y = -1026,
-    OPTIONS_COOLDOWN_COLUMN_H = 300,
+    OPTIONS_COOLDOWN_COLUMN_H = 258,
     OPTIONS_COOLDOWN_COLUMN_CHECK_Y = -62,
 }
 
-EL.DB_VERSION = 11606
+EL.DB_VERSION = 11608
 
 
 EL.PROFESSION_ICON_TEXTURES = {

@@ -1252,7 +1252,7 @@ function EL:CreateSettingsPanel(parent)
         end
         f._emberLedgerEscRegistered = true
     end
-    f:SetSize(660, 735)
+    f:SetSize(660, 650)
     f:SetScale(1)
     f:SetFrameStrata("DIALOG")
     f:SetMovable(true)
@@ -1286,7 +1286,7 @@ function EL:CreateSettingsPanel(parent)
 
     f.nav = CreateFrame("Frame", nil, f, "BackdropTemplate")
     f.nav:SetPoint("TOPLEFT", 14, -42)
-    f.nav:SetSize(140, 645)
+    f.nav:SetSize(140, 560)
     AddBackdrop(f.nav, 0.28, 0.35)
 
     local navItems = {
@@ -1438,7 +1438,7 @@ function EL:CreateSettingsPanel(parent)
         if control then control:Hide() end
     end
 
-    f.mainWindowTogglesSection = MakeSettingsSection(f, "Main Window Toggles", contentX, -498, contentW, 112)
+    f.mainWindowTogglesSection = MakeSettingsSection(f, "Main Window Toggles", contentX, -498, contentW, 104)
     local mainWindowToggleLeftX = 12
     local mainWindowToggleRightX = 250
     f.toggleCompactMode = MakeSettingsCheck(f.mainWindowTogglesSection, "Compact Mode", function() EL:ToggleDisplaySetting("compactMode") end)
@@ -1490,7 +1490,7 @@ function EL:CreateSettingsPanel(parent)
         thresholdY = thresholdY - 30
     end
 
-    f.trackingColumnsSection = MakeSettingsSection(f, "Main Window Columns", contentX, -766, contentW, 112)
+    f.trackingColumnsSection = MakeSettingsSection(f, "Main Window Columns", contentX, -766, contentW, 104)
     local trackingColumnLeftX = 12
     local trackingColumnRightX = 250
     f.toggleProf1Column = MakeSettingsCheck(f.trackingColumnsSection, "Show Prof 1 column", function() EL:ToggleTrackingColumn("prof1") end)
@@ -1840,7 +1840,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, T("Information"), contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.29.1")))
+    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.29.16")))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -2538,7 +2538,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText(T("Version %s", tostring(self.version or "1.29.1")))
+    canvas.version:SetText(T("Version %s", tostring(self.version or "1.29.16")))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)

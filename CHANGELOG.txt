@@ -1,3 +1,156 @@
+## v1.29.16
+
+### Charged Cooldown Full Recharge Correction
+- Fixed full-recharge display for shared charged profession cooldowns so it uses the longest known active charge timer instead of adding recharge timers together.
+- Preserved next-charge timing as the shortest known active charge timer.
+- Kept shared cooldown grouping, expansion scope, and tracked-cooldown visibility behavior unchanged.
+
+---
+
+## v1.29.15
+
+### Charged Cooldown Recharge Display
+- Added full-recharge timing for multi-charge profession cooldowns when more than one charge is recovering.
+- Cooldown tooltips can now show both the next available charge and the time until all charges are restored.
+- Improved inferred shared cooldown timing so using the final charge preserves the earlier next-charge timer and separately tracks full recharge time.
+- Preserved existing shared cooldown grouping, expansion scope, and tracked-cooldown visibility behavior.
+
+---
+
+## v1.29.14
+
+### Shared Charged Cooldown Handling
+
+- Fixed shared charged cooldowns being treated as unavailable when one charge remained.
+- Added separate next-charge ready time tracking so charged cooldown tooltips can show the available charge count and the next recharge timer.
+- Preserved inferred shared cooldown state after craft-result refreshes so Blizzard API timing gaps do not overwrite the known charge state with Unknown.
+- No saved cooldown data, tracked-cooldown visibility settings, or expansion-scope settings are deleted.
+
+---
+
+## v1.29.13
+
+### Cooldown Craft Inference
+
+- Added craft-result inference for Midnight Alchemy shared transmutes so EmberLedger can store a reliable cooldown timer even when Blizzard recipe cooldown APIs do not expose one immediately.
+- Bouquet of Herbs, Box of Rocks, and School of Gems now use their shared 18-hour recharge bucket after a tracked craft result.
+- Preserved shared cooldown grouping, expansion scope, and tracked-cooldown visibility settings.
+- No saved cooldown data is deleted.
+
+---
+
+## v1.29.12
+
+### Cooldown Recipe Matching Fix
+
+- Fixed Midnight transmute cooldown tooltip rows still showing Unknown when the profession recipe name includes a prefix such as "Transmute:".
+- Added recipe-name alias matching for shared Alchemy material transmutes so EmberLedger can find the active recipe ID and cooldown timer reliably.
+- Preserved shared cooldown grouping, expansion scope, and tracked-cooldown visibility settings.
+- No saved cooldown data is deleted.
+
+---
+
+## v1.29.10
+### Cooldown Timer Source Hardening
+- Expanded profession cooldown timing detection to try recipe IDs, craft spell IDs, schematic IDs, and recipe-info cooldown fields.
+- Fixed cases where shared cooldown rows could still show `Unknown` even while the Blizzard profession UI had a valid cooldown timer available.
+- Preserved shared cooldown availability handling and saved cooldown data.
+
+## v1.29.11
+
+### Cooldown Tooltip Timer Fix
+- Fixed shared profession cooldown tooltip rows continuing to show Unknown when the Blizzard profession UI exposed the actual timer under a recipe ID different from EmberLedger's curated spell ID.
+- Added recipe-list matching for curated cooldown definitions while the profession window is open, so `C_TradeSkillUI.GetRecipeCooldown()` can be queried against the active recipe ID.
+- Preserved shared cooldown grouping, cooldown visibility filters, expansion scope filters, and saved cooldown data.
+
+---
+
+---
+
+## v1.29.9
+
+### Profession Cooldown Tooltip Fix
+
+- Fixed shared profession cooldown tooltip rows continuing to show `Unknown` when the Blizzard trade skill UI exposes a valid recipe cooldown timer.
+- Added recipe cooldown remaining-time reads as a higher-priority timing source while profession data is available.
+- Fixed shared cooldown grouping on tooltip/display copies so grouped cooldown rows use the same canonical timing source as the CD column.
+- Preserved existing shared cooldown availability behavior and saved cooldown data.
+
+---
+
+## v1.29.8
+
+### Shared Cooldown Tooltip Countdown Fix
+- Fixed shared cooldown tooltip rows still showing `Unknown` when a shared cooldown bucket had a valid future ready time.
+- Re-applied shared cooldown grouping to display copies so tooltips, summaries, and CD column state use the same canonical bucket timing.
+- Preserved existing shared cooldown availability behavior and saved cooldown data.
+
+---
+
+## v1.29.7
+
+### Profession Cooldown Tooltip Fix
+
+- Fixed cooldown tooltip rows showing `Unknown` when a stored shared cooldown ready time was available.
+- Recovered older or transient cooldown records that were marked unknown but still contained reliable ready-time data.
+- Kept the CD column and tooltip aligned without adding stale-state behavior.
+- No saved cooldown data, cooldown visibility settings, or expansion-scope settings are deleted.
+
+---
+
+## v1.29.6
+
+### Shared Cooldown Tooltip State Fix
+
+- Fixed shared profession cooldown tooltip rows showing ready text when the shared cooldown bucket is still unavailable.
+- Shared cooldown groups now treat a future bucket ready time as authoritative, keeping tooltip state aligned with the CD column.
+- Improved charged cooldown tooltip formatting so countdowns take priority when the entry is not currently ready.
+- No saved cooldown data, cooldown visibility settings, or expansion-scope settings are deleted.
+
+---
+
+## v1.29.5
+
+### Shared Cooldown State Fixes
+- Added a second delayed cooldown refresh after profession cooldown crafts so shared charged cooldown buckets can settle while the Blizzard Trade Skill window remains open.
+- Hardened shared charged cooldown grouping so future bucket ready times are preserved when transient charge data is reported immediately after crafting.
+- Preserved the shared cooldown tooltip countdown behavior from v1.29.4.
+- No saved cooldown data, cooldown visibility settings, or expansion-scope settings are deleted.
+
+---
+
+## v1.29.4
+
+### Bug Fixes
+- Fixed shared profession cooldown tooltip countdowns so grouped cooldowns continue displaying their remaining time.
+- Shared cooldown entries now preserve stored ready-time data during charged-cooldown normalization.
+- No saved cooldown data, cooldown visibility settings, or expansion-scope settings are deleted.
+
+---
+
+## v1.29.3
+
+### Bug Fixes
+- Fixed shared profession cooldown handling for Midnight Alchemy material transmutes.
+- Bouquet of Herbs, Box of Rocks, and School of Gems now share the same tracked cooldown/charge state.
+- Fixed charged cooldown normalization so partially available shared cooldowns are not incorrectly treated as unavailable.
+- No saved cooldown data, cooldown visibility settings, or expansion-scope settings are deleted.
+
+---
+
+## v1.29.2
+
+### Cooldown Refresh and Tooltip Accuracy
+
+- Fixed profession cooldown refresh timing after completing a tracked cooldown craft while the Blizzard Trade Skill window remains open.
+- Added absolute ready-time tracking for profession cooldown records so tooltip countdowns continue updating from stored ready timestamps.
+- Added compatibility handling for older saved cooldown records that only stored remaining time.
+- Updated cooldown tooltips to use `Unknown` only when EmberLedger has no reliable ready-time data.
+- Added `Last scanned` information to profession cooldown tooltips.
+- No cooldown data is deleted and no per-character cooldown settings were added.
+
+---
+
 ## v1.29.1
 
 ### Main Window Options Layout Polish
