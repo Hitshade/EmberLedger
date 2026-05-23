@@ -206,6 +206,8 @@ local function IsLoginCooldownGuardActive()
     return guardUntil > 0 and GetFineTime() < guardUntil
 end
 
+-- Arm early so the first profession scan after login is protected,
+-- even before PLAYER_ENTERING_WORLD fires. Later login events extend this window.
 ArmLoginCooldownGuard()
 
 local function GetLatestExpansionID()
@@ -1691,7 +1693,7 @@ end
 FormatCooldownDuration = function(seconds)
     local secs = SafeNumber(seconds, 0) or 0
     if EL and EL.FormatCountdown then return EL:FormatCountdown(secs) end
-    return tostring(math.ceil(secs))
+    return FormatCooldownColumnTimer(secs)
 end
 
 -- Canonical display state used by summaries, sorting, and tooltip formatting.
@@ -1794,6 +1796,7 @@ FormatCooldownTooltipState = function(entry, state)
 end
 
 function EL:GetProfessionCooldownDisplayText(charKey, professions)
+    -- Priority: active timer > ready count > unknown > not tracked.
     local summary = self:GetProfessionCooldownSummary(charKey, professions)
     if summary.tracked <= 0 then return "-", summary end
     if summary.nextRemaining and summary.nextRemaining > 0 then
@@ -1844,20 +1847,20 @@ function EL:AddProfessionCooldownTooltipLines(tooltip, charKey, professions)
     if not tooltip or not charKey then return end
     local entries = self:GetProfessionCooldownEntriesForCharacter(charKey, professions)
     tooltip:AddLine(" ")
-    tooltip:AddLine("Profession Cooldowns", 0.62, 0.78, 0.92)
+    tooltip:AddLine(self:T("Profession Cooldowns"), 0.62, 0.78, 0.92)
     if #entries == 0 then
-        tooltip:AddLine("No supported profession cooldowns tracked.", 0.70, 0.70, 0.70)
+        tooltip:AddLine(self:T("No supported profession cooldowns tracked."), 0.70, 0.70, 0.70)
         return
     end
 
     local currentCategory
     for _, entry in ipairs(entries) do
-        local category = entry.category or "Profession"
+        local category = entry.category or self:T("Profession")
         if category ~= currentCategory then
             tooltip:AddLine(category, 0.95, 0.82, 0.38)
             currentCategory = category
         end
-        local label = "   " .. tostring(entry.label or entry.shortLabel or "Cooldown")
+        local label = "   " .. tostring(entry.label or entry.shortLabel or self:T("Cooldown"))
         local state = ComputeCanonicalCooldownState(entry)
         local right = FormatCooldownTooltipState(entry, state)
         if state.unknown then
@@ -1875,7 +1878,7 @@ function EL:AddProfessionCooldownTooltipLines(tooltip, charKey, professions)
     local age = type(stored) == "table" and FormatCooldownScanAge(stored._lastUpdated) or nil
     if age then
         tooltip:AddLine(" ")
-        tooltip:AddDoubleLine("Last scanned", age, 0.62, 0.78, 0.92, 0.72, 0.72, 0.72)
+        tooltip:AddDoubleLine(self:T("Last scanned"), age, 0.62, 0.78, 0.92, 0.72, 0.72, 0.72)
     end
 end
 

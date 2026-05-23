@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.30.2"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.30.5"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -42,6 +42,8 @@ EL.PROFESSION_THRESHOLD_PROFESSIONS = {
 EL.DB_KEY_SEP = "\031"
 EL.CONCENTRATION_MAX_DEFAULT = 1000
 EL.CONCENTRATION_RATE_PER_HOUR = 10
+EL.CONCENTRATION_THRESHOLD_DEFAULT = 900
+EL.MOXIE_THRESHOLD_DEFAULT = 600
 EL.IMBUED_MULCH_ITEM_ID = 238388
 EL.TRADEGOODS_CLASS = Enum.ItemClass and Enum.ItemClass.Tradegoods or 7
 EL.CONSUMABLE_CLASS = Enum.ItemClass and Enum.ItemClass.Consumable or 0
@@ -194,7 +196,7 @@ EL.UI_CONSTANTS = {
     OPTIONS_COOLDOWN_COLUMN_CHECK_Y = -62,
 }
 
-EL.DB_VERSION = 11609
+EL.DB_VERSION = 11610
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -328,8 +330,8 @@ local defaults = {
             historyMaxEntries = 500,
         },
         alerts = {
-            concentrationThreshold = 360,
-            moxieThreshold = 600,
+            concentrationThreshold = EL.CONCENTRATION_THRESHOLD_DEFAULT,
+            moxieThreshold = EL.MOXIE_THRESHOLD_DEFAULT,
             professionThresholds = {},
         },
         display = {
@@ -728,8 +730,8 @@ local function NormalizeDisplaySettings(self, settings)
 end
 
 local function NormalizeAlertAndScaleSettings(self, settings)
-    settings.alerts.concentrationThreshold = math.floor(ClampNumber(settings.alerts.concentrationThreshold, 0, self.CONCENTRATION_MAX_DEFAULT, 360))
-    settings.alerts.moxieThreshold = math.floor(ClampNumber(settings.alerts.moxieThreshold, 0, 1000, 600))
+    settings.alerts.concentrationThreshold = math.floor(ClampNumber(settings.alerts.concentrationThreshold, 0, self.CONCENTRATION_MAX_DEFAULT, self.CONCENTRATION_THRESHOLD_DEFAULT or 900))
+    settings.alerts.moxieThreshold = math.floor(ClampNumber(settings.alerts.moxieThreshold, 0, 1000, self.MOXIE_THRESHOLD_DEFAULT or 600))
     if type(settings.alerts.professionThresholds) ~= "table" then settings.alerts.professionThresholds = {} end
     local normalizedThresholds = {}
     for k, v in pairs(settings.alerts.professionThresholds) do
@@ -1104,6 +1106,20 @@ function EL:EnsureDB()
         self.db.settings.panel = self.db.settings.panel or {}
         self.db.settings.panel.actionBarFloating = false
         self.db.actionBarPlacementVersion = 1202
+    end
+
+    -- v1.30.5 migration: align the untouched historical concentration threshold default
+    -- with the documented 900-value default. Explicit user/custom values other than
+    -- the old default are preserved.
+    local thresholdDefaultVersion = tonumber(self.db.thresholdDefaultVersion) or 0
+    if thresholdDefaultVersion < 13005 then
+        self.db.settings = self.db.settings or {}
+        self.db.settings.alerts = self.db.settings.alerts or {}
+        local currentThreshold = tonumber(self.db.settings.alerts.concentrationThreshold)
+        if currentThreshold == nil or currentThreshold == 360 then
+            self.db.settings.alerts.concentrationThreshold = self.CONCENTRATION_THRESHOLD_DEFAULT or 900
+        end
+        self.db.thresholdDefaultVersion = 13005
     end
 
     self:NormalizeDatabaseSettings()
@@ -1616,7 +1632,7 @@ end
 
 function EL:GetMoxieThreshold()
     local threshold = self.db and self.db.settings and self.db.settings.alerts and tonumber(self.db.settings.alerts.moxieThreshold)
-    return math.max(0, math.min(1000, math.floor((threshold or 600) + 0.5)))
+    return math.max(0, math.min(1000, math.floor((threshold or self.MOXIE_THRESHOLD_DEFAULT or 600) + 0.5)))
 end
 
 function EL:HasMoxieAtThreshold(charKey, moxieEntries)
@@ -2268,7 +2284,7 @@ function EL:GetReadyConcentrationCountForCharacter(charKey, threshold, now)
     local count = 0
     for _, data in ipairs(self:GetConcentrationEntriesForCharacter(charKey) or {}) do
         local qty = self:GetEstimatedConcentration(data, now) or 0
-        local required = self:GetProfessionConcentrationThreshold(data) or threshold or 360
+        local required = self:GetProfessionConcentrationThreshold(data) or threshold or self.CONCENTRATION_THRESHOLD_DEFAULT or 900
         if qty >= required then
             count = count + 1
         end
@@ -2307,7 +2323,7 @@ end
 
 function EL:GetConcentrationThreshold()
     local alerts = self.db and self.db.settings and self.db.settings.alerts
-    return tonumber(alerts and alerts.concentrationThreshold) or 360
+    return tonumber(alerts and alerts.concentrationThreshold) or self.CONCENTRATION_THRESHOLD_DEFAULT or 900
 end
 
 function EL:GetConcentrationThresholdProfessionID(profOrData)
@@ -2351,7 +2367,7 @@ function EL:GetConcentrationReadyCount(threshold, now)
         if charKey and not self:IsCharacterHidden(charKey) then
             for _, data in ipairs(entries or {}) do
                 local qty = self:GetEstimatedConcentration(data, now) or 0
-                local required = self:GetProfessionConcentrationThreshold(data) or threshold or 360
+                local required = self:GetProfessionConcentrationThreshold(data) or threshold or self.CONCENTRATION_THRESHOLD_DEFAULT or 900
                 if qty >= required then
                     count = count + 1
                     break
@@ -2373,7 +2389,7 @@ function EL:GetConcentrationReadyEntries(threshold, limit)
             local char = self.db and self.db.characters and self.db.characters[charKey]
             for _, data in ipairs(concEntries or {}) do
                 local qty = self:GetEstimatedConcentration(data, now) or 0
-                local required = self:GetProfessionConcentrationThreshold(data) or threshold or 360
+                local required = self:GetProfessionConcentrationThreshold(data) or threshold or self.CONCENTRATION_THRESHOLD_DEFAULT or 900
                 if qty >= required then
                     entries[#entries + 1] = {
                         type = "concentration",
@@ -2497,7 +2513,7 @@ end
 
 function EL:DoesCharacterNeedAttention(charKey, threshold, now)
     if not charKey or self:IsCharacterHidden(charKey) then return false end
-    local fallbackThreshold = tonumber(threshold) or (self.db and self.db.settings and self.db.settings.alerts and self.db.settings.alerts.concentrationThreshold) or 360
+    local fallbackThreshold = tonumber(threshold) or (self.db and self.db.settings and self.db.settings.alerts and self.db.settings.alerts.concentrationThreshold) or self.CONCENTRATION_THRESHOLD_DEFAULT or 900
     now = now or time()
 
     for _, data in ipairs(self:GetConcentrationEntriesForCharacter(charKey) or {}) do

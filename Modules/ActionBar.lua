@@ -15,10 +15,6 @@ local THEME = EL.THEME_COLORS or {}
 local BORDER_R, BORDER_G, BORDER_B = THEME.BORDER_R or 0.82, THEME.BORDER_G or 0.66, THEME.BORDER_B or 0.34
 local EL_BG_R, EL_BG_G, EL_BG_B = THEME.BG_R or 0.030, THEME.BG_G or 0.024, THEME.BG_B or 0.075
 
-local function SafeNumber(value, fallback, context)
-    return EL:SafeNumber(value, fallback ~= nil and fallback or 0, context or "ActionBar")
-end
-
 local function SetTextIfChanged(fontString, text)
     if not fontString or not fontString.SetText then return end
     text = tostring(text or "")
@@ -50,8 +46,8 @@ local function GetActionBarPanelSettings()
     panel.actionBarPosition = type(panel.actionBarPosition) == "table" and panel.actionBarPosition or { point = "CENTER", relativePoint = "CENTER", x = 0, y = -160 }
     panel.actionBarPosition.point = panel.actionBarPosition.point or "CENTER"
     panel.actionBarPosition.relativePoint = panel.actionBarPosition.relativePoint or "CENTER"
-    panel.actionBarPosition.x = SafeNumber(panel.actionBarPosition.x, 0)
-    panel.actionBarPosition.y = SafeNumber(panel.actionBarPosition.y, -160)
+    panel.actionBarPosition.x = EL:SafeNumber(panel.actionBarPosition.x, 0, "ActionBar.position.x")
+    panel.actionBarPosition.y = EL:SafeNumber(panel.actionBarPosition.y, -160, "ActionBar.position.y")
     return panel
 end
 
@@ -83,8 +79,8 @@ local function SetFloatingActionBarPoint(bar, pos)
     end
     local point = SanitizeAnchorPoint(pos and pos.point, "CENTER")
     local relativePoint = SanitizeAnchorPoint(pos and pos.relativePoint, "CENTER")
-    local x = SafeNumber(pos and pos.x, 0)
-    local y = SafeNumber(pos and pos.y, -160)
+    local x = EL:SafeNumber(pos and pos.x, 0, "ActionBar.floating.x")
+    local y = EL:SafeNumber(pos and pos.y, -160, "ActionBar.floating.y")
     local ok = pcall(bar.SetPoint, bar, point, UIParent, relativePoint, x, y)
     if ok then return true end
 
@@ -130,7 +126,7 @@ local function StyleBlizzardButton(button)
 end
 
 local function FormatActionCooldownText(seconds)
-    seconds = SafeNumber(seconds, 0)
+    seconds = EL:SafeNumber(seconds, 0, "ActionBar.cooldown.seconds")
     if seconds <= 0 then return "" end
     if seconds < 60 then return tostring(math.ceil(seconds)) .. "s" end
     local minutes = math.ceil(seconds / 60)
@@ -243,15 +239,19 @@ local function GetItemCountSafe(itemID, itemName)
     if not item then return 0 end
     if C_Item and C_Item.GetItemCount then
         local ok, count = pcall(C_Item.GetItemCount, item, false, false, false, true)
-        if ok and SafeNumber(count, nil) then return SafeNumber(count, 0) end
+        local countNumber = ok and EL:SafeNumber(count, nil, "ActionBar.itemCount.account") or nil
+        if countNumber ~= nil then return countNumber end
         ok, count = pcall(C_Item.GetItemCount, item)
-        if ok and SafeNumber(count, nil) then return SafeNumber(count, 0) end
+        countNumber = ok and EL:SafeNumber(count, nil, "ActionBar.itemCount.bags") or nil
+        if countNumber ~= nil then return countNumber end
     end
     if GetItemCount then
         local ok, count = pcall(GetItemCount, item, false, false, true)
-        if ok and SafeNumber(count, nil) then return SafeNumber(count, 0) end
+        local countNumber = ok and EL:SafeNumber(count, nil, "ActionBar.itemCount.globalAccount") or nil
+        if countNumber ~= nil then return countNumber end
         ok, count = pcall(GetItemCount, item)
-        if ok and SafeNumber(count, nil) then return SafeNumber(count, 0) end
+        countNumber = ok and EL:SafeNumber(count, nil, "ActionBar.itemCount.globalBags") or nil
+        if countNumber ~= nil then return countNumber end
     end
     return 0
 end
@@ -345,7 +345,7 @@ local function GetActionAvailable(info)
 end
 
 local function NormalizeCooldownValues(start, duration, enable)
-    return SafeNumber(start, 0), SafeNumber(duration, 0), SafeNumber(enable, 0)
+    return EL:SafeNumber(start, 0, "ActionBar.cooldown.start"), EL:SafeNumber(duration, 0, "ActionBar.cooldown.duration"), EL:SafeNumber(enable, 0, "ActionBar.cooldown.enable")
 end
 
 local function GetActionCooldownSafe(info)

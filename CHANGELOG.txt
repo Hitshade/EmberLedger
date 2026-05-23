@@ -1,3 +1,43 @@
+## v1.30.5
+
+### Threshold Default and Final Polish
+
+- Updated the documented global concentration threshold default to 900 across fresh defaults, fallback logic, settings display, and minimap summary logic.
+- Added a conservative migration that moves the old untouched 360 default to 900 while preserving custom threshold values.
+- Routed remaining profession cooldown tooltip labels through localization helpers.
+- Kept session history retention fixed at 30 days as intended.
+- Removed small duplicate helper entries left over from prior cleanup passes.
+
+---
+
+## v1.30.4
+
+### Final Audit Polish
+
+- Removed the remaining local tracking tooltip bridge from UI.lua and routed row hover directly through the tooltip module compatibility wrapper.
+- Extracted tracking header refresh handling from RefreshPanel() into a small helper for easier maintenance.
+- Extracted tracking empty-state handling from RefreshPanel() into a small helper without changing empty-state behavior.
+- Added a clearer module header comment to Modules/Tooltips.lua.
+- Verified the previous now/currentTime naming concern had no remaining currentTime usage to standardize.
+- Preserved the existing changelog history rather than pruning historical entries.
+
+---
+
+## v1.30.3
+
+### Tooltip and Cooldown Polish
+
+- Added a maintenance comment explaining why the login cooldown guard is armed at module load time.
+- Added a cooldown display priority comment so timer, ready, unknown, and untracked states are easier to follow.
+- Changed the cooldown duration fallback to use compact formatted time instead of raw seconds.
+- Added a shared Moxie threshold default constant and reused it in tooltip fallback logic.
+- Routed remaining row tooltip labels and relative-time strings through localization helpers.
+- Added a defensive row key guard to tooltip display handling.
+- Removed the remaining thin Action Bar SafeNumber wrapper and routed calls directly through EL:SafeNumber().
+- Guarded concentration full-time tooltip calls for consistency with other protected helper usage.
+
+---
+
 ## v1.30.2
 
 ### Tooltip and Cooldown Cleanup

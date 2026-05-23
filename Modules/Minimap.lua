@@ -17,7 +17,7 @@ local function GetMinimapSettings()
 end
 
 local function GetDisplaySummary()
-    local threshold = (EL.GetConcentrationThreshold and EL:GetConcentrationThreshold()) or (EL.db and EL.db.settings and EL.db.settings.alerts and EL.db.settings.alerts.concentrationThreshold) or 360
+    local threshold = (EL.GetConcentrationThreshold and EL:GetConcentrationThreshold()) or (EL.db and EL.db.settings and EL.db.settings.alerts and EL.db.settings.alerts.concentrationThreshold) or EL.CONCENTRATION_THRESHOLD_DEFAULT or 900
     local ready = (EL.GetConcentrationReadyCount and EL:GetConcentrationReadyCount(threshold)) or 0
     local mulch = (EL.GetMulchReadyCount and EL:GetMulchReadyCount()) or 0
     local session = (EL.GetSessionDB and EL:GetSessionDB()) or {}

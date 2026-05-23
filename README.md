@@ -1,4 +1,4 @@
-# 🔥 EmberLedger v1.30.2
+# 🔥 EmberLedger v1.30.5
 
 **EmberLedger** is a lightweight Retail World of Warcraft profession dashboard for players managing profession alts across multiple characters.
 

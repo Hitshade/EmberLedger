@@ -3,7 +3,6 @@ local addonName, EL = ...
 local CreateFrame = _G.CreateFrame
 local IsShiftKeyDown = _G.IsShiftKeyDown
 local UIParent = _G.UIParent
-local Tooltip = EL.GetModule and EL:GetModule("tooltips") or (EL.modules and EL.modules.tooltips)
 
 local ticker
 local UIC = EL.UI_CONSTANTS or {}
@@ -54,14 +53,6 @@ local function T(key, ...)
     return tostring(key)
 end
 
-local function ShowTrackingRowTooltip(row)
-    Tooltip = Tooltip or (EL.GetModule and EL:GetModule("tooltips") or (EL.modules and EL.modules.tooltips))
-    if Tooltip and Tooltip.ShowRowTooltip then
-        Tooltip:ShowRowTooltip(row)
-    elseif EL.ShowRowTooltip then
-        EL:ShowRowTooltip(row)
-    end
-end
 
 local function UpdateTickerShouldRun()
     return not EL.HasVisibleUpdateConsumers or EL:HasVisibleUpdateConsumers()
@@ -1850,7 +1841,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, T("Information"), contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.30.2")))
+    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.30.5")))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -1951,12 +1942,12 @@ function EL:RefreshSettingsPanel()
     if f.panelOpacityValue then f.panelOpacityValue:SetText(string.format("%d%%", math.floor((tonumber(display.panelOpacity) or 0.55) * 100 + 0.5))) end
     if f.launcherOpacityValue then f.launcherOpacityValue:SetText(string.format("%d%%", math.floor((tonumber(display.launcherOpacity) or 0.50) * 100 + 0.5))) end
     if f.sessionOpacityValue then f.sessionOpacityValue:SetText(string.format("%d%%", math.floor((tonumber(display.sessionOpacity) or 0.55) * 100 + 0.5))) end
-    if f.thresholdValue then f.thresholdValue:SetText(tostring(tonumber(alerts.concentrationThreshold) or 360)) end
+    if f.thresholdValue then f.thresholdValue:SetText(tostring(tonumber(alerts.concentrationThreshold) or self.CONCENTRATION_THRESHOLD_DEFAULT or 900)) end
     if f.moxieThresholdValue then f.moxieThresholdValue:SetText(tostring(tonumber(alerts.moxieThreshold) or 600)) end
     SetSliderValue(f.panelOpacitySlider, math.floor((tonumber(display.panelOpacity) or 0.55) * 100 + 0.5))
     SetSliderValue(f.launcherOpacitySlider, math.floor((tonumber(display.launcherOpacity) or 0.50) * 100 + 0.5))
     SetSliderValue(f.sessionOpacitySlider, math.floor((tonumber(display.sessionOpacity) or 0.55) * 100 + 0.5))
-    SetSliderValue(f.thresholdSlider, tonumber(alerts.concentrationThreshold) or 360)
+    SetSliderValue(f.thresholdSlider, tonumber(alerts.concentrationThreshold) or self.CONCENTRATION_THRESHOLD_DEFAULT or 900)
     SetSliderValue(f.moxieThresholdSlider, tonumber(alerts.moxieThreshold) or 600)
     if f.profThresholdSliders then
         for _, slider in ipairs(f.profThresholdSliders) do
@@ -2142,7 +2133,7 @@ function EL:SetAbsoluteSetting(kind, value)
     elseif kind == "sessionOpacity" then
         self.db.settings.display.sessionOpacity = math.max(0.20, math.min(1.00, tonumber(value) or 0.55))
     elseif kind == "concThreshold" then
-        self.db.settings.alerts.concentrationThreshold = math.max(0, math.min(1000, math.floor((tonumber(value) or 360) + 0.5)))
+        self.db.settings.alerts.concentrationThreshold = math.max(0, math.min(1000, math.floor((tonumber(value) or self.CONCENTRATION_THRESHOLD_DEFAULT or 900) + 0.5)))
     elseif kind == "moxieThreshold" then
         self.db.settings.alerts.moxieThreshold = math.max(0, math.min(1000, math.floor((tonumber(value) or 600) + 0.5)))
     elseif kind == "panelScale" then
@@ -2175,7 +2166,7 @@ function EL:AdjustSetting(kind, delta)
         local v = tonumber(self.db.settings.display.sessionOpacity) or 0.55
         self.db.settings.display.sessionOpacity = math.max(0.20, math.min(1.00, v + (delta or 0)))
     elseif kind == "concThreshold" then
-        local v = tonumber(self.db.settings.alerts.concentrationThreshold) or 360
+        local v = tonumber(self.db.settings.alerts.concentrationThreshold) or self.CONCENTRATION_THRESHOLD_DEFAULT or 900
         self.db.settings.alerts.concentrationThreshold = math.max(0, math.min(1000, v + (delta or 0)))
     elseif kind == "moxieThreshold" then
         local v = tonumber(self.db.settings.alerts.moxieThreshold) or 600
@@ -2548,7 +2539,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText(T("Version %s", tostring(self.version or "1.30.2")))
+    canvas.version:SetText(T("Version %s", tostring(self.version or "1.30.5")))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -4300,7 +4291,7 @@ function EL:GetRow(i)
         end)
         row:SetScript("OnEnter", function(self)
             if self.hover then self.hover:Show() end
-            ShowTrackingRowTooltip(self)
+            if EL.ShowRowTooltip then EL:ShowRowTooltip(self) end
         end)
         row:SetScript("OnLeave", function(self)
             if self.hover then self.hover:Hide() end
@@ -4343,6 +4334,56 @@ local function UpdateTrackingLayoutGeneration(owner, width, rowH, cols, visible)
     return owner._trackingLayoutGeneration
 end
 
+local function UpdateTrackingHeader(owner, panel, concReady, concSoon, mulchReady)
+    if panel.summary then
+        if IsCompactModeEnabled() then
+            SetFontStringTextIfChanged(panel.summary, "")
+            panel.summary:Hide()
+        else
+            SetFontStringTextIfChanged(panel.summary, T("Ready: %d | Soon: %d | Mulch: %d", concReady, concSoon, mulchReady))
+            panel.summary:SetTextColor(0.82, 0.80, 0.72)
+            panel.summary:Show()
+        end
+    end
+
+    local hiddenCount = 0
+    for _, hidden in pairs(owner.db and owner.db.settings and owner.db.settings.hiddenCharacters or {}) do
+        if hidden then hiddenCount = hiddenCount + 1 end
+    end
+    if panel.restore then
+        panel.restore:SetShown(hiddenCount > 0)
+        panel.restore:SetText(hiddenCount > 0 and ("Restore (" .. hiddenCount .. ")") or "Restore")
+    end
+end
+
+local function UpdateTrackingEmptyState(owner, panel, rows, allRows, visibleRowCount, hiddenRowCount, attentionOnly, width)
+    if panel.empty then
+        local compactMode = IsCompactModeEnabled()
+        panel.empty:ClearAllPoints()
+        panel.empty:SetPoint("TOPLEFT", panel.header, "BOTTOMLEFT", 12, compactMode and -8 or -10)
+        panel.empty:SetPoint("TOPRIGHT", panel.header, "BOTTOMRIGHT", -12, compactMode and -8 or -10)
+        panel.empty:SetHeight(GetTrackingEmptyBodyHeight())
+        if panel.empty.SetFontObject then panel.empty:SetFontObject(compactMode and GameFontHighlightSmall or GameFontHighlight) end
+        if panel.empty.SetSpacing then panel.empty:SetSpacing(0) end
+        if panel.empty.SetWidth then panel.empty:SetWidth(math.max(1, (panel.header:GetWidth() or width) - 24)) end
+
+        local emptyText
+        if #allRows == 0 then
+            emptyText = T("No characters tracked yet. Open the Trade Skill window (K) on each profession alt.")
+        elseif visibleRowCount == 0 and hiddenRowCount == #allRows then
+            emptyText = T("All tracked characters are hidden. Use Restore to show them.")
+        elseif attentionOnly and hiddenRowCount > 0 then
+            emptyText = T("No attention rows. Restore hidden characters or turn off Attention Only.")
+        elseif attentionOnly then
+            emptyText = T("No characters need attention. Adjust thresholds or turn off Attention Only to view all tracked characters.")
+        else
+            emptyText = T("No visible character data. Open the Trade Skill window on a character to scan that character.")
+        end
+        panel.empty:SetText(emptyText)
+        panel.empty:SetShown(#rows == 0)
+    end
+end
+
 function EL:RefreshPanel()
     local p = self.panel
     if not p then return end
@@ -4369,7 +4410,7 @@ function EL:RefreshPanel()
             for _, data in ipairs(entries or {}) do
                 local qty = self:GetEstimatedConcentration(data, now) or 0
                 local required = self:GetProfessionConcentrationThreshold(data) or threshold
-                local soonFloor = math.max(0, math.floor((tonumber(required) or threshold or 360) * 0.80 + 0.5))
+                local soonFloor = math.max(0, math.floor((tonumber(required) or threshold or self.CONCENTRATION_THRESHOLD_DEFAULT or 900) * 0.80 + 0.5))
                 if qty >= required then
                     lookup.readyCount = lookup.readyCount + 1
                 elseif qty >= soonFloor then
@@ -4391,24 +4432,7 @@ function EL:RefreshPanel()
     end
     StopStage("RefreshPanel:Lookups", stageProfile)
     stageProfile = StartStage("RefreshPanel:Header")
-    if p.summary then
-        if IsCompactModeEnabled() then
-            SetFontStringTextIfChanged(p.summary, "")
-            p.summary:Hide()
-        else
-            SetFontStringTextIfChanged(p.summary, T("Ready: %d | Soon: %d | Mulch: %d", concReady, concSoon, mulchReady))
-            p.summary:SetTextColor(0.82, 0.80, 0.72)
-            p.summary:Show()
-        end
-    end
-    local hiddenCount = 0
-    for _, hidden in pairs(self.db and self.db.settings and self.db.settings.hiddenCharacters or {}) do
-        if hidden then hiddenCount = hiddenCount + 1 end
-    end
-    if p.restore then
-        p.restore:SetShown(hiddenCount > 0)
-        p.restore:SetText(hiddenCount > 0 and ("Restore (" .. hiddenCount .. ")") or "Restore")
-    end
+    UpdateTrackingHeader(self, p, concReady, concSoon, mulchReady)
     StopStage("RefreshPanel:Header", stageProfile)
 
     stageProfile = StartStage("RefreshPanel:GetCharacterRows")
@@ -4660,31 +4684,7 @@ function EL:RefreshPanel()
     StopStage("RefreshPanel:RowUpdate", stageProfile)
 
     stageProfile = StartStage("RefreshPanel:EmptyAutoSize")
-    if p.empty then
-        local compactMode = IsCompactModeEnabled()
-        p.empty:ClearAllPoints()
-        p.empty:SetPoint("TOPLEFT", p.header, "BOTTOMLEFT", 12, compactMode and -8 or -10)
-        p.empty:SetPoint("TOPRIGHT", p.header, "BOTTOMRIGHT", -12, compactMode and -8 or -10)
-        p.empty:SetHeight(GetTrackingEmptyBodyHeight())
-        if p.empty.SetFontObject then p.empty:SetFontObject(compactMode and GameFontHighlightSmall or GameFontHighlight) end
-        if p.empty.SetSpacing then p.empty:SetSpacing(0) end
-        if p.empty.SetWidth then p.empty:SetWidth(math.max(1, (p.header:GetWidth() or width) - 24)) end
-
-        local emptyText
-        if #allRows == 0 then
-            emptyText = T("No characters tracked yet. Open the Trade Skill window (K) on each profession alt.")
-        elseif visibleRowCount == 0 and hiddenRowCount == #allRows then
-            emptyText = T("All tracked characters are hidden. Use Restore to show them.")
-        elseif attentionOnly and hiddenRowCount > 0 then
-            emptyText = T("No attention rows. Restore hidden characters or turn off Attention Only.")
-        elseif attentionOnly then
-            emptyText = T("No characters need attention. Adjust thresholds or turn off Attention Only to view all tracked characters.")
-        else
-            emptyText = T("No visible character data. Open the Trade Skill window on a character to scan that character.")
-        end
-        p.empty:SetText(emptyText)
-        p.empty:SetShown(#rows == 0)
-    end
+    UpdateTrackingEmptyState(self, p, rows, allRows, visibleRowCount, hiddenRowCount, attentionOnly, width)
     p.content:SetHeight(math.max(GetTrackingEmptyBodyHeight(), #rows * (rowH + gap)))
     if #rows > 0 and not p._emberVerticalResizing then RestoreSavedTrackingHeightIfNeeded(p, #rows) end
     if self.AutoSizeTrackingPanel and not p._emberVerticalResizing then self:AutoSizeTrackingPanel("refresh", #rows) end
