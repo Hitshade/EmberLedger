@@ -69,6 +69,12 @@ local enUS = {
     ["%dd ago"] = "%dd ago",
     ["Cooldown tooltip unavailable: %s"] = "Cooldown tooltip unavailable: %s",
 
+    ["Currently tracking: %s"] = "Currently tracking: %s",
+    ["All supported cooldown crafts are now shown."] = "All supported cooldown crafts are now shown.",
+    ["Quick launcher and window toggle."] = "Quick launcher and window toggle.",
+    ["Next CD: Ready on %s"] = "Next CD: Ready on %s",
+    ["Next CD: %s in %s"] = "Next CD: %s in %s",
+
     ["Item"] = "Item",
     ["Qty"] = "Qty",
     ["Value"] = "Value",

@@ -1,3 +1,52 @@
+## v1.31.5
+
+### Shared Cooldown Tooltip Clarity
+
+- Fixed charged cooldown tooltip formatting so both next recharge and full recharge are shown when full recharge data is available.
+- Preserved cases where next and full recharge are identical or nearly identical, which can happen with shared charged cooldown buckets.
+
+## v1.31.4
+
+### Cooldown Tooltip and Dropdown Fixes
+
+- Fixed charged cooldown tooltip fallback handling so active shared cooldown entries consistently show their next recharge timer instead of an incomplete charge-only state.
+- Fixed tracked cooldown dropdown checkbox refresh behavior so toggling one cooldown no longer visually clears every checkbox in the open menu.
+
+## v1.31.3
+
+### Shared Charged Cooldown Timer Fallback
+
+- Fixed charged cooldown records that could display Unknown when a recipe cooldown was active but charge timing data was incomplete.
+- Added recipe cooldown ready-time fallback handling for charged cooldown display and tooltip state.
+- Preserved the intended shared cooldown behavior where 1/2 usable charges shows ready and 0/2 charges shows the active timer.
+
+## v1.31.2
+
+### Shared Charged Cooldown Accuracy
+
+- Corrected charged recipe cooldown handling so a positive recipe cooldown from the profession window overrides stale spell-charge data.
+- Fixed shared charged cooldowns that could still show 2/2 Ready while both charges were actually recovering.
+- Preserved 1/2 charge behavior so one genuinely available charge still appears ready in the CD column.
+
+## v1.31.1
+
+### Shared Cooldown Charge Display Fix
+
+- Corrected shared charged cooldown display when multiple charges are recovering.
+- Added charge reconciliation from saved recharge timers so stale Blizzard charge data cannot show Ready when no usable charges remain.
+- Preserved the intended 1/2 charge behavior so the CD column still shows ready when one charge is actually available.
+
+## v1.31.0
+
+### Cooldown Visibility and Launcher Summary
+
+- Corrected Dawnweave Bolt and Duskweave Bolt cooldown metadata so they are treated as The War Within cooldowns instead of Midnight cooldowns.
+- Added the next profession cooldown ready state to the launcher, with an option to show or hide the Next CD line.
+- Added a Show All Cooldowns button to restore all hidden profession cooldown definitions without deleting saved data.
+- Added supported profession coverage to the CD column header tooltip.
+- Confirmed Green Thumb remains available on the action bar and in Action Bar button visibility options, including the Midnight spell variant.
+- Preserved 30-day session history retention.
+
 ## v1.30.8
 
 ### Shared Cooldown Charge Display Fix

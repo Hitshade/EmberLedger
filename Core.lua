@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.30.8"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.31.5"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -192,11 +192,11 @@ EL.UI_CONSTANTS = {
     OPTIONS_NEXT_COLUMN_H = 80,
     OPTIONS_NEXT_COLUMN_CHECK_Y = -58,
     OPTIONS_COOLDOWN_COLUMN_Y = -1026,
-    OPTIONS_COOLDOWN_COLUMN_H = 258,
+    OPTIONS_COOLDOWN_COLUMN_H = 196,
     OPTIONS_COOLDOWN_COLUMN_CHECK_Y = -62,
 }
 
-EL.DB_VERSION = 11610
+EL.DB_VERSION = 11611
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -340,6 +340,7 @@ local defaults = {
             sessionOpacity = 0.55,
             showLauncherConc = true,
             showLauncherMulch = true,
+            showLauncherCooldown = false,
             showLauncherSession = true,
             showLauncherSessionTotal = true,
             showLauncherSessionTime = true,
@@ -687,6 +688,7 @@ local function NormalizeDisplaySettings(self, settings)
     if settings.display.showMoxieColumn == nil then settings.display.showMoxieColumn = false end
     if settings.display.showMulchColumn == nil then settings.display.showMulchColumn = true end
     if settings.display.showCooldownColumn == nil then settings.display.showCooldownColumn = true end
+    if settings.display.showLauncherCooldown == nil then settings.display.showLauncherCooldown = false end
     if settings.display.cooldownDisplayScope == nil then settings.display.cooldownDisplayScope = "current" end
     settings.display.hiddenCooldowns = type(settings.display.hiddenCooldowns) == "table" and settings.display.hiddenCooldowns or {}
     if settings.display.showForecastColumn == nil then settings.display.showForecastColumn = false end
@@ -706,6 +708,7 @@ local function NormalizeDisplaySettings(self, settings)
     settings.display.showMoxieColumn = settings.display.showMoxieColumn == true
     settings.display.showMulchColumn = settings.display.showMulchColumn ~= false
     settings.display.showCooldownColumn = settings.display.showCooldownColumn ~= false
+    settings.display.showLauncherCooldown = settings.display.showLauncherCooldown == true
     if settings.display.cooldownDisplayScope ~= "current_previous" and settings.display.cooldownDisplayScope ~= "all" then
         settings.display.cooldownDisplayScope = "current"
     end

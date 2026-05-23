@@ -921,6 +921,110 @@ local function MakeSettingsDropdown(parent, width, options, getValue, setValue)
     return dd
 end
 
+
+local cooldownMultiDropdownCounter = 0
+local function MakeCooldownVisibilityDropdown(parent, width)
+    cooldownMultiDropdownCounter = cooldownMultiDropdownCounter + 1
+    local name = "EmberLedgerCooldownVisibilityDropdown" .. tostring(cooldownMultiDropdownCounter)
+    local dd = CreateFrame("Frame", name, parent, "UIDropDownMenuTemplate")
+    dd:SetSize(width or 220, 24)
+
+    local function GetVisibleDefinitions()
+        if EL.GetProfessionCooldownVisibilityDefinitions then
+            return EL:GetProfessionCooldownVisibilityDefinitions() or {}
+        end
+        return {}
+    end
+
+    local function GetSelectionSummary()
+        local total, shown = 0, 0
+        for _, def in ipairs(GetVisibleDefinitions()) do
+            if def and def.key then
+                total = total + 1
+                if not (EL.IsProfessionCooldownHidden and EL:IsProfessionCooldownHidden(def.key)) then
+                    shown = shown + 1
+                end
+            end
+        end
+        if total <= 0 then return "No cooldowns in scope" end
+        if shown == total then return "All cooldowns shown" end
+        if shown <= 0 then return "No cooldowns shown" end
+        return string.format("%d of %d cooldowns shown", shown, total)
+    end
+
+    function dd:RefreshSelection()
+        if UIDropDownMenu_SetText then UIDropDownMenu_SetText(self, GetSelectionSummary()) end
+        if UIDropDownMenu_SetWidth then UIDropDownMenu_SetWidth(self, width or 220) end
+    end
+
+    if UIDropDownMenu_SetWidth then UIDropDownMenu_SetWidth(dd, width or 220) end
+    if UIDropDownMenu_Initialize then
+        UIDropDownMenu_Initialize(dd, function(self, level)
+            local defsByCategory = {}
+            local order = {}
+            for _, def in ipairs(GetVisibleDefinitions()) do
+                if def and def.key then
+                    local category = tostring(def.category or def.professionName or "Profession")
+                    if not defsByCategory[category] then
+                        defsByCategory[category] = {}
+                        order[#order + 1] = category
+                    end
+                    defsByCategory[category][#defsByCategory[category] + 1] = def
+                end
+            end
+
+            if #order == 0 then
+                local info = UIDropDownMenu_CreateInfo and UIDropDownMenu_CreateInfo() or {}
+                info.text = "No cooldowns in this scope"
+                info.notCheckable = true
+                info.disabled = true
+                if UIDropDownMenu_AddButton then UIDropDownMenu_AddButton(info, level) end
+                return
+            end
+
+            for groupIndex, category in ipairs(order) do
+                local title = UIDropDownMenu_CreateInfo and UIDropDownMenu_CreateInfo() or {}
+                title.text = category
+                title.notCheckable = true
+                title.disabled = true
+                if UIDropDownMenu_AddButton then UIDropDownMenu_AddButton(title, level) end
+
+                for _, def in ipairs(defsByCategory[category] or {}) do
+                    local key = def.key
+                    local info = UIDropDownMenu_CreateInfo and UIDropDownMenu_CreateInfo() or {}
+                    info.text = def.label or def.shortLabel or key
+                    info.arg1 = key
+                    info.keepShownOnClick = true
+                    info.isNotRadio = true
+                    info.checked = function()
+                        return not (EL.IsProfessionCooldownHidden and EL:IsProfessionCooldownHidden(key))
+                    end
+                    info.func = function(_, clickedKey)
+                        clickedKey = clickedKey or key
+                        if clickedKey and EL.SetProfessionCooldownHidden then
+                            local currentlyHidden = EL.IsProfessionCooldownHidden and EL:IsProfessionCooldownHidden(clickedKey)
+                            EL:SetProfessionCooldownHidden(clickedKey, not currentlyHidden)
+                        end
+                        if dd.RefreshSelection then dd:RefreshSelection() end
+                        if UIDropDownMenu_Refresh then UIDropDownMenu_Refresh(dd, nil, 1) end
+                    end
+                    if UIDropDownMenu_AddButton then UIDropDownMenu_AddButton(info, level) end
+                end
+
+                if groupIndex < #order then
+                    local spacer = UIDropDownMenu_CreateInfo and UIDropDownMenu_CreateInfo() or {}
+                    spacer.text = " "
+                    spacer.notCheckable = true
+                    spacer.disabled = true
+                    if UIDropDownMenu_AddButton then UIDropDownMenu_AddButton(spacer, level) end
+                end
+            end
+        end)
+    end
+    dd:RefreshSelection()
+    return dd
+end
+
 local function ShowSettingsConfirm(text, acceptText, onAccept, popupKey, requireDialog)
     if not onAccept then return end
     local key = popupKey or "EMBERLEDGER_CONFIRM_ACTION"
@@ -1533,7 +1637,7 @@ function EL:CreateSettingsPanel(parent)
     f.cooldownScopeLabel = f.cooldownColumnSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     f.cooldownScopeLabel:SetPoint("TOPLEFT", 14, -90)
     f.cooldownScopeLabel:SetText("Expansion Scope")
-    f.cooldownScopeDropdown = MakeSettingsDropdown(f.cooldownColumnSection, 218, {
+    f.cooldownScopeDropdown = MakeSettingsDropdown(f.cooldownColumnSection, 192, {
         { label = "Current Expansion Only", value = "current" },
         { label = "Current + Previous Expansion", value = "current_previous" },
         { label = "All Supported Cooldowns", value = "all" },
@@ -1544,6 +1648,11 @@ function EL:CreateSettingsPanel(parent)
     end)
     f.cooldownScopeDropdown:SetPoint("LEFT", f.cooldownScopeLabel, "RIGHT", -4, -2)
     SetSettingsTooltip(f.cooldownScopeDropdown, "Cooldown expansion scope", {"Controls which expansion's profession cooldowns appear in the CD column, row tooltips, and summaries.", "Saved cooldown data is not deleted."})
+    f.showAllCooldownsButton = MakeSettingsButton(f.cooldownColumnSection, "Show All Cooldowns", 138, function()
+        if EL.ShowAllProfessionCooldowns then EL:ShowAllProfessionCooldowns() end
+    end)
+    f.showAllCooldownsButton:SetPoint("TOPRIGHT", f.cooldownColumnSection, "TOPRIGHT", -14, -86)
+    SetSettingsTooltip(f.showAllCooldownsButton, "Show All Cooldowns", {"Restores all supported cooldown crafts to the tracker.", "This does not delete saved cooldown data."})
 
     f.cooldownVisibilityLabel = f.cooldownColumnSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     f.cooldownVisibilityLabel:SetPoint("TOPLEFT", 14, -120)
@@ -1554,43 +1663,29 @@ function EL:CreateSettingsPanel(parent)
     f.cooldownVisibilityDesc:SetJustifyH("LEFT")
     if f.cooldownVisibilityDesc.SetWordWrap then f.cooldownVisibilityDesc:SetWordWrap(true) end
     f.cooldownVisibilityDesc:SetTextColor(0.82, 0.82, 0.76)
-    f.cooldownVisibilityDesc:SetText("Choose which cooldowns appear after Expansion Scope is applied. Account-wide; saved data is not deleted.")
-    f.cooldownVisibilityChecks = {}
-    local cooldownCheckY = -172
-    local cooldownCheckColumns = {12, 168, 324}
-    local cooldownCheckIndex = 0
-    for _, def in ipairs(EL.PROFESSION_COOLDOWN_DEFS or {}) do
-        if def and def.key then
-            cooldownCheckIndex = cooldownCheckIndex + 1
-            local cb = MakeSettingsCheck(f.cooldownColumnSection, def.label or def.key, function(self)
-                if EL.SetProfessionCooldownHidden then
-                    EL:SetProfessionCooldownHidden(def.key, not (self and self:GetChecked()))
-                end
-            end)
-            local colX = cooldownCheckColumns[((cooldownCheckIndex - 1) % #cooldownCheckColumns) + 1]
-            local rowY = cooldownCheckY - (math.floor((cooldownCheckIndex - 1) / #cooldownCheckColumns) * 24)
-            cb:SetPoint("TOPLEFT", colX, rowY)
-            cb.cooldownKey = def.key
-            cb.cooldownDefinition = def
-            SetSettingsTooltip(cb, def.label or "Profession cooldown", {"Unchecked cooldowns are hidden everywhere in EmberLedger.", "This setting is account-wide and does not remove saved cooldown data."})
-            f.cooldownVisibilityChecks[#f.cooldownVisibilityChecks + 1] = cb
-        end
-    end
-    f.launcherSection = MakeSettingsSection(f, "Launcher Display", contentX, -598, contentW, 88)
+    f.cooldownVisibilityDesc:SetText("Choose which cooldown crafts appear after Expansion Scope is applied.")
+    f.cooldownVisibilityDropdown = MakeCooldownVisibilityDropdown(f.cooldownColumnSection, 252)
+    f.cooldownVisibilityDropdown:SetPoint("TOPLEFT", 2, -158)
+    SetSettingsTooltip(f.cooldownVisibilityDropdown, "Tracked Cooldowns", {"Choose which cooldown crafts appear in EmberLedger after Expansion Scope is applied.", "Checked cooldowns are shown. Unchecked cooldowns are hidden account-wide without deleting saved data."})
+
+    f.launcherSection = MakeSettingsSection(f, "Launcher Display", contentX, -598, contentW, 112)
     f.toggleConc = MakeSettingsCheck(f.launcherSection, "Concentration alert", function() EL:ToggleDisplaySetting("showLauncherConc") end)
     f.toggleConc:SetPoint("TOPLEFT", 12, -34)
     f.toggleMulch = MakeSettingsCheck(f.launcherSection, "Mulch", function() EL:ToggleDisplaySetting("showLauncherMulch") end)
     f.toggleMulch:SetPoint("TOPLEFT", 178, -34)
+    f.toggleCooldown = MakeSettingsCheck(f.launcherSection, "Next CD", function() EL:ToggleDisplaySetting("showLauncherCooldown") end)
+    f.toggleCooldown:SetPoint("TOPLEFT", 294, -34)
+    SetSettingsTooltip(f.toggleCooldown, "Launcher next cooldown", {"Shows the next profession cooldown ready state on the launcher.", "Ready cooldowns show as CD ready; recovering cooldowns show the next character and time."})
     f.toggleSession = MakeSettingsCheck(f.launcherSection, "Session rate", function() EL:ToggleDisplaySetting("showLauncherSession") end)
-    f.toggleSession:SetPoint("TOPLEFT", 294, -34)
+    f.toggleSession:SetPoint("TOPLEFT", 12, -56)
     f.toggleTotal = MakeSettingsCheck(f.launcherSection, "Session total", function() EL:ToggleDisplaySetting("showLauncherSessionTotal") end)
-    f.toggleTotal:SetPoint("TOPLEFT", 12, -56)
+    f.toggleTotal:SetPoint("TOPLEFT", 178, -56)
     SetSettingsTooltip(f.toggleTotal, "Launcher session total", {"Controls the session total line on the launcher only.", "This does not show or hide the standalone Session window."})
     f.toggleTime = MakeSettingsCheck(f.launcherSection, "Session time", function() EL:ToggleDisplaySetting("showLauncherSessionTime") end)
-    f.toggleTime:SetPoint("TOPLEFT", 178, -56)
+    f.toggleTime:SetPoint("TOPLEFT", 294, -56)
     SetSettingsTooltip(f.toggleTime, "Launcher session time", {"Controls the session timer line on the launcher only.", "This does not show or hide the standalone Session window."})
 
-    f.sessionOptions = MakeSettingsSection(f, "Session Tracking", contentX, -698, contentW, 190)
+    f.sessionOptions = MakeSettingsSection(f, "Session Tracking", contentX, -724, contentW, 190)
     f.filterHerbs = MakeSettingsCheck(f.sessionOptions, "Herbs", function() EL:ToggleSessionFilterSetting("trackHerbs") end)
     f.filterHerbs:SetPoint("TOPLEFT", 12, -34)
     f.filterOre = MakeSettingsCheck(f.sessionOptions, "Ore", function() EL:ToggleSessionFilterSetting("trackOre") end)
@@ -1841,7 +1936,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, T("Information"), contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.30.8")))
+    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.31.3")))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -1973,6 +2068,7 @@ function EL:RefreshSettingsPanel()
     setToggle(f.moduleMinimap, minimapSettings.hide ~= true)
     setToggle(f.toggleConc, display.showLauncherConc ~= false)
     setToggle(f.toggleMulch, display.showLauncherMulch ~= false)
+    setToggle(f.toggleCooldown, display.showLauncherCooldown == true)
     setToggle(f.toggleSession, display.showLauncherSession ~= false)
     setToggle(f.toggleTotal, display.showLauncherSessionTotal ~= false)
     setToggle(f.toggleTime, display.showLauncherSessionTime ~= false)
@@ -1987,21 +2083,8 @@ function EL:RefreshSettingsPanel()
     if f.cooldownScopeDropdown and f.cooldownScopeDropdown.RefreshSelection then
         f.cooldownScopeDropdown:RefreshSelection()
     end
-    local visibleCooldownDefs = {}
-    if self.GetProfessionCooldownVisibilityDefinitions then
-        for _, def in ipairs(self:GetProfessionCooldownVisibilityDefinitions() or {}) do
-            if def and def.key then visibleCooldownDefs[def.key] = true end
-        end
-    end
-    if f.cooldownVisibilityChecks then
-        for _, cb in ipairs(f.cooldownVisibilityChecks) do
-            local key = cb and cb.cooldownKey
-            local shown = key and visibleCooldownDefs[key] == true
-            if cb.SetShown then cb:SetShown(shown) elseif shown and cb.Show then cb:Show() elseif cb.Hide then cb:Hide() end
-            if shown then
-                setToggle(cb, not (self.IsProfessionCooldownHidden and self:IsProfessionCooldownHidden(key)))
-            end
-        end
+    if f.cooldownVisibilityDropdown and f.cooldownVisibilityDropdown.RefreshSelection then
+        f.cooldownVisibilityDropdown:RefreshSelection()
     end
     setToggle(f.toggleForecastColumn, trackingDisplay.showForecastColumn == true)
     setToggle(f.toggleCharacterRealm, display.showCharacterRealm ~= false)
@@ -2196,6 +2279,7 @@ end
 local DISPLAY_TOGGLE_LABELS = {
     showLauncherConc = "Launcher concentration alert",
     showLauncherMulch = "Launcher mulch line",
+    showLauncherCooldown = "Launcher next cooldown line",
     showLauncherSession = "Launcher session rate",
     showLauncherSessionTotal = "Launcher session total",
     showLauncherSessionTime = "Launcher session time",
@@ -2539,7 +2623,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText(T("Version %s", tostring(self.version or "1.30.8")))
+    canvas.version:SetText(T("Version %s", tostring(self.version or "1.31.3")))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -4741,10 +4825,21 @@ function EL:UpdateButton()
         end
     end
 
-    local sessionEnabled = not self.IsSessionTrackingEnabled or self:IsSessionTrackingEnabled()
+    local nextCooldown = display.showLauncherCooldown == true and self.GetNextProfessionCooldownSummary and self:GetNextProfessionCooldownSummary(now) or nil
     local line2Text = ""
+    if nextCooldown then
+        if nextCooldown.ready then
+            line2Text = "CD ready " .. tostring(nextCooldown.readyCount or 1)
+            if nextCooldown.characterName then line2Text = line2Text .. " | " .. tostring(nextCooldown.characterName) end
+        elseif nextCooldown.remaining and nextCooldown.remaining > 0 then
+            line2Text = "CD " .. tostring(nextCooldown.characterName or "Next") .. " " .. self:FormatCountdown(nextCooldown.remaining)
+        end
+    end
+
+    local sessionEnabled = not self.IsSessionTrackingEnabled or self:IsSessionTrackingEnabled()
     if sessionEnabled and display.showLauncherSession ~= false then
-        line2Text = self:FormatMoneyRateText(self:GetSessionGoldPerHour()) .. "/hr"
+        local rateText = self:FormatMoneyRateText(self:GetSessionGoldPerHour()) .. "/hr"
+        line2Text = #line2Text > 0 and (line2Text .. "  |  " .. rateText) or rateText
     end
     if sessionEnabled and display.showLauncherSessionTime ~= false then
         local sessionTimeText = FormatSessionTime(self:GetSessionElapsedSeconds())
@@ -4929,7 +5024,17 @@ end
 function EL:ShowButtonTooltip(owner)
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
     GameTooltip:SetText(T("EmberLedger"), 1, 0.82, 0.24)
-    GameTooltip:AddLine("Quick launcher and window toggle.", 0.86, 0.86, 0.78, true)
+    GameTooltip:AddLine(T("Quick launcher and window toggle."), 0.86, 0.86, 0.78, true)
+    if self.GetNextProfessionCooldownSummary then
+        local nextCooldown = self:GetNextProfessionCooldownSummary(time())
+        if nextCooldown then
+            if nextCooldown.ready then
+                GameTooltip:AddLine(T("Next CD: Ready on %s", tostring(nextCooldown.characterName or "character")), 0.70, 0.90, 0.70, true)
+            elseif nextCooldown.remaining and nextCooldown.remaining > 0 then
+                GameTooltip:AddLine(T("Next CD: %s in %s", tostring(nextCooldown.characterName or "character"), self:FormatCountdown(nextCooldown.remaining)), 0.70, 0.90, 0.70, true)
+            end
+        end
+    end
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine("Left-click: show, hide, or restore EmberLedger windows", 0.72, 0.72, 0.72)
     GameTooltip:AddLine("Right-click: lock or unlock launcher", 0.72, 0.72, 0.72)
