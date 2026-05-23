@@ -818,8 +818,14 @@ function SharedCooldownBucket.GetRecipeLockTime(record, now, extraReadyTime)
 end
 
 function SharedCooldownBucket.GetBlockingReadyTime(record, currentCharges, nextChargeReadyTime, now, extraReadyTime)
+    -- For shared charged profession cooldowns, a future recipe/charge timer usually
+    -- means a charge is recovering, not that every recipe in the bucket is blocked.
+    -- Only block the display when no usable charges remain. This keeps 1/2 charges
+    -- actionable in the CD column while still showing the recharge timer in tooltips.
+    if SafeNumber(currentCharges, 0) > 0 then return nil end
+
     local blockingReadyTime = SharedCooldownBucket.GetRecipeLockTime(record, now, extraReadyTime)
-    if SafeNumber(currentCharges, 0) <= 0 and nextChargeReadyTime and nextChargeReadyTime > now then
+    if nextChargeReadyTime and nextChargeReadyTime > now then
         blockingReadyTime = blockingReadyTime and math.max(blockingReadyTime, nextChargeReadyTime) or nextChargeReadyTime
     end
     return blockingReadyTime
@@ -1746,6 +1752,11 @@ ComputeCanonicalCooldownState = function(entry)
     state.ready = entry.ready == true
 
     if state.maxCharges > 0 then
+        -- Charged cooldowns are actionable when at least one charge is available,
+        -- but only when the normalized record is not blocked by an active shared
+        -- recipe/cooldown timer. This keeps 1/max charges Ready while preventing
+        -- stale shared cooldown data from displaying Ready during an active lock.
+        state.ready = (entry.ready == true) and state.currentCharges > 0
         local nextChargeReadyTime = GetNextChargeReadyTime(entry)
         if nextChargeReadyTime and nextChargeReadyTime > now then
             state.nextRemaining = math.max(0, nextChargeReadyTime - now)
@@ -1796,13 +1807,15 @@ FormatCooldownTooltipState = function(entry, state)
 end
 
 function EL:GetProfessionCooldownDisplayText(charKey, professions)
-    -- Priority: active timer > ready count > unknown > not tracked.
+    -- Priority: ready count > active timer > unknown > not tracked.
+    -- Charged cooldowns with 1/max charges are still usable, so Ready wins over
+    -- the recharge timer in the compact CD column.
     local summary = self:GetProfessionCooldownSummary(charKey, professions)
     if summary.tracked <= 0 then return "-", summary end
+    if summary.ready > 0 then return tostring(summary.ready), summary end
     if summary.nextRemaining and summary.nextRemaining > 0 then
         return FormatCooldownColumnTimer(summary.nextRemaining), summary
     end
-    if summary.ready > 0 then return tostring(summary.ready), summary end
     if summary.unknown > 0 then return "?", summary end
     return "-", summary
 end
@@ -1810,8 +1823,8 @@ end
 function EL:GetProfessionCooldownSortValue(charKey, professions)
     local summary = self:GetProfessionCooldownSummary(charKey, professions)
     if summary.tracked <= 0 then return nil end
-    if summary.nextRemaining and summary.nextRemaining > 0 then return summary.nextRemaining end
     if summary.ready > 0 then return 0 - summary.ready end
+    if summary.nextRemaining and summary.nextRemaining > 0 then return summary.nextRemaining end
     if summary.unknown > 0 then return 999999998 end
     return 999999999
 end

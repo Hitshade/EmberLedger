@@ -1,3 +1,27 @@
+## v1.30.8
+
+### Shared Cooldown Charge Display Fix
+
+- Fixed shared charged cooldown display so 1/2 available charges shows as ready/actionable in the CD column.
+- Kept active recharge timing available in tooltips without allowing the recharge timer to override an available charge.
+- Preserved 0/2 charge behavior so fully spent shared cooldown buckets still show the active cooldown timer.
+
+## v1.30.7
+
+### Shared Cooldown Display Fix
+
+- Fixed shared charged cooldown display logic so an active shared lock cannot appear Ready from stale charge data.
+- Preserved the intended 1/2 charge behavior where an available charge still displays as Ready when no shared lock is active.
+- Kept recharge timing available for tooltip detail without overriding true locked states.
+
+## v1.30.6
+
+### Cooldown Charge Display
+
+- Updated the CD column so charged profession cooldowns with one available charge still display as ready.
+- Kept recharge timing available in tooltips while preventing 1/2 charge states from appearing as unavailable in the compact column.
+- Updated cooldown sorting so ready charged cooldowns sort as ready before recovering cooldowns.
+
 ## v1.30.5
 
 ### Threshold Default and Final Polish

@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.30.5"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.30.8"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -1108,7 +1108,7 @@ function EL:EnsureDB()
         self.db.actionBarPlacementVersion = 1202
     end
 
-    -- v1.30.5 migration: align the untouched historical concentration threshold default
+    -- Migration: align the untouched historical concentration threshold default
     -- with the documented 900-value default. Explicit user/custom values other than
     -- the old default are preserved.
     local thresholdDefaultVersion = tonumber(self.db.thresholdDefaultVersion) or 0
