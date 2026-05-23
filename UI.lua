@@ -3,6 +3,7 @@ local addonName, EL = ...
 local CreateFrame = _G.CreateFrame
 local IsShiftKeyDown = _G.IsShiftKeyDown
 local UIParent = _G.UIParent
+local Tooltip = EL.GetModule and EL:GetModule("tooltips") or (EL.modules and EL.modules.tooltips)
 
 local ticker
 local UIC = EL.UI_CONSTANTS or {}
@@ -51,6 +52,15 @@ local function T(key, ...)
         if ok then return formatted end
     end
     return tostring(key)
+end
+
+local function ShowTrackingRowTooltip(row)
+    Tooltip = Tooltip or (EL.GetModule and EL:GetModule("tooltips") or (EL.modules and EL.modules.tooltips))
+    if Tooltip and Tooltip.ShowRowTooltip then
+        Tooltip:ShowRowTooltip(row)
+    elseif EL.ShowRowTooltip then
+        EL:ShowRowTooltip(row)
+    end
 end
 
 local function UpdateTickerShouldRun()
@@ -1840,7 +1850,7 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, T("Information"), contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.29.16")))
+    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.30.2")))
     f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
 
     f.allSettingsSections = {
@@ -2538,7 +2548,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText(T("Version %s", tostring(self.version or "1.29.16")))
+    canvas.version:SetText(T("Version %s", tostring(self.version or "1.30.2")))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -4290,7 +4300,7 @@ function EL:GetRow(i)
         end)
         row:SetScript("OnEnter", function(self)
             if self.hover then self.hover:Show() end
-            EL:ShowRowTooltip(self)
+            ShowTrackingRowTooltip(self)
         end)
         row:SetScript("OnLeave", function(self)
             if self.hover then self.hover:Hide() end
@@ -4927,112 +4937,3 @@ function EL:ShowButtonTooltip(owner)
     GameTooltip:Show()
 end
 
-local function FormatTooltipDate(timestamp)
-    timestamp = tonumber(timestamp) or 0
-    if timestamp <= 0 then return "Unknown" end
-    return date("%b %d, %I:%M %p", timestamp)
-end
-
-local function FormatTooltipAgo(timestamp)
-    timestamp = tonumber(timestamp) or 0
-    if timestamp <= 0 then return "Unknown" end
-    local elapsed = math.max(0, time() - timestamp)
-    if elapsed < 60 then return "just now" end
-    if elapsed < 3600 then return string.format("%dm ago", math.floor(elapsed / 60)) end
-    if elapsed < 86400 then return string.format("%dh %02dm ago", math.floor(elapsed / 3600), math.floor((elapsed % 3600) / 60)) end
-    return string.format("%dd ago", math.floor(elapsed / 86400))
-end
-
-function EL:ShowRowTooltip(row)
-    if not row then return end
-    local char = self.db and self.db.characters and self.db.characters[row.charKey or ""]
-    local displayName = self:GetCharacterDisplayName(char, row.charKey or "Character")
-    local r, g, b = self:GetClassColor(char and char.class)
-    local threshold = self.db and self.db.settings and self.db.settings.alerts and self.db.settings.alerts.concentrationThreshold or 360
-    local now = time()
-
-    GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-    GameTooltip:SetText(displayName, r, g, b)
-
-    GameTooltip:AddDoubleLine("Realm", (char and char.realm) or "Unknown", 0.82, 0.80, 0.72, 1, 1, 1)
-    GameTooltip:AddDoubleLine("Last seen", FormatTooltipAgo(char and char.lastSeen), 0.82, 0.80, 0.72, 1, 1, 1)
-
-    GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Professions", 0.62, 0.78, 0.92)
-    if row.profEntries and #row.profEntries > 0 then
-        for i, prof in ipairs(row.profEntries) do
-            local profName = self:GetCleanProfessionName(prof.professionName)
-            local abbrev = self:GetProfessionAbbreviation(prof)
-            local conc = self:GetConcentrationEntryForProfession(row.charKey, prof)
-            GameTooltip:AddDoubleLine(string.format("%d. %s", i, profName), abbrev, 0.62, 0.78, 0.92, 1, 1, 1)
-            if conc then
-                local quantity = tonumber(self:GetEstimatedConcentration(conc, now)) or 0
-                local maxQuantity = tonumber(conc.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
-                local threshold, hasOverride = self:GetProfessionConcentrationThreshold(conc)
-                GameTooltip:AddDoubleLine("   Concentration", string.format("%d/%d", quantity, maxQuantity), 0.72, 0.72, 0.72, 1, 1, 1)
-                GameTooltip:AddDoubleLine("   Alert threshold", tostring(threshold) .. (hasOverride and " (override)" or " (global)"), 0.72, 0.72, 0.72, 1, 1, 1)
-                if quantity >= maxQuantity then
-                    GameTooltip:AddDoubleLine("   Full", "Now", 0.72, 0.72, 0.72, 1, 1, 1)
-                elseif quantity >= threshold then
-                    GameTooltip:AddDoubleLine("   Ready", "Now", 0.35, 1.00, 0.45, 0.35, 1.00, 0.45)
-                    GameTooltip:AddDoubleLine("   Full in", self:GetConcentrationFullIn(conc, now) or "Unknown", 0.72, 0.72, 0.72, 1, 1, 1)
-                else
-                    local rate = tonumber(self.CONCENTRATION_RATE_PER_HOUR) or 10
-                    local readySeconds = math.ceil(math.max(0, threshold - quantity) / rate * 3600)
-                    GameTooltip:AddDoubleLine("   Ready at", FormatTooltipDate(now + readySeconds), 0.72, 0.72, 0.72, 1, 1, 1)
-                    GameTooltip:AddDoubleLine("   Full in", self:GetConcentrationFullIn(conc, now) or "Unknown", 0.72, 0.72, 0.72, 1, 1, 1)
-                end
-            else
-                GameTooltip:AddLine("   Concentration: not tracked", 0.70, 0.70, 0.70)
-            end
-            local moxie = self:GetMoxieEntryForProfession(row.charKey, prof)
-            if moxie and type(moxie.quantity) == "number" then
-                local threshold = self.GetMoxieThreshold and self:GetMoxieThreshold() or 600
-                local ready = tonumber(moxie.quantity) and tonumber(moxie.quantity) >= threshold
-                GameTooltip:AddDoubleLine("   Moxie", tostring(moxie.quantity), 0.72, 0.72, 0.72, ready and 0.35 or 1, ready and 1 or 1, ready and 0.45 or 1)
-            end
-        end
-    elseif row.concEntries and #row.concEntries > 0 then
-        for i, data in ipairs(row.concEntries) do
-            local profName = self:GetCleanProfessionName(data.professionName)
-            local abbrev = self:GetProfessionAbbreviation(data)
-            local quantity = tonumber(self:GetEstimatedConcentration(data, now)) or 0
-            local maxQuantity = tonumber(data.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
-            GameTooltip:AddDoubleLine(string.format("%d. %s", i, profName), abbrev, 0.62, 0.78, 0.92, 1, 1, 1)
-            GameTooltip:AddDoubleLine("   Concentration", string.format("%d/%d", quantity, maxQuantity), 0.72, 0.72, 0.72, 1, 1, 1)
-        end
-    else
-        GameTooltip:AddLine("No professions tracked yet.", 0.7, 0.7, 0.7)
-    end
-
-    if type(self.AddProfessionCooldownTooltipLines) == "function" then
-        local ok, err = pcall(self.AddProfessionCooldownTooltipLines, self, GameTooltip, row.charKey, row.profEntries)
-        if not ok and self.db and self.db.settings and self.db.settings.debug and self.Print then
-            self:Print("Cooldown tooltip unavailable: " .. tostring(err))
-        end
-    end
-
-    GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Imbued Mulch", 0.95, 0.62, 0.26)
-    if self:HasImbuedMulchAccess(row.mulchData) then
-        local readyAt = tonumber(row.mulchData.readyAt) or 0
-        local remain = math.max(0, readyAt - now)
-        GameTooltip:AddDoubleLine("Ready at", remain <= 0 and "Now" or FormatTooltipDate(readyAt), 0.72, 0.72, 0.72, 1, 1, 1)
-        GameTooltip:AddDoubleLine("In bags", tostring(row.mulchData.itemCount or 0), 0.72, 0.72, 0.72, 1, 1, 1)
-    else
-        GameTooltip:AddLine("No Imbued Mulch data tracked.", 0.7, 0.7, 0.7)
-    end
-
-    GameTooltip:AddLine(" ")
-    if row.isCurrentCharacter then
-        GameTooltip:AddLine("Current character", 0.95, 0.82, 0.38)
-    end
-    if self:IsCharacterPinned(row.charKey) then
-        GameTooltip:AddLine("Pinned", 0.95, 0.82, 0.38)
-    end
-    GameTooltip:AddLine("Row interactions", 0.62, 0.78, 0.92)
-    GameTooltip:AddLine((self:IsCharacterPinned(row.charKey) and "Alt-click: unpin character" or "Alt-click: pin character"), 0.7, 0.7, 0.7)
-    GameTooltip:AddLine("Right-click: hide character", 0.7, 0.7, 0.7)
-    GameTooltip:AddLine("Shift-right-click: remove EmberLedger data", 0.95, 0.62, 0.26)
-    GameTooltip:Show()
-end

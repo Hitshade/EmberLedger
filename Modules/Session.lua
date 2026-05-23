@@ -35,10 +35,7 @@ local function TextContainsAny(value, patterns)
 end
 
 local function N(value, fallback, context)
-    if EL and type(EL.SafeNumber) == "function" then
-        return EL:SafeNumber(value, fallback, context)
-    end
-    return fallback
+    return EL:SafeNumber(value, fallback, context)
 end
 
 local function GetInboxAttachmentQuantity(mailIndex, attachmentIndex)

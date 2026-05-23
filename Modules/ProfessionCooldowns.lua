@@ -132,7 +132,7 @@ local VALID_COOLDOWN_DEF_KEYS = {}
 for _, def in ipairs(EL.PROFESSION_COOLDOWN_DEFS) do
     if def and def.key then
         COOLDOWN_DEFS_BY_KEY[def.key] = def
-            VALID_COOLDOWN_DEF_KEYS[def.key] = true
+        VALID_COOLDOWN_DEF_KEYS[def.key] = true
         if def.professionID then
             COOLDOWN_DEFS_BY_PROFESSION[def.professionID] = COOLDOWN_DEFS_BY_PROFESSION[def.professionID] or {}
             table.insert(COOLDOWN_DEFS_BY_PROFESSION[def.professionID], def)
@@ -187,25 +187,26 @@ local function EnsureProfessionCooldownStore()
 end
 
 local function SafeNumber(value, fallback)
-    if EL and type(EL.SafeNumber) == "function" then
-        return EL:SafeNumber(value, fallback, "ProfessionCooldowns")
-    end
-    if value == nil then return fallback end
-    local okNumber, direct = pcall(tonumber, value)
-    if okNumber and type(direct) == "number" then
-        local okUsable, usable = pcall(function() return direct + 0 end)
-        if okUsable and type(usable) == "number" then return usable end
-    end
-    local okText, text = pcall(tostring, value)
-    if okText and type(text) == "string" then
-        local okParsed, parsed = pcall(tonumber, text)
-        if okParsed and type(parsed) == "number" then
-            local okUsable, usable = pcall(function() return parsed + 0 end)
-            if okUsable and type(usable) == "number" then return usable end
-        end
-    end
-    return fallback
+    return EL:SafeNumber(value, fallback, "ProfessionCooldowns")
 end
+
+local LOGIN_READY_OVERWRITE_GUARD_SECONDS = 0.5
+
+local function GetFineTime()
+    if type(GetTime) == "function" then return GetTime() end
+    return Now()
+end
+
+local function ArmLoginCooldownGuard()
+    EL._professionCooldownLoginGuardUntil = math.max(SafeNumber(EL._professionCooldownLoginGuardUntil, 0) or 0, GetFineTime() + LOGIN_READY_OVERWRITE_GUARD_SECONDS)
+end
+
+local function IsLoginCooldownGuardActive()
+    local guardUntil = SafeNumber(EL._professionCooldownLoginGuardUntil, 0) or 0
+    return guardUntil > 0 and GetFineTime() < guardUntil
+end
+
+ArmLoginCooldownGuard()
 
 local function GetLatestExpansionID()
     if EL and type(EL.GetCurrentExpansionID) == "function" then
@@ -598,6 +599,7 @@ local function BuildCooldownRecord(def)
     local ready = false
     local remaining = 0
     local readyTime
+    local recipeReadyTime
 
     -- Recipe cooldowns are the most reliable source while the Blizzard trade skill UI is open.
     -- Spell charge/cooldown APIs can temporarily return stale positive charges for shared
@@ -605,9 +607,11 @@ local function BuildCooldownRecord(def)
     if recipeRemaining and recipeRemaining > 0 then
         ready = false
         remaining = recipeRemaining
-        readyTime = now + recipeRemaining
-        currentCharges = 0
+        recipeReadyTime = now + recipeRemaining
+        readyTime = recipeReadyTime
+        if maxCharges <= 0 then maxCharges = SafeNumber(def.defaultMaxCharges, 0) or 0 end
         if maxCharges <= 0 then maxCharges = 1 end
+        currentCharges = math.max(0, math.min(maxCharges, currentCharges or 0))
     elseif maxCharges > 0 then
         currentCharges = math.max(0, math.min(maxCharges, currentCharges))
         if currentCharges > 0 then ready = true end
@@ -659,7 +663,8 @@ local function BuildCooldownRecord(def)
         chargeDuration = chargeDuration,
         recipeID = knownRecipeID,
         recipeRemaining = recipeRemaining,
-        nextChargeReadyTime = (maxCharges > 0 and remaining and remaining > 0) and (now + remaining) or nil,
+        recipeReadyTime = recipeReadyTime,
+        nextChargeReadyTime = (maxCharges > 0 and not recipeReadyTime and remaining and remaining > 0) and (now + remaining) or nil,
         -- For shared charged profession cooldowns, each recovering charge can have its own timer.
         -- Store the known timer here and let group normalization choose the longest known timer
         -- as full recharge instead of adding recharge durations together.
@@ -711,6 +716,12 @@ end
 
 local function DeriveReadyTime(record)
     if type(record) ~= "table" then return nil end
+    local recipeReadyTime = SafeNumber(record.recipeReadyTime)
+    if recipeReadyTime and recipeReadyTime > 0 then return recipeReadyTime end
+
+    local sharedRecipeReadyTime = SafeNumber(record.sharedRecipeReadyTime)
+    if sharedRecipeReadyTime and sharedRecipeReadyTime > 0 then return sharedRecipeReadyTime end
+
     local readyTime = SafeNumber(record.readyTime)
     if readyTime and readyTime > 0 then return readyTime end
 
@@ -780,6 +791,92 @@ local function GetFullRechargeReadyTime(record)
     return nil
 end
 
+
+-- Shared charged cooldown philosophy:
+-- Some profession cooldown crafts spend charges from one bucket across multiple recipes.
+-- EmberLedger treats any available charge as Ready while still preserving the next
+-- recharge and full recharge timers for tooltip clarity. Saved future timing is
+-- protected during login because profession APIs can briefly report Ready before
+-- the profession window has repopulated.
+local SharedCooldownBucket = {}
+
+function SharedCooldownBucket.GetRecipeLockTime(record, now, extraReadyTime)
+    if type(record) ~= "table" then return nil end
+    local lockTime
+    local recipeReadyTime = SafeNumber(record.recipeReadyTime)
+    local sharedRecipeReadyTime = SafeNumber(record.sharedRecipeReadyTime)
+    if recipeReadyTime and recipeReadyTime > now then lockTime = recipeReadyTime end
+    if sharedRecipeReadyTime and sharedRecipeReadyTime > now then
+        lockTime = lockTime and math.min(lockTime, sharedRecipeReadyTime) or sharedRecipeReadyTime
+    end
+    if extraReadyTime and extraReadyTime > now then
+        lockTime = lockTime and math.min(lockTime, extraReadyTime) or extraReadyTime
+    end
+    return lockTime
+end
+
+function SharedCooldownBucket.GetBlockingReadyTime(record, currentCharges, nextChargeReadyTime, now, extraReadyTime)
+    local blockingReadyTime = SharedCooldownBucket.GetRecipeLockTime(record, now, extraReadyTime)
+    if SafeNumber(currentCharges, 0) <= 0 and nextChargeReadyTime and nextChargeReadyTime > now then
+        blockingReadyTime = blockingReadyTime and math.max(blockingReadyTime, nextChargeReadyTime) or nextChargeReadyTime
+    end
+    return blockingReadyTime
+end
+
+function SharedCooldownBucket.GetFutureTiming(record, now)
+    if type(record) ~= "table" then return nil end
+    local recipeReadyTime = SafeNumber(record.recipeReadyTime)
+    local sharedRecipeReadyTime = SafeNumber(record.sharedRecipeReadyTime)
+    local nextChargeReadyTime = GetNextChargeReadyTime(record)
+    local fullRechargeReadyTime = GetFullRechargeReadyTime(record)
+    local hasFuture = (recipeReadyTime and recipeReadyTime > now)
+        or (sharedRecipeReadyTime and sharedRecipeReadyTime > now)
+        or (nextChargeReadyTime and nextChargeReadyTime > now)
+        or (fullRechargeReadyTime and fullRechargeReadyTime > now)
+    if not hasFuture then return nil end
+    return {
+        recipeReadyTime = recipeReadyTime,
+        sharedRecipeReadyTime = sharedRecipeReadyTime,
+        nextChargeReadyTime = nextChargeReadyTime,
+        fullRechargeReadyTime = fullRechargeReadyTime,
+        maxCharges = SafeNumber(record.maxCharges, 0) or 0,
+        currentCharges = SafeNumber(record.currentCharges, 0) or 0,
+        chargeStartTime = SafeNumber(record.chargeStartTime, 0) or 0,
+        chargeDuration = SafeNumber(record.chargeDuration, 0) or 0,
+        fullRechargeMode = record.fullRechargeMode,
+    }
+end
+
+function SharedCooldownBucket.AccumulateFutureState(state, timing, now)
+    if type(timing) ~= "table" then return state end
+    state = state or {
+        maxCharges = timing.maxCharges or 0,
+        currentCharges = timing.currentCharges or 0,
+        chargeDuration = timing.chargeDuration or 0,
+    }
+    if (timing.maxCharges or 0) > (state.maxCharges or 0) then state.maxCharges = timing.maxCharges end
+    state.currentCharges = math.min(state.currentCharges or timing.currentCharges or 0, timing.currentCharges or 0)
+    if (timing.chargeDuration or 0) > (state.chargeDuration or 0) then state.chargeDuration = timing.chargeDuration end
+    if timing.nextChargeReadyTime and timing.nextChargeReadyTime > now then
+        state.nextChargeReadyTime = state.nextChargeReadyTime and math.min(state.nextChargeReadyTime, timing.nextChargeReadyTime) or timing.nextChargeReadyTime
+        state.fullRechargeReadyTime = state.fullRechargeReadyTime and math.max(state.fullRechargeReadyTime, timing.nextChargeReadyTime) or timing.nextChargeReadyTime
+    end
+    if timing.fullRechargeReadyTime and timing.fullRechargeReadyTime > now then
+        state.fullRechargeReadyTime = state.fullRechargeReadyTime and math.max(state.fullRechargeReadyTime, timing.fullRechargeReadyTime) or timing.fullRechargeReadyTime
+    end
+    local lockTime = nil
+    if timing.recipeReadyTime and timing.recipeReadyTime > now then lockTime = timing.recipeReadyTime end
+    if timing.sharedRecipeReadyTime and timing.sharedRecipeReadyTime > now then
+        lockTime = lockTime and math.min(lockTime, timing.sharedRecipeReadyTime) or timing.sharedRecipeReadyTime
+    end
+    if lockTime and lockTime > now then
+        state.sharedRecipeReadyTime = state.sharedRecipeReadyTime and math.min(state.sharedRecipeReadyTime, lockTime) or lockTime
+    end
+    state.chargeStartTime = timing.chargeStartTime or state.chargeStartTime
+    state.fullRechargeMode = timing.fullRechargeMode or state.fullRechargeMode
+    return state
+end
+
 local function NormalizeCooldownRecordTiming(record)
     if type(record) ~= "table" then return record end
     if record.unlearned then return record end
@@ -803,6 +900,18 @@ local function NormalizeCooldownRecordTiming(record)
         local currentCharges = math.max(0, math.min(maxCharges, SafeNumber(record.currentCharges, 0)))
         local chargeDuration = SafeNumber(record.chargeDuration, 0)
         local nextChargeTime = GetNextChargeReadyTime(record)
+        local recipeReadyTime = SafeNumber(record.recipeReadyTime)
+        local sharedRecipeReadyTime = SafeNumber(record.sharedRecipeReadyTime)
+        if recipeReadyTime and recipeReadyTime <= now then
+            record.recipeReadyTime = nil
+            record.recipeRemaining = nil
+            recipeReadyTime = nil
+        end
+        if sharedRecipeReadyTime and sharedRecipeReadyTime <= now then
+            record.sharedRecipeReadyTime = nil
+            record.sharedRecipeRemaining = nil
+            sharedRecipeReadyTime = nil
+        end
 
         if currentCharges < maxCharges and nextChargeTime and chargeDuration > 0 then
             while currentCharges < maxCharges and nextChargeTime <= now do
@@ -815,7 +924,17 @@ local function NormalizeCooldownRecordTiming(record)
 
         record.currentCharges = currentCharges
         record.maxCharges = maxCharges
-        if currentCharges >= maxCharges then
+
+        local blockingReadyTime = SharedCooldownBucket.GetBlockingReadyTime(record, currentCharges, nextChargeTime, now)
+
+        if blockingReadyTime and blockingReadyTime > now then
+            record.ready = false
+            record.unknown = false
+            record.readyTime = blockingReadyTime
+            record.remaining = math.max(0, blockingReadyTime - now)
+            record.nextChargeReadyTime = nextChargeTime
+            record.fullRechargeReadyTime = GetFullRechargeReadyTime(record)
+        elseif currentCharges >= maxCharges then
             record.ready = true
             record.unknown = false
             record.readyTime = now
@@ -986,9 +1105,32 @@ local function MarkCooldownCrafted(def)
         record.nextChargeReadyTime = nextReadyTime
         record.fullRechargeReadyTime = fullRechargeReadyTime
         record.fullRechargeMode = groupKey and "longest_timer" or nil
-        record.remaining = math.max(0, nextReadyTime - now)
-        record.readyTime = currentCharges > 0 and now or nextReadyTime
-        record.ready = currentCharges > 0
+        if groupKey then
+            -- Shared profession cooldown buckets can report individual recipes as ready
+            -- after a fresh login until the profession window is opened again. Persist a
+            -- group-level recipe lock so the dashboard does not forget an active member
+            -- cooldown between sessions.
+            record.sharedRecipeReadyTime = newChargeReadyTime
+            record.sharedRecipeRemaining = recharge
+        end
+        if candidate.key == def.key then
+            record.recipeReadyTime = newChargeReadyTime
+            record.recipeRemaining = recharge
+        elseif SafeNumber(record.recipeReadyTime, 0) <= now then
+            record.recipeReadyTime = nil
+            record.recipeRemaining = nil
+        end
+        local recipeReadyTime = SafeNumber(record.recipeReadyTime)
+        local blockingReadyTime = nil
+        if recipeReadyTime and recipeReadyTime > now then
+            blockingReadyTime = recipeReadyTime
+        end
+        if currentCharges <= 0 and nextReadyTime and nextReadyTime > now then
+            blockingReadyTime = blockingReadyTime and math.max(blockingReadyTime, nextReadyTime) or nextReadyTime
+        end
+        record.remaining = blockingReadyTime and math.max(0, blockingReadyTime - now) or math.max(0, nextReadyTime - now)
+        record.readyTime = blockingReadyTime or (currentCharges > 0 and now or nextReadyTime)
+        record.ready = not blockingReadyTime and currentCharges > 0
         record.unknown = false
         record.unlearned = false
         record.lastUpdated = now
@@ -1039,6 +1181,7 @@ function ApplySharedCooldownGroups(records)
             local groupCurrentCharges
             local groupNextChargeTime
             local groupFullRechargeTime
+            local groupRecipeReadyTime
             local groupRemaining = 0
             local groupLabel
 
@@ -1048,7 +1191,16 @@ function ApplySharedCooldownGroups(records)
                 local currentCharges = SafeNumber(record.currentCharges, 0)
                 local nextChargeTime = GetNextChargeReadyTime(record)
                 local fullRechargeTime = GetFullRechargeReadyTime(record)
+                local recipeReadyTime = SafeNumber(record.recipeReadyTime)
+                local sharedRecipeReadyTime = SafeNumber(record.sharedRecipeReadyTime)
                 local remaining = SafeNumber(record.remaining, 0)
+
+                if recipeReadyTime and recipeReadyTime > now then
+                    groupRecipeReadyTime = groupRecipeReadyTime and math.min(groupRecipeReadyTime, recipeReadyTime) or recipeReadyTime
+                end
+                if sharedRecipeReadyTime and sharedRecipeReadyTime > now then
+                    groupRecipeReadyTime = groupRecipeReadyTime and math.min(groupRecipeReadyTime, sharedRecipeReadyTime) or sharedRecipeReadyTime
+                end
 
                 if maxCharges > groupMaxCharges then groupMaxCharges = maxCharges end
                 if maxCharges > 0 then
@@ -1079,7 +1231,31 @@ function ApplySharedCooldownGroups(records)
                     record.currentCharges = groupCurrentCharges
                     record.maxCharges = groupMaxCharges
                     record.nextChargeReadyTime = groupNextChargeTime
-                    if groupCurrentCharges >= groupMaxCharges then
+                    local recipeReadyTime = SafeNumber(record.recipeReadyTime)
+                    local sharedRecipeReadyTime = SafeNumber(record.sharedRecipeReadyTime)
+                    if recipeReadyTime and recipeReadyTime <= now then
+                        record.recipeReadyTime = nil
+                        record.recipeRemaining = nil
+                        recipeReadyTime = nil
+                    end
+                    if sharedRecipeReadyTime and sharedRecipeReadyTime <= now then
+                        record.sharedRecipeReadyTime = nil
+                        record.sharedRecipeRemaining = nil
+                        sharedRecipeReadyTime = nil
+                    end
+                    if groupRecipeReadyTime and groupRecipeReadyTime <= now then
+                        groupRecipeReadyTime = nil
+                    end
+                    local blockingReadyTime = SharedCooldownBucket.GetBlockingReadyTime(record, groupCurrentCharges, groupNextChargeTime, now, groupRecipeReadyTime)
+
+                    if blockingReadyTime and blockingReadyTime > now then
+                        record.ready = false
+                        record.unknown = false
+                        record.readyTime = blockingReadyTime
+                        record.fullRechargeReadyTime = groupFullRechargeTime or GetFullRechargeReadyTime(record)
+                        record.fullRechargeMode = groupFullRechargeTime and "longest_timer" or record.fullRechargeMode
+                        record.remaining = math.max(0, blockingReadyTime - now)
+                    elseif groupCurrentCharges >= groupMaxCharges then
                         record.ready = true
                         record.unknown = false
                         record.readyTime = now
@@ -1125,27 +1301,172 @@ function ApplySharedCooldownGroups(records)
 end
 
 
-local function PreserveInferredChargedState(record, previous, def)
-    if type(record) ~= "table" or type(previous) ~= "table" or type(def) ~= "table" then return record end
+local function BuildPreviousSharedCooldownState(previousRecords, sharedCooldownKey)
+    if type(previousRecords) ~= "table" or type(sharedCooldownKey) ~= "string" or sharedCooldownKey == "" then return nil end
+
+    local now = Now()
+    local state
+    for _, previous in pairs(previousRecords) do
+        if type(previous) == "table" and previous.sharedCooldownKey == sharedCooldownKey then
+            local copy = CopyCooldownRecord(previous)
+            NormalizeCooldownRecordTiming(copy)
+            state = SharedCooldownBucket.AccumulateFutureState(state, SharedCooldownBucket.GetFutureTiming(copy, now), now)
+        end
+    end
+    return state
+end
+
+local function PreserveInferredChargedState(record, previous, def, previousSharedState)
+    if type(record) ~= "table" or type(def) ~= "table" then return record end
     local maxCharges = SafeNumber(def.defaultMaxCharges, 0) or 0
     if maxCharges <= 0 then return record end
-    local previousCopy = CopyCooldownRecord(previous)
-    NormalizeCooldownRecordTiming(previousCopy)
-    local previousCharges = SafeNumber(previousCopy.currentCharges)
-    local nextChargeReadyTime = GetNextChargeReadyTime(previousCopy)
-    if previousCharges and previousCharges > 0 and nextChargeReadyTime and nextChargeReadyTime > Now() then
-        record.currentCharges = previousCharges
-        record.maxCharges = SafeNumber(previousCopy.maxCharges, maxCharges) or maxCharges
-        record.chargeStartTime = SafeNumber(previousCopy.chargeStartTime, 0)
-        record.chargeDuration = SafeNumber(previousCopy.chargeDuration, def.defaultRechargeSeconds or 0)
+
+    local previousCopy = type(previous) == "table" and CopyCooldownRecord(previous) or nil
+    if previousCopy then NormalizeCooldownRecordTiming(previousCopy) end
+
+    local now = Now()
+    local timing = previousSharedState or (previousCopy and SharedCooldownBucket.GetFutureTiming(previousCopy, now))
+
+    -- Blizzard's spell charge APIs can briefly report a shared profession cooldown as
+    -- ready after login/reload. Preserve confirmed saved future timing until it expires
+    -- or a later profession scan provides a real replacement state.
+    if timing then
+        local previousMaxCharges = SafeNumber(timing.maxCharges, maxCharges) or maxCharges
+        local previousCharges = SafeNumber(timing.currentCharges)
+        local nextChargeReadyTime = timing.nextChargeReadyTime
+        local fullRechargeReadyTime = timing.fullRechargeReadyTime
+        local previousRecipeReadyTime = previousCopy and SafeNumber(previousCopy.recipeReadyTime) or nil
+        local previousSharedRecipeReadyTime = SafeNumber(timing.sharedRecipeReadyTime)
+        record.currentCharges = math.max(0, math.min(previousMaxCharges, previousCharges or 0))
+        record.maxCharges = previousMaxCharges
+        record.chargeStartTime = (previousSharedState and SafeNumber(previousSharedState.chargeStartTime, 0)) or (previousCopy and SafeNumber(previousCopy.chargeStartTime, 0)) or 0
+        record.chargeDuration = (previousSharedState and SafeNumber(previousSharedState.chargeDuration, def.defaultRechargeSeconds or 0)) or (previousCopy and SafeNumber(previousCopy.chargeDuration, def.defaultRechargeSeconds or 0)) or def.defaultRechargeSeconds or 0
         record.nextChargeReadyTime = nextChargeReadyTime
-        record.fullRechargeReadyTime = GetFullRechargeReadyTime(previousCopy)
-        record.remaining = math.max(0, nextChargeReadyTime - Now())
-        record.readyTime = Now()
-        record.ready = true
+        record.fullRechargeReadyTime = fullRechargeReadyTime
+        record.fullRechargeMode = timing.fullRechargeMode or (previousCopy and previousCopy.fullRechargeMode)
+        if previousSharedRecipeReadyTime and previousSharedRecipeReadyTime > now then
+            record.sharedRecipeReadyTime = previousSharedRecipeReadyTime
+            record.sharedRecipeRemaining = math.max(0, previousSharedRecipeReadyTime - now)
+        end
+        if previousRecipeReadyTime and previousRecipeReadyTime > now then
+            record.recipeReadyTime = previousRecipeReadyTime
+            record.recipeRemaining = math.max(0, previousRecipeReadyTime - now)
+        end
+        local blockingReadyTime = SharedCooldownBucket.GetBlockingReadyTime(record, record.currentCharges, nextChargeReadyTime, now)
+        record.remaining = blockingReadyTime and math.max(0, blockingReadyTime - now) or (nextChargeReadyTime and math.max(0, nextChargeReadyTime - now) or (previousCopy and SafeNumber(previousCopy.remaining, 0)) or 0)
+        if blockingReadyTime then
+            record.readyTime = blockingReadyTime
+            record.ready = false
+        elseif record.currentCharges > 0 then
+            record.readyTime = now
+            record.ready = true
+        else
+            record.readyTime = nextChargeReadyTime or fullRechargeReadyTime
+            record.ready = false
+        end
         record.unknown = false
     end
     return record
+end
+
+local function ReapplyPreviousFutureCooldownState(records, previousRecords)
+    if type(records) ~= "table" or type(previousRecords) ~= "table" then return false end
+    local now = Now()
+    local changed = false
+
+    local function ApplyFutureState(record, previous, sharedState)
+        if type(record) ~= "table" then return end
+        local previousCopy = type(previous) == "table" and CopyCooldownRecord(previous) or nil
+        if previousCopy then NormalizeCooldownRecordTiming(previousCopy) end
+
+        local timing = sharedState or (previousCopy and SharedCooldownBucket.GetFutureTiming(previousCopy, now))
+        if not timing then return end
+
+        local recipeReadyTime = previousCopy and SafeNumber(previousCopy.recipeReadyTime) or nil
+        local sharedRecipeReadyTime = SafeNumber(timing.sharedRecipeReadyTime)
+        local nextChargeReadyTime = timing.nextChargeReadyTime
+        local fullRechargeReadyTime = timing.fullRechargeReadyTime
+        local previousMaxCharges = SafeNumber(timing.maxCharges) or SafeNumber(record.maxCharges, 0) or 0
+        local previousCharges = SafeNumber(timing.currentCharges) or SafeNumber(record.currentCharges, previousMaxCharges) or previousMaxCharges
+        local previousChargeDuration = SafeNumber(timing.chargeDuration) or SafeNumber(record.chargeDuration, 0) or 0
+
+        if previousMaxCharges and previousMaxCharges > 0 then
+            record.maxCharges = previousMaxCharges
+            record.currentCharges = math.max(0, math.min(previousMaxCharges, previousCharges or 0))
+        end
+        if previousChargeDuration and previousChargeDuration > 0 then
+            record.chargeDuration = previousChargeDuration
+        end
+        if recipeReadyTime and recipeReadyTime > now then
+            record.recipeReadyTime = recipeReadyTime
+            record.recipeRemaining = math.max(0, recipeReadyTime - now)
+        end
+        if sharedRecipeReadyTime and sharedRecipeReadyTime > now then
+            record.sharedRecipeReadyTime = sharedRecipeReadyTime
+            record.sharedRecipeRemaining = math.max(0, sharedRecipeReadyTime - now)
+        end
+        if nextChargeReadyTime and nextChargeReadyTime > now then
+            record.nextChargeReadyTime = nextChargeReadyTime
+        end
+        if fullRechargeReadyTime and fullRechargeReadyTime > now then
+            record.fullRechargeReadyTime = fullRechargeReadyTime
+            record.fullRechargeMode = "longest_timer"
+        end
+
+        local blockingReadyTime = SharedCooldownBucket.GetBlockingReadyTime(record, record.currentCharges, record.nextChargeReadyTime, now)
+        if blockingReadyTime and blockingReadyTime > now then
+            record.ready = false
+            record.unknown = false
+            record.readyTime = blockingReadyTime
+            record.remaining = math.max(0, blockingReadyTime - now)
+        end
+        changed = true
+    end
+
+    local sharedStates = {}
+    for _, def in ipairs(EL.PROFESSION_COOLDOWN_DEFS or {}) do
+        if def and def.sharedCooldownKey and not sharedStates[def.sharedCooldownKey] then
+            sharedStates[def.sharedCooldownKey] = BuildPreviousSharedCooldownState(previousRecords, def.sharedCooldownKey)
+        end
+    end
+
+    for _, def in ipairs(EL.PROFESSION_COOLDOWN_DEFS or {}) do
+        if def and def.key and type(records[def.key]) == "table" then
+            ApplyFutureState(records[def.key], previousRecords[def.key], def.sharedCooldownKey and sharedStates[def.sharedCooldownKey])
+        end
+    end
+    return changed
+end
+
+-- Detect saved future cooldown timing before trusting fresh API-ready states.
+local function HasFutureCooldownState(records)
+    if type(records) ~= "table" then return false end
+    local now = Now()
+    for key, record in pairs(records) do
+        if key ~= "_lastUpdated" and type(record) == "table" and not record.unlearned then
+            local copy = CopyCooldownRecord(record)
+            NormalizeCooldownRecordTiming(copy)
+            local readyTime = DeriveReadyTime(copy)
+            local nextChargeReadyTime = GetNextChargeReadyTime(copy)
+            local fullRechargeReadyTime = GetFullRechargeReadyTime(copy)
+            local recipeReadyTime = SafeNumber(copy.recipeReadyTime)
+            local sharedRecipeReadyTime = SafeNumber(copy.sharedRecipeReadyTime)
+            if (readyTime and readyTime > now)
+                or (nextChargeReadyTime and nextChargeReadyTime > now)
+                or (fullRechargeReadyTime and fullRechargeReadyTime > now)
+                or (recipeReadyTime and recipeReadyTime > now)
+                or (sharedRecipeReadyTime and sharedRecipeReadyTime > now) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function module:ApplyLoginCooldownGuard(previousRecords)
+    if not IsLoginCooldownGuardActive() or not HasFutureCooldownState(previousRecords) then return false end
+    QueueCooldownRefresh(LOGIN_READY_OVERWRITE_GUARD_SECONDS + 0.05, "_cooldownLoginSettledRefreshPending")
+    return true
 end
 
 function EL:RefreshCurrentProfessionCooldowns()
@@ -1166,12 +1487,30 @@ function EL:RefreshCurrentProfessionCooldowns()
     end
 
     local previousRecords = type(cooldownStore[charKey]) == "table" and cooldownStore[charKey] or nil
+    if module:ApplyLoginCooldownGuard(previousRecords) then
+        if self.ProfileStop then self:ProfileStop("RefreshCurrentProfessionCooldowns", profile) end
+        return false
+    end
+    if #professions == 0 and type(previousRecords) == "table" then
+        -- Full logout/login can fire cooldown refreshes before profession identity has
+        -- repopulated. Do not replace confirmed saved cooldowns with an empty table.
+        if self.ProfileStop then self:ProfileStop("RefreshCurrentProfessionCooldowns", profile) end
+        return false
+    end
+    local previousSharedStates = {}
+    if type(previousRecords) == "table" then
+        for _, def in ipairs(self.PROFESSION_COOLDOWN_DEFS or {}) do
+            if def and def.sharedCooldownKey and not previousSharedStates[def.sharedCooldownKey] then
+                previousSharedStates[def.sharedCooldownKey] = BuildPreviousSharedCooldownState(previousRecords, def.sharedCooldownKey)
+            end
+        end
+    end
     local records = {}
     for _, def in ipairs(self.PROFESSION_COOLDOWN_DEFS or {}) do
         if CharacterHasProfession(professions, def.professionID) then
             local record, knownState = BuildCooldownRecord(def)
             if record then
-                record = PreserveInferredChargedState(record, previousRecords and previousRecords[def.key], def)
+                record = PreserveInferredChargedState(record, previousRecords and previousRecords[def.key], def, def.sharedCooldownKey and previousSharedStates[def.sharedCooldownKey])
                 records[record.key] = record
             elseif knownState == false then
                 records[def.key] = {
@@ -1224,6 +1563,9 @@ function EL:RefreshCurrentProfessionCooldowns()
         end
     end
 
+    if HasFutureCooldownState(previousRecords) then
+        ReapplyPreviousFutureCooldownState(records, previousRecords)
+    end
     ApplySharedCooldownGroups(records)
 
     records._lastUpdated = Now()
@@ -1299,21 +1641,26 @@ function EL:GetProfessionCooldownEntriesForCharacter(charKey, professions)
     return results
 end
 
+local FormatCooldownDuration
+local ComputeCanonicalCooldownState
+local FormatCooldownTooltipState
+
 function EL:GetProfessionCooldownSummary(charKey, professions)
     local entries = self:GetProfessionCooldownEntriesForCharacter(charKey, professions)
     local tracked, ready, recovering, unknown, unlearned = 0, 0, 0, 0, 0
     local nextRemaining
     for _, entry in ipairs(entries) do
         tracked = tracked + 1
-        if entry.unknown then
+        local state = ComputeCanonicalCooldownState(entry)
+        if state.unknown then
             unknown = unknown + 1
-        elseif entry.unlearned then
+        elseif state.unlearned then
             unlearned = unlearned + 1
-        elseif entry.ready then
+        elseif state.ready then
             ready = ready + 1
         else
             recovering = recovering + 1
-            local remaining = SafeNumber(entry.remaining, 0)
+            local remaining = state.nextRemaining or state.remaining or 0
             if remaining > 0 and (not nextRemaining or remaining < nextRemaining) then
                 nextRemaining = remaining
             end
@@ -1341,13 +1688,118 @@ local function FormatCooldownColumnTimer(seconds)
     return "<1m"
 end
 
+FormatCooldownDuration = function(seconds)
+    local secs = SafeNumber(seconds, 0) or 0
+    if EL and EL.FormatCountdown then return EL:FormatCountdown(secs) end
+    return tostring(math.ceil(secs))
+end
+
+-- Canonical display state used by summaries, sorting, and tooltip formatting.
+ComputeCanonicalCooldownState = function(entry)
+    local state = {
+        ready = false,
+        unknown = true,
+        unlearned = false,
+        remaining = 0,
+        nextRemaining = nil,
+        fullRemaining = nil,
+        currentCharges = 0,
+        maxCharges = 0,
+    }
+    if type(entry) ~= "table" then return state end
+
+    state.unlearned = entry.unlearned and true or false
+    if state.unlearned then
+        state.unknown = false
+        return state
+    end
+
+    local now = Now()
+    state.maxCharges = SafeNumber(entry.maxCharges, 0) or 0
+    state.currentCharges = math.max(0, math.min(state.maxCharges, SafeNumber(entry.currentCharges, 0) or 0))
+    state.readyTime = SafeNumber(entry.readyTime)
+    state.remaining = SafeNumber(entry.remaining, 0) or 0
+
+    if state.remaining <= 0 and state.readyTime and state.readyTime > now then
+        state.remaining = math.max(0, state.readyTime - now)
+    end
+
+    if entry.unknown then
+        local recoveredReadyTime = DeriveReadyTime(entry)
+        if recoveredReadyTime and recoveredReadyTime > now then
+            state.unknown = false
+            state.ready = false
+            state.readyTime = recoveredReadyTime
+            state.remaining = math.max(0, recoveredReadyTime - now)
+            state.nextRemaining = state.remaining
+        elseif state.remaining > 0 then
+            state.unknown = false
+            state.ready = false
+            state.nextRemaining = state.remaining
+        end
+        return state
+    end
+
+    state.unknown = false
+    state.ready = entry.ready == true
+
+    if state.maxCharges > 0 then
+        local nextChargeReadyTime = GetNextChargeReadyTime(entry)
+        if nextChargeReadyTime and nextChargeReadyTime > now then
+            state.nextRemaining = math.max(0, nextChargeReadyTime - now)
+            if state.remaining <= 0 then state.remaining = state.nextRemaining end
+        elseif state.remaining > 0 then
+            state.nextRemaining = state.remaining
+        end
+
+        local fullRechargeReadyTime = GetFullRechargeReadyTime(entry)
+        if fullRechargeReadyTime and fullRechargeReadyTime > now then
+            local fullRemaining = math.max(0, fullRechargeReadyTime - now)
+            if not state.nextRemaining or fullRemaining > state.nextRemaining + 1 then
+                state.fullRemaining = fullRemaining
+            end
+        end
+    elseif state.remaining > 0 then
+        state.nextRemaining = state.remaining
+    end
+
+    return state
+end
+
+FormatCooldownTooltipState = function(entry, state)
+    state = state or ComputeCanonicalCooldownState(entry)
+    if state.unknown then return EL:T("Unknown") end
+    if state.unlearned then return EL:T("Unlearned") end
+
+    if state.maxCharges and state.maxCharges > 0 then
+        local chargesText = tostring(state.currentCharges or 0) .. "/" .. tostring(state.maxCharges) .. " " .. EL:T("charges")
+        if state.ready and (state.currentCharges or 0) > 0 then
+            local text = chargesText .. " " .. EL:T("ready")
+            if state.nextRemaining and state.nextRemaining > 0 then text = text .. " | " .. EL:T("next") .. " " .. FormatCooldownDuration(state.nextRemaining) end
+            if state.fullRemaining and state.fullRemaining > 0 then text = text .. " | " .. EL:T("full") .. " " .. FormatCooldownDuration(state.fullRemaining) end
+            return text
+        end
+        if state.nextRemaining and state.nextRemaining > 0 then
+            local text = chargesText .. " | " .. EL:T("next") .. " " .. FormatCooldownDuration(state.nextRemaining)
+            if state.fullRemaining and state.fullRemaining > 0 then text = text .. " | " .. EL:T("full") .. " " .. FormatCooldownDuration(state.fullRemaining) end
+            return text
+        end
+        if state.ready then return EL:T("READY") end
+        return EL:T("Unknown")
+    end
+
+    if state.ready then return EL:T("READY") end
+    if state.nextRemaining and state.nextRemaining > 0 then return FormatCooldownDuration(state.nextRemaining) end
+    return EL:T("Unknown")
+end
+
 function EL:GetProfessionCooldownDisplayText(charKey, professions)
     local summary = self:GetProfessionCooldownSummary(charKey, professions)
     if summary.tracked <= 0 then return "-", summary end
-    if summary.ready > 0 then return tostring(summary.ready), summary end
     if summary.nextRemaining and summary.nextRemaining > 0 then
         return FormatCooldownColumnTimer(summary.nextRemaining), summary
     end
+    if summary.ready > 0 then return tostring(summary.ready), summary end
     if summary.unknown > 0 then return "?", summary end
     return "-", summary
 end
@@ -1355,8 +1807,8 @@ end
 function EL:GetProfessionCooldownSortValue(charKey, professions)
     local summary = self:GetProfessionCooldownSummary(charKey, professions)
     if summary.tracked <= 0 then return nil end
-    if summary.ready > 0 then return 0 - summary.ready end
     if summary.nextRemaining and summary.nextRemaining > 0 then return summary.nextRemaining end
+    if summary.ready > 0 then return 0 - summary.ready end
     if summary.unknown > 0 then return 999999998 end
     return 999999999
 end
@@ -1406,65 +1858,15 @@ function EL:AddProfessionCooldownTooltipLines(tooltip, charKey, professions)
             currentCategory = category
         end
         local label = "   " .. tostring(entry.label or entry.shortLabel or "Cooldown")
-        if entry.unknown then
-            local readyTime = DeriveReadyTime(entry)
-            local remaining = 0
-            if readyTime and readyTime > Now() then
-                remaining = math.max(0, readyTime - Now())
-            else
-                remaining = SafeNumber(entry.remaining, 0)
-            end
-            if remaining and remaining > 0 then
-                local right = (self.FormatCountdown and self:FormatCountdown(remaining) or tostring(math.ceil(remaining)))
-                tooltip:AddDoubleLine(label, right, 0.72, 0.72, 0.72, 1.00, 0.82, 0.32)
-            else
-                tooltip:AddDoubleLine(label, "Unknown", 0.72, 0.72, 0.72, 0.58, 0.68, 0.78)
-                tooltip:AddLine("      Open profession to refresh.", 0.58, 0.68, 0.78)
-            end
-        elseif entry.unlearned then
-            tooltip:AddDoubleLine(label, "Unlearned", 0.72, 0.72, 0.72, 0.78, 0.62, 0.42)
-        elseif entry.maxCharges and entry.maxCharges > 0 then
-            local charges = tostring(entry.currentCharges or 0) .. "/" .. tostring(entry.maxCharges)
-            local remaining = SafeNumber(entry.remaining, 0)
-            local readyTime = SafeNumber(entry.readyTime)
-            if remaining <= 0 and readyTime and readyTime > Now() then
-                remaining = math.max(0, readyTime - Now())
-            end
-            local right = charges
-            local nextChargeReadyTime = GetNextChargeReadyTime(entry)
-            if remaining <= 0 and nextChargeReadyTime and nextChargeReadyTime > Now() then
-                remaining = math.max(0, nextChargeReadyTime - Now())
-            end
-            local countdown = remaining > 0 and (self.FormatCountdown and self:FormatCountdown(remaining) or tostring(math.ceil(remaining))) or nil
-            local fullRechargeReadyTime = GetFullRechargeReadyTime(entry)
-            local fullCountdown
-            if fullRechargeReadyTime and fullRechargeReadyTime > Now() then
-                local fullRemaining = math.max(0, fullRechargeReadyTime - Now())
-                if not remaining or fullRemaining > remaining + 1 then
-                    fullCountdown = self.FormatCountdown and self:FormatCountdown(fullRemaining) or tostring(math.ceil(fullRemaining))
-                end
-            end
-            if entry.ready == false and countdown then
-                right = "next " .. countdown
-                if fullCountdown then right = right .. ", full " .. fullCountdown end
-            elseif (SafeNumber(entry.currentCharges, 0)) > 0 and entry.ready == true then
-                right = charges .. " ready"
-                if countdown then right = right .. ", next " .. countdown end
-                if fullCountdown then right = right .. ", full " .. fullCountdown end
-            elseif (SafeNumber(entry.currentCharges, 0)) <= 0 and countdown then
-                right = "next " .. countdown
-                if fullCountdown then right = right .. ", full " .. fullCountdown end
-            elseif entry.ready == true then
-                right = "READY"
-            elseif readyTime and readyTime > Now() then
-                right = (self.FormatCountdown and self:FormatCountdown(math.max(0, readyTime - Now())) or tostring(math.ceil(math.max(0, readyTime - Now()))))
-            else
-                right = "Unknown"
-            end
-            tooltip:AddDoubleLine(label, right, 0.72, 0.72, 0.72, entry.ready and 0.35 or 1.00, entry.ready and 1.00 or 0.82, entry.ready and 0.45 or 0.32)
+        local state = ComputeCanonicalCooldownState(entry)
+        local right = FormatCooldownTooltipState(entry, state)
+        if state.unknown then
+            tooltip:AddDoubleLine(label, right, 0.72, 0.72, 0.72, 0.58, 0.68, 0.78)
+            tooltip:AddLine("      " .. EL:T("Open profession to refresh."), 0.58, 0.68, 0.78)
+        elseif state.unlearned then
+            tooltip:AddDoubleLine(label, right, 0.72, 0.72, 0.72, 0.78, 0.62, 0.42)
         else
-            local right = entry.ready and "READY" or ((SafeNumber(entry.remaining, 0)) > 0 and (self.FormatCountdown and self:FormatCountdown(entry.remaining) or tostring(entry.remaining)) or "Unknown")
-            tooltip:AddDoubleLine(label, right, 0.72, 0.72, 0.72, entry.ready and 0.35 or 1.00, entry.ready and 1.00 or 0.82, entry.ready and 0.45 or 0.32)
+            tooltip:AddDoubleLine(label, right, 0.72, 0.72, 0.72, state.ready and 0.35 or 1.00, state.ready and 1.00 or 0.82, state.ready and 0.45 or 0.32)
         end
     end
 
@@ -1478,10 +1880,12 @@ function EL:AddProfessionCooldownTooltipLines(tooltip, charKey, professions)
 end
 
 function module:OnLoad()
+    ArmLoginCooldownGuard()
     if EL.ValidateProfessionCooldownDefinitions then EL:ValidateProfessionCooldownDefinitions() end
     if EL.EnsureProfessionCooldownStore then EL:EnsureProfessionCooldownStore() end
     if EL.PruneProfessionCooldownStore then EL:PruneProfessionCooldownStore() end
     if EL.RefreshCurrentProfessionCooldowns then EL:RefreshCurrentProfessionCooldowns() end
+    QueueCooldownRefresh(LOGIN_READY_OVERWRITE_GUARD_SECONDS + 0.05, "_cooldownLoginInitialRefreshPending")
 end
 
 function module:Refresh()
@@ -1489,9 +1893,10 @@ function module:Refresh()
 end
 
 function module:OnEvent(event, ...)
-    -- PLAYER_ENTERING_WORLD is already covered by Core.lua via ForEachModule("Refresh").
-    -- Handle only profession/cooldown-specific changes here to avoid duplicate login scans.
-    if event == "TRADE_SKILL_ITEM_CRAFTED_RESULT" then
+    if event == "PLAYER_ENTERING_WORLD" then
+        ArmLoginCooldownGuard()
+        QueueCooldownRefresh(LOGIN_READY_OVERWRITE_GUARD_SECONDS + 0.05, "_cooldownLoginSettledRefreshPending")
+    elseif event == "TRADE_SKILL_ITEM_CRAFTED_RESULT" then
         local craftedItemID = ExtractCraftedItemIDFromEvent(...)
         local craftedDef = craftedItemID and COOLDOWN_DEFS_BY_ITEM[craftedItemID]
         if craftedDef then

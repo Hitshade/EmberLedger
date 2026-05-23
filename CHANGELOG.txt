@@ -1,3 +1,88 @@
+## v1.30.2
+
+### Tooltip and Cooldown Cleanup
+
+- Extracted main dashboard row tooltip handling from UI.lua into Modules/Tooltips.lua.
+- Added a lightweight tooltip module registration and Core module lookup helper for cleaner module access.
+- Kept profession cooldown tooltip content routed through the existing ProfessionCooldowns module to avoid behavior changes.
+- Renamed and documented shared cooldown bucket helper logic in ProfessionCooldowns.lua for clarity.
+- Moved login cooldown guard handling into an explicit module helper.
+- Cleaned stale comments and standardized additional tooltip numeric handling through shared SafeNumber calls.
+
+---
+
+## v1.30.1
+
+### Profession Cooldown Cleanup
+
+- Refactored shared profession cooldown bucket timing into a small internal helper to reduce duplicated lock, charge, and future-timer handling.
+- Kept shared charged cooldown behavior unchanged while making login-preserved cooldown state easier to follow.
+- Removed the remaining concentration module numeric wrapper in favor of direct shared SafeNumber calls.
+- Cleaned minor cooldown definition indentation and maintenance comments without changing user-facing behavior.
+
+---
+
+## v1.30.0
+
+### Maintenance and Cooldown Hardening
+
+- Added a short login-time cooldown guard so confirmed saved future cooldown timers are not overwritten by transient ready states during the first scan after login.
+- Consolidated module numeric sanitizing through the shared Core.lua SafeNumber helper and removed local fallback conversion implementations.
+- Centralized profession cooldown display-state formatting so CD summaries and tooltip rows consume the same canonical ready, charge, next-recharge, and full-recharge values.
+- Improved shared charged cooldown tooltip wording to clearly show available charges, next recharge, and full recharge timing.
+- Reduced redundant cooldown preservation work by only reapplying saved future state when existing records actually contain future timers.
+- Standardized the Imbued Mulch delayed refresh path with a pending guard and fallback refresh behavior.
+- Performed minor cooldown comment cleanup while preserving saved cooldown data, tracked-cooldown visibility, expansion-scope filtering, and shared bucket behavior.
+
+---
+
+## v1.29.21
+
+### Bug Fixes
+
+- Fixed shared charged cooldowns reverting to ready after full logout/login when saved cooldown data exists but profession identity has not finished repopulating.
+- Preserved confirmed future shared cooldown timers during login-time refreshes instead of replacing them with transient ready states.
+- Re-applied saved future recipe locks before shared cooldown grouping so the CD column and tooltip stay aligned until the profession window supplies a fresh scan.
+
+---
+
+## v1.29.20
+
+### Shared Cooldown Persistence Fix
+
+- Fixed shared profession cooldown groups reverting to a ready state after a full logout/login while a member recipe cooldown was still active.
+- Added persisted shared recipe lock timing for grouped cooldowns so login-time scans cannot overwrite active member cooldowns with transient ready states.
+- Preserved existing shared charge handling, tracked-cooldown visibility, expansion scope, and saved cooldown data.
+
+---
+
+## v1.29.19
+
+### Profession Cooldown Persistence Fix
+
+- Fixed shared charged cooldown recipes appearing fully ready after a full logout/login while an individual recipe cooldown was still active.
+- Added per-recipe cooldown lock preservation for shared cooldown groups, so a ready shared charge no longer overwrites a specific recipe cooldown timer.
+- The CD column now prefers the next active cooldown timer when some tracked cooldowns are ready and others are still recovering.
+- Preserved shared charge grouping, expansion scope, tracked-cooldown visibility, and saved cooldown data.
+
+---
+
+## v1.29.18
+### Shared Cooldown Login Preservation Fix
+- Fixed shared charged profession cooldowns still reverting to Ready on login/reload when another cooldown member held the confirmed future recharge timer.
+- Preserves the entire shared cooldown bucket state across login/reload instead of checking only the individual cooldown row.
+- No saved cooldown data, expansion-scope settings, or tracked-cooldown visibility settings are deleted.
+
+---
+
+## v1.29.17
+### Profession Cooldown Login-State Hardening
+- Fixed shared charged profession cooldowns briefly resetting to a ready state after login or reload when a confirmed future recharge timer already exists.
+- Preserved confirmed shared cooldown timing until it expires naturally or a later profession scan supplies a replacement state.
+- No saved cooldown data, tracked-cooldown visibility settings, or expansion-scope settings are deleted.
+
+---
+
 ## v1.29.16
 
 ### Charged Cooldown Full Recharge Correction

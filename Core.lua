@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.29.16"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.30.2"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -194,7 +194,7 @@ EL.UI_CONSTANTS = {
     OPTIONS_COOLDOWN_COLUMN_CHECK_Y = -62,
 }
 
-EL.DB_VERSION = 11608
+EL.DB_VERSION = 11609
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -1160,6 +1160,10 @@ function EL:RegisterModule(name, module)
     module.EL = self
 end
 
+function EL:GetModule(name)
+    return self.modules and self.modules[name]
+end
+
 function EL:ForEachModule(fn)
     for _, module in pairs(self.modules) do
         if module and module[fn] then
@@ -1204,6 +1208,15 @@ EL.REQUIRED_MODULES = {
     mulch = { registered = true },
     session = { registered = true },
     Minimap = { registered = true },
+    tooltips = {
+        registered = true,
+        functions = {
+            "ShowRowTooltip",
+            "AddProfessionCooldownTooltipLines",
+            "FormatTooltipDate",
+            "FormatTooltipAgo",
+        },
+    },
     ProfessionCooldowns = {
         registered = true,
         functions = {

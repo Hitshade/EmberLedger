@@ -3,10 +3,7 @@ local M = {}
 EL:RegisterModule("mulch", M)
 
 local function N(value, fallback, context)
-    if EL and type(EL.SafeNumber) == "function" then
-        return EL:SafeNumber(value, fallback, context)
-    end
-    return fallback
+    return EL:SafeNumber(value, fallback, context)
 end
 
 local function GetItemCountSafe(itemID)
@@ -97,12 +94,24 @@ function M:OnLoad()
     self:Refresh()
 end
 
-function M:OnEvent(event, ...)
-    if event == "BAG_UPDATE_DELAYED" or event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_ITEM_CRAFTED_RESULT" then
+local function QueueMulchRefresh()
+    if C_Timer and C_Timer.After then
+        if EL._mulchRefreshPending then return end
+        EL._mulchRefreshPending = true
         C_Timer.After(0.5, function()
+            if EL then EL._mulchRefreshPending = nil end
             if not EL or not EL.db then return end
-            self:Refresh()
+            M:Refresh()
             EL:RequestUpdate()
         end)
+    else
+        M:Refresh()
+        EL:RequestUpdate()
+    end
+end
+
+function M:OnEvent(event, ...)
+    if event == "BAG_UPDATE_DELAYED" or event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_ITEM_CRAFTED_RESULT" then
+        QueueMulchRefresh()
     end
 end

@@ -15,18 +15,8 @@ local THEME = EL.THEME_COLORS or {}
 local BORDER_R, BORDER_G, BORDER_B = THEME.BORDER_R or 0.82, THEME.BORDER_G or 0.66, THEME.BORDER_B or 0.34
 local EL_BG_R, EL_BG_G, EL_BG_B = THEME.BG_R or 0.030, THEME.BG_G or 0.024, THEME.BG_B or 0.075
 
-local function SafeNumber(value, fallback)
-    if EL and type(EL.SafeNumber) == "function" then
-        return EL:SafeNumber(value, fallback ~= nil and fallback or 0, "ActionBar")
-    end
-    local okNumber, direct = pcall(tonumber, value)
-    if okNumber and direct ~= nil then return direct end
-    local okText, text = pcall(tostring, value)
-    if okText and type(text) == "string" then
-        local okParsed, parsed = pcall(tonumber, text)
-        if okParsed and parsed ~= nil then return parsed end
-    end
-    return fallback ~= nil and fallback or 0
+local function SafeNumber(value, fallback, context)
+    return EL:SafeNumber(value, fallback ~= nil and fallback or 0, context or "ActionBar")
 end
 
 local function SetTextIfChanged(fontString, text)
