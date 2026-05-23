@@ -1,3 +1,11 @@
+## v1.31.6
+
+### Tracked Cooldown Dropdown Polish
+
+- Fixed the tracked cooldown dropdown label so partial selections display Custom instead of the last toggled cooldown name.
+- Updated the tracked cooldown dropdown summary states to show All cooldowns tracked, Custom, None, or No cooldowns in scope.
+- Preserved independent checkbox toggling behavior inside the dropdown.
+
 ## v1.31.5
 
 ### Shared Cooldown Tooltip Clarity
