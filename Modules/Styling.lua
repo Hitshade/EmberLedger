@@ -11,7 +11,7 @@ local function ThemeValue(key, fallback)
 end
 
 local function BorderRGB()
-    return ThemeValue("BORDER_R", 0.82), ThemeValue("BORDER_G", 0.66), ThemeValue("BORDER_B", 0.34)
+    return ThemeValue("BORDER_R", 0.42), ThemeValue("BORDER_G", 0.42), ThemeValue("BORDER_B", 0.44)
 end
 
 local function BackgroundRGB()
@@ -19,11 +19,222 @@ local function BackgroundRGB()
 end
 
 local function AccentRGB()
-    return ThemeValue("ACCENT_R", 1.00), ThemeValue("ACCENT_G", 0.72), ThemeValue("ACCENT_B", 0.18)
+    return ThemeValue("ACCENT_R", 0.68), ThemeValue("ACCENT_G", 0.68), ThemeValue("ACCENT_B", 0.70)
 end
 
 local function GlowRGB()
     return ThemeValue("GLOW_R", 1.00), ThemeValue("GLOW_G", 0.46), ThemeValue("GLOW_B", 0.10)
+end
+
+Style.TrackingRowPalette = Style.TrackingRowPalette or {
+    currentR = 0.42, currentG = 0.68, currentB = 1.00,
+    currentBgAlpha = 0.145,
+    currentBgAlphaCompact = 0.125,
+    currentLineAlpha = 0.44,
+    currentEdgeAlpha = 0.70,
+    hoverR = 0.50, hoverG = 0.66, hoverB = 0.88,
+    hoverAlpha = 0.075,
+    currentHoverAlpha = 0.115,
+}
+
+function Style:GetTrackingRowPalette()
+    return self.TrackingRowPalette
+end
+
+Style.MoxieTextColor = Style.MoxieTextColor or { r = 0.66, g = 0.78, b = 0.88 }
+
+function Style:GetMoxieTextColor()
+    local color = self.MoxieTextColor or {}
+    return tonumber(color.r) or 0.66, tonumber(color.g) or 0.78, tonumber(color.b) or 0.88
+end
+
+
+function Style:ThemeColor(key, fallback)
+    return ThemeValue(key, fallback)
+end
+
+function Style:ThemeAccentRGB()
+    return AccentRGB()
+end
+
+function Style:ThemeBorderRGB()
+    return BorderRGB()
+end
+
+function Style:ThemeTextRGB()
+    return ThemeValue("TEXT_R", 0.88), ThemeValue("TEXT_G", 0.89), ThemeValue("TEXT_B", 0.91)
+end
+
+function Style:ThemeMutedTextRGB()
+    return ThemeValue("MUTED_TEXT_R", 0.76), ThemeValue("MUTED_TEXT_G", 0.77), ThemeValue("MUTED_TEXT_B", 0.80)
+end
+
+function Style:ThemeValueTextRGB()
+    return ThemeValue("VALUE_TEXT_R", 0.90), ThemeValue("VALUE_TEXT_G", 0.91), ThemeValue("VALUE_TEXT_B", 0.93)
+end
+
+function Style:RegisterThemeText(fontString, bucket, panel)
+    if not fontString then return end
+    panel = panel or (EL and EL.settingsPanel)
+    if not panel then return end
+    bucket = bucket or "themeTextWidgets"
+    panel[bucket] = panel[bucket] or {}
+    panel[bucket][#panel[bucket] + 1] = fontString
+end
+
+function Style:ApplyThemeTextCollections(frame)
+    if not frame then return end
+    local r, g, b = self:ThemeTextRGB()
+    if frame.themeTextWidgets then
+        for _, fs in ipairs(frame.themeTextWidgets) do
+            if fs and fs.SetTextColor then fs:SetTextColor(r, g, b) end
+        end
+    end
+    r, g, b = self:ThemeMutedTextRGB()
+    if frame.themeMutedTextWidgets then
+        for _, fs in ipairs(frame.themeMutedTextWidgets) do
+            if fs and fs.SetTextColor then fs:SetTextColor(r, g, b) end
+        end
+    end
+    r, g, b = self:ThemeValueTextRGB()
+    if frame.themeValueTextWidgets then
+        for _, fs in ipairs(frame.themeValueTextWidgets) do
+            if fs and fs.SetTextColor then fs:SetTextColor(r, g, b) end
+        end
+    end
+end
+
+function Style:BringWindowToFront(frame)
+    if not frame or not EL then return end
+
+    if frame == EL.settingsPanel then
+        EL._emberOptionsFrontLevel = (tonumber(EL._emberOptionsFrontLevel) or 500) + 10
+        if EL._emberOptionsFrontLevel > 900 then
+            EL._emberOptionsFrontLevel = 510
+        end
+        if frame.SetFrameStrata then frame:SetFrameStrata("DIALOG") end
+        if frame.SetFrameLevel then frame:SetFrameLevel(EL._emberOptionsFrontLevel) end
+        return
+    end
+
+    EL._emberWindowFrontLevel = (tonumber(EL._emberWindowFrontLevel) or 20) + 5
+    if EL._emberWindowFrontLevel > 80 then
+        EL._emberWindowFrontLevel = 25
+    end
+    if frame.SetFrameStrata then frame:SetFrameStrata("MEDIUM") end
+    if frame.SetFrameLevel then frame:SetFrameLevel(EL._emberWindowFrontLevel) end
+end
+
+function EL:BringWindowToFront(frame)
+    if self.Style and self.Style.BringWindowToFront then
+        return self.Style:BringWindowToFront(frame)
+    end
+end
+
+function Style:HideSessionHistoryDisplayDropdown()
+    if EL and EL.sessionHistoryDisplayDropdown then
+        EL.sessionHistoryDisplayDropdown:Hide()
+    end
+end
+
+function Style:ShowSessionHistoryDisplayDropdown(anchor)
+    if not anchor or not EL or not CreateFrame then return end
+
+    local options = {
+        { mode = "today", text = "Today" },
+        { mode = "week", text = "This Week" },
+        { mode = "30", text = "30 days (" .. ((EL.GetSessionHistoryMaxEntries and EL:GetSessionHistoryMaxEntries()) or 500) .. " max)" },
+    }
+
+    local menu = EL.sessionHistoryDisplayDropdown
+    if not menu then
+        menu = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+        menu:SetSize(148, 86)
+        menu:SetFrameStrata("MEDIUM")
+        menu:SetClampedToScreen(true)
+        if menu.EnableKeyboard then
+            menu:EnableKeyboard(true)
+            menu:SetScript("OnKeyDown", function(_, key)
+                if key == "ESCAPE" then
+                    Style:HideSessionHistoryDisplayDropdown()
+                end
+            end)
+            menu:SetScript("OnShow", function(self)
+                if self.SetPropagateKeyboardInput then self:SetPropagateKeyboardInput(false) end
+                if self.SetFocus then self:SetFocus() end
+            end)
+            menu:SetScript("OnHide", function(self)
+                if self.ClearFocus then self:ClearFocus() end
+            end)
+        end
+        self:AddBackdrop(menu, 0.95, 0.78)
+        if menu.SetBackdropColor then menu:SetBackdropColor(0.012, 0.010, 0.024, 0.98) end
+        self:AddInnerBorder(menu)
+        menu.buttons = {}
+        for i, option in ipairs(options) do
+            local btn = CreateFrame("Button", nil, menu)
+            btn:SetSize(132, 23)
+            btn:SetPoint("TOPLEFT", menu, "TOPLEFT", 8, -7 - ((i - 1) * 24))
+            btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            btn.text:SetPoint("LEFT", btn, "LEFT", 8, 0)
+            btn.text:SetPoint("RIGHT", btn, "RIGHT", -8, 0)
+            btn.text:SetJustifyH("LEFT")
+            btn.highlight = btn:CreateTexture(nil, "BACKGROUND")
+            btn.highlight:SetAllPoints(btn)
+            btn.highlight:SetColorTexture(0.76, 0.82, 0.92, 0.10)
+            btn.highlight:Hide()
+            btn:SetScript("OnEnter", function(self)
+                if self.highlight then self.highlight:Show() end
+                if self.text then self.text:SetTextColor(0.82, 0.88, 0.96) end
+            end)
+            btn:SetScript("OnLeave", function(self)
+                local currentMode = (EL.GetSessionHistoryDisplayMode and EL:GetSessionHistoryDisplayMode()) or "30"
+                if self.highlight then self.highlight:SetShown(self.mode == currentMode) end
+                if self.text then
+                    if self.mode == currentMode then
+                        self.text:SetTextColor(0.42, 1.00, 0.32)
+                    else
+                        self.text:SetTextColor(Style:ThemeTextRGB())
+                    end
+                end
+            end)
+            btn:SetScript("OnClick", function(self)
+                if EL.SetSessionHistoryDisplayMode then EL:SetSessionHistoryDisplayMode(self.mode) end
+                Style:HideSessionHistoryDisplayDropdown()
+            end)
+            menu.buttons[i] = btn
+        end
+        menu:Hide()
+        EL.sessionHistoryDisplayDropdown = menu
+    end
+
+    if menu:IsShown() then
+        menu:Hide()
+        return
+    end
+
+    local currentMode = (EL.GetSessionHistoryDisplayMode and EL:GetSessionHistoryDisplayMode()) or "30"
+    for i, option in ipairs(options) do
+        local btn = menu.buttons and menu.buttons[i]
+        if btn then
+            btn.mode = option.mode
+            if btn.text then
+                btn.text:SetText(option.text)
+                if currentMode == option.mode then
+                    btn.text:SetTextColor(0.42, 1.00, 0.32)
+                else
+                    btn.text:SetTextColor(self:ThemeTextRGB())
+                end
+            end
+            if btn.highlight then btn.highlight:SetShown(currentMode == option.mode) end
+        end
+    end
+
+    menu:ClearAllPoints()
+    menu:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -4)
+    if menu.SetFrameStrata then menu:SetFrameStrata("MEDIUM") end
+    if menu.SetFrameLevel then menu:SetFrameLevel(((anchor.GetFrameLevel and anchor:GetFrameLevel()) or 30) + 20) end
+    menu:Show()
 end
 
 function Style:ColorTextByRGB(text, r, g, b)

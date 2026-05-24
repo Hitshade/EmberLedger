@@ -2,13 +2,13 @@
 ## Title: EmberLedger
 ## Notes: Modular profession alt dashboard for concentration, Artisan Moxie, Imbued Mulch, profession cooldown readiness, session tracking, utility actions, and roster management.
 ## Author: Hitshade
-## Version: 2.0.8
+## Version: 2.1.3
 ## Category: Professions
 ## SavedVariables: EmberLedgerDB
 ## OptionalDeps: LibStub, LibDataBroker-1.1, LibDBIcon-1.0
 ## DefaultState: Enabled
 
-## X-EmberLedger-LoadOrder: Core.lua first, Localization.lua second, lightweight resource modules next, UI after styling/session/cooldown/tooltip helpers, ActionBar last so secure button setup runs after UI creation helpers are available.
+## X-EmberLedger-LoadOrder: Core.lua first, Localization.lua second, lightweight resource modules next, UI after styling/session/cooldown/tooltip helpers, Onboarding after UI so runtime display helpers are available, ActionBar last so secure button setup runs after UI creation helpers are available.
 Core.lua
 Localization.lua
 Modules/Concentration.lua
@@ -19,5 +19,8 @@ Modules/Styling.lua
 Modules/SessionWindow.lua
 Modules/ProfessionCooldowns.lua
 Modules/Tooltips.lua
+Modules/TrackingRows.lua
+Modules/OptionsPanel.lua
 UI.lua
+Modules/Onboarding.lua
 Modules/ActionBar.lua

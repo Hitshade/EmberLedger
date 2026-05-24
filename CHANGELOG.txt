@@ -1,3 +1,242 @@
+## v2.1.3
+
+### Upgrade Migration and Audit Cleanup
+
+- Added a one-time spaced-realm character key migration so legacy keys such as `Name-Area 52` are moved to the canonical `Name-Area52` format.
+- Migrated related profession, cooldown, concentration, Moxie, mulch, hidden, and pinned data when spaced-realm character keys are corrected.
+- Improved duplicate-row candidate selection so an empty current-character record does not win over an older populated record.
+- Added Tracking Rows, Options Panel, and Onboarding function checks to module initialization validation.
+- Fixed stale amber/gold fallback theme values in row and panel helpers.
+- Removed the remaining duplicate theme-helper declaration in `UI.lua`.
+- Clamped onboarding panel frame-level increments and centralized the onboarding body text.
+- Kept session history retention at 30 days.
+
+## v2.1.2
+
+### Character Key Hardening
+
+- Added a canonical character key helper so character name and realm keys are built consistently.
+- Normalized realm spacing for saved character keys while preserving display realm text.
+- Improved duplicate-row debug output with canonical identity details.
+- Kept the v2.1.1 non-destructive duplicate-row guard.
+- Consolidated duplicated UI helper code through the shared styling module.
+- Removed accidental global theme helper declarations from the options and UI modules.
+- Routed visible main-window layout refreshes through the coalesced update path where safe.
+- No saved character data is deleted or merged.
+
+## v2.1.1
+
+### Defensive Duplicate Row Guard
+
+- Added a non-destructive character row dedupe guard for legacy or inconsistent saved data.
+- Character rows are now canonicalized by normalized name and realm before display.
+- When duplicate row candidates resolve to the same character, EmberLedger shows the preferred canonical row and suppresses the duplicate display row.
+- Added debug logging for suppressed duplicate row candidates.
+- No saved character data is deleted or merged.
+- No SavedVariables schema, cooldown, session, or tracking logic changes.
+
+## v2.1.0
+
+### Architecture Completion Release
+
+- Completed the planned 2.x modular architecture pass.
+- Confirmed Options Panel, Tracking Rows, and Onboarding are now extracted into dedicated modules.
+- Preserved the finalized blue-metal row highlight and muted Moxie styling from the final cleanup pass.
+- Marks the transition from refactor-focused development back to regular polish, bug fixes, and future feature work.
+- No SavedVariables, cooldown, session, tracking logic, or visual design behavior changes.
+
+## v2.0.31
+
+### Final Cleanup Pass
+
+- Centralized tracker row highlight and hover palette values through the shared styling module.
+- Updated stale post-extraction comments in UI, Tracking Rows, and Options Panel code.
+- Removed misleading refactor-prep wording now that the module extractions are complete.
+- No SavedVariables, cooldown, session, tracking logic, or visual design behavior changes.
+
+## v2.0.30
+
+### Onboarding Stabilization
+
+- Stabilized the extracted onboarding module after moving it out of UI.lua.
+- Added a dedicated onboarding panel refresh helper for text and theme color consistency.
+- Hardened Escape-key registration for the onboarding panel.
+- Replaced the close button glyph with an ASCII-safe label to avoid font or encoding issues.
+- Added missing localization entries for onboarding text and buttons.
+- No SavedVariables, cooldown, session, tracking, or visual design behavior changes.
+
+## v2.0.29
+
+### Onboarding Module Extraction
+
+- Added `Modules/Onboarding.lua`.
+- Moved onboarding panel creation, manual show behavior, and first-run scheduling out of `UI.lua`.
+- Kept slash command routing, onboarding SavedVariables helpers, and OptionsPanel's Show Welcome button behavior unchanged.
+- No visual, cooldown, session, tracking, or SavedVariables behavior changes.
+
+## v2.0.28
+
+### Onboarding Architecture Audit
+
+- Added an in-code onboarding extraction map to UI.lua before moving onboarding logic into a separate module.
+- Identified the onboarding methods that should move together: frame construction, show logic, combat deferral, and first-run scheduling.
+- Documented which Core and OptionsPanel responsibilities should stay outside the first onboarding extraction pass.
+- No behavior, visual design, SavedVariables schema, cooldown, session, or tracking logic changes.
+
+## v2.0.27
+
+### Tracking Row Stabilization
+
+- Stabilized the post-extraction tracking-row boundary between `UI.lua` and `Modules/TrackingRows.lua`.
+- Centralized tracking-row height constants through shared UI constants so layout and rendering stay synchronized.
+- Updated stale tracking-row extraction comments to reflect the current module ownership.
+- Added a defensive debug warning if the TrackingRows module is unavailable.
+- No visual, tracking, cooldown, session, or SavedVariables behavior changes.
+
+## v2.0.26
+
+### Tracking Row Visual Restoration
+
+- Restored the blue-metal current-character row highlight after the TrackingRows extraction accidentally reverted it to the older amber/gold treatment.
+- Fixed TrackingRows theme color lookups so Moxie and other value/muted text use the current EmberLedger theme colors instead of fallback legacy gold/grey values.
+- No tracking logic, cooldown behavior, session data, or SavedVariables schema changes.
+
+## v2.0.25
+
+### TrackingRows Extraction
+
+- Added `Modules/TrackingRows.lua` for tracker row creation, hover/highlight state, column anchoring, and row cell rendering.
+- Kept main tracker frame sizing, header/footer layout, session windows, onboarding, and launcher/window toggles in `UI.lua`.
+- Updated TOC load order so tracking row helpers load before the main UI.
+- No SavedVariables schema changes.
+
+## v2.0.24
+
+### Tracking Row Architecture Audit
+
+- Added an in-code tracking row extraction map to UI.lua before moving row logic into a separate module.
+- Identified the row helpers, column layout helpers, row lifecycle methods, and row-rendering dependencies that must move together.
+- Documented which main panel, session, onboarding, and launcher responsibilities should remain in UI.lua during the first tracking-row extraction pass.
+- No behavior, visual design, SavedVariables schema, cooldown, or session logic changes.
+
+## v2.0.23
+
+### Tooltip and Text Polish
+
+- Consolidated shared charged profession cooldown tooltip rows into one shared-pool summary line.
+- Preserved the compact gold CD readiness marker and existing cooldown calculation behavior.
+- Replaced the Moxie cell bullet separator with a plain ASCII separator to avoid mojibake on clients that render the bullet incorrectly.
+- No SavedVariables schema, cooldown logic, or session logic changes.
+
+## v2.0.22
+
+### UI.lua Cleanup After Options Extraction
+
+- Removed duplicated options-panel helper code left behind in UI.lua after the OptionsPanel.lua extraction.
+- Removed duplicate reset confirmation methods from UI.lua so OptionsPanel.lua owns options and reset dialog behavior.
+- Removed unused settings dropdown, checkbox, slider, and tooltip helper copies from UI.lua.
+- Kept shared tracker, onboarding, session-history, and theme helpers in UI.lua.
+- No behavior, SavedVariables schema, cooldown, session, or visual design changes.
+
+## v2.0.21
+
+### Post-Refactor Stabilization
+
+- Fixed a tracking column toggle error after the Options Panel extraction.
+- Restored local tracking column definitions needed by OptionsPanel.lua.
+- Added a defensive fallback around tracking column iteration.
+
+## v2.0.20
+
+### Post-Refactor Stabilization
+
+- Fixed a session history load error caused by a UI constant not being localized after the Options Panel extraction.
+- Restored session history row creation and scrolling after the refactor.
+- Kept the Options Panel extraction intact with no feature changes or SavedVariables schema changes.
+
+## v2.0.19
+
+### Options Panel Refactor Stabilization
+
+- Fixed a load error in the extracted Options Panel module caused by a stale UI-local reference.
+- Kept the Options Panel extraction intact while restoring clean addon loading.
+- No feature changes, SavedVariables changes, or UI redesigns.
+
+## v2.0.18
+
+### Options Panel Extraction
+
+- Moved options panel construction, runtime methods, Blizzard Settings integration, and UI settings reset behavior into `Modules/OptionsPanel.lua`.
+- Updated TOC load order so the extracted Options Panel module loads before the main UI file.
+- Kept shared visual helper functions in `UI.lua` because they are still used by the tracker, launcher, session window, and onboarding.
+- No behavior, saved data, or settings schema changes.
+
+## v2.0.17
+
+### Options Panel Refactor Prep
+
+- Grouped and documented options-panel helper, construction, runtime, host-integration, and reset sections inside UI.lua.
+- Added refactor-prep comments identifying the dependencies that must move with the options panel.
+- Preserved current options behavior, saved settings behavior, cooldown logic, session logic, and UI layout.
+- No file split was performed in this version.
+
+## v2.0.16
+
+### Low-Priority Cleanup
+
+- Clarified profile command main-window preservation logic.
+- Routed several safe direct tracker refreshes through the update request system.
+- Cleared the spell-name lookup cache when recipe match caches are reset.
+- Localized several visible toggle/status messages.
+- Added comments around cooldown cache invalidation behavior.
+
+## v2.0.15
+
+### Diagnostics and Documentation
+- Fixed unsupported-event diagnostic logging in safe event registration so debug mode can report skipped unsupported events correctly.
+- Corrected the v2.0.14 changelog formatting.
+
+## v2.0.14
+
+### Update Refresh Coalescing
+- Added update refresh coalescing to reduce repeated main tracker redraws during bursty events such as batch crafting.
+- Non-immediate UI update requests are now collapsed into a single short trailing refresh window instead of allowing repeated refresh work to stack.
+- Kept cooldown logic, session tracking data, SavedVariables schema, and displayed values unchanged.
+
+## v2.0.13
+
+### Profile Command Window Preservation
+- Fixed `/el profile off` and related profile commands so they preserve the main tracker visibility state.
+- Added a small restore guard around profile commands to prevent performance testing from accidentally toggling the main window/module state.
+- No cooldown logic, saved tracking data, or profiling measurements were changed.
+
+## v2.0.12
+- Added short-lived profession cooldown display caches for entry and summary lookups.
+- Reduced repeated cooldown entry rebuilding during row sorting, row refreshes, launcher summaries, and tooltip preparation.
+- Cache invalidation is tied to cooldown data changes, recipe-list cache resets, cooldown visibility changes, and display-scope changes.
+- Kept cooldown calculation logic, saved data, and SavedVariables schema unchanged.
+
+## v2.0.11
+- Added recipe-match caching for profession cooldown scans to reduce repeated full recipe-list scans during crafting.
+- Invalidated cooldown recipe caches only when profession data/source events indicate the recipe list may have changed.
+- Added main-window recovery hardening so restoring the tracker recenters it if saved coordinates place it off-screen.
+- Added /el recover, /el restore window, and /el reset main as recovery commands for a missing main tracker window.
+- Kept profiling labels from v2.0.10 for continued cooldown performance testing.
+
+## v2.0.10
+
+### Performance Diagnostics
+- Added focused cooldown profiling labels for crafting/event refreshes, queued cooldown scans, shared cooldown grouping, cooldown record building, and tooltip/display entry generation.
+- This diagnostic build helps isolate any remaining crafting CPU spikes without changing cooldown logic, saved data, or SavedVariables schema.
+
+## v2.0.9
+
+- Added crafting performance safeguards to reduce repeated refresh work during batch crafting.
+- Debounced session bag-diff processing from repeated BAG_UPDATE_DELAYED events.
+- Reduced profession cooldown craft refreshes to a single settled refresh after crafting.
+- Added a short cooldown-refresh interval guard to prevent repeated profession cooldown scans from stacking.
+- No cooldown data, tracking data, or SavedVariables schema changes.
+
 ## v2.0.8
 
 - Strengthened the current-character row highlight with a warmer amber/gold treatment and a clearer left accent.

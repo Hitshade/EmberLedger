@@ -191,6 +191,14 @@ local function SafeNumber(value, fallback)
     return EL:SafeNumber(value, fallback, "ProfessionCooldowns")
 end
 
+local function ProfileStart(label)
+    return (EL and EL.ProfileStart) and EL:ProfileStart(label) or nil
+end
+
+local function ProfileStop(label, started)
+    if EL and EL.ProfileStop then EL:ProfileStop(label, started) end
+end
+
 local LOGIN_READY_OVERWRITE_GUARD_SECONDS = 0.5
 
 local function GetFineTime()
@@ -278,7 +286,7 @@ function EL:SetCooldownDisplayScope(scope)
     if scope ~= "current_previous" and scope ~= "all" then scope = "current" end
     if not (self.db and self.db.settings and self.db.settings.display) then return false end
     self.db.settings.display.cooldownDisplayScope = scope
-    self._hasCooldownColumnData = nil
+    ClearCooldownDisplayCache()
     if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
     if self.RequestUpdate then self:RequestUpdate() end
     return true
@@ -300,7 +308,7 @@ function EL:SetProfessionCooldownHidden(key, hidden)
     else
         hiddenCooldowns[key] = nil
     end
-    self._hasCooldownColumnData = nil
+    ClearCooldownDisplayCache()
     if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
     if self.RequestUpdate then self:RequestUpdate() end
     return true
@@ -316,12 +324,54 @@ function EL:GetProfessionCooldownVisibilityDefinitions()
     return defs
 end
 
+
+local SPELL_NAME_CACHE = {}
+local RECIPE_MATCH_CACHE = { byKey = nil }
+
+-- Short-lived display caches reduce repeated cooldown entry/summary rebuilding during
+-- row sorting, row painting, launcher summaries, and tooltip prep. They are invalidated
+-- whenever cooldown data or visibility settings change, and also expire quickly so
+-- countdown text remains fresh.
+local COOLDOWN_DISPLAY_CACHE_TTL_SECONDS = 0.35
+local COOLDOWN_DISPLAY_CACHE_VERSION = 0
+local COOLDOWN_ENTRIES_CACHE = {}
+local COOLDOWN_SUMMARY_CACHE = {}
+
+-- Short-lived display caches avoid rebuilding the same cooldown lists repeatedly
+-- during bursty UI refreshes. Bumping the cache version invalidates all entries.
+local function ClearCooldownDisplayCache()
+    COOLDOWN_DISPLAY_CACHE_VERSION = COOLDOWN_DISPLAY_CACHE_VERSION + 1
+    COOLDOWN_ENTRIES_CACHE = {}
+    COOLDOWN_SUMMARY_CACHE = {}
+    if EL then EL._hasCooldownColumnData = nil end
+end
+
+function EL:InvalidateProfessionCooldownDisplayCache()
+    ClearCooldownDisplayCache()
+end
+
+-- Recipe/name lookup cache is rebuilt from current profession data after Blizzard
+-- signals that the trade skill source may have changed.
+local function ClearRecipeMatchCache()
+    RECIPE_MATCH_CACHE.byKey = nil
+    SPELL_NAME_CACHE = {}
+    ClearCooldownDisplayCache()
+end
+
 local function GetSpellName(spellID)
+    spellID = SafeNumber(spellID)
+    if not spellID then return nil end
+    if SPELL_NAME_CACHE[spellID] ~= nil then
+        local cached = SPELL_NAME_CACHE[spellID]
+        return cached ~= false and cached or nil
+    end
+    local name
     if C_Spell and C_Spell.GetSpellInfo then
         local info = SafeCall(C_Spell.GetSpellInfo, spellID)
-        if type(info) == "table" and info.name then return info.name end
+        if type(info) == "table" and info.name then name = info.name end
     end
-    local name = SafeCall(GetSpellInfo, spellID)
+    if not name then name = SafeCall(GetSpellInfo, spellID) end
+    SPELL_NAME_CACHE[spellID] = name or false
     return name
 end
 
@@ -393,32 +443,54 @@ local function IsRecipeLearned(recipeID, info)
     return nil
 end
 
-local function GetMatchingRecipeIDsForDefinition(def)
-    local ids = {}
-    local seen = {}
-    local function Add(id)
+local function BuildRecipeMatchCache()
+    local byKey = {}
+    local seenByKey = {}
+    local defs = EL.PROFESSION_COOLDOWN_DEFS or {}
+
+    local function Add(def, id)
+        if not (def and def.key) then return end
         id = SafeNumber(id)
-        if id and id > 0 and not seen[id] then
-            seen[id] = true
-            ids[#ids + 1] = id
+        if not id or id <= 0 then return end
+        byKey[def.key] = byKey[def.key] or {}
+        seenByKey[def.key] = seenByKey[def.key] or {}
+        if not seenByKey[def.key][id] then
+            seenByKey[def.key][id] = true
+            byKey[def.key][#byKey[def.key] + 1] = id
         end
     end
 
-    Add(def and def.spellID)
+    for _, def in ipairs(defs) do
+        Add(def, def and def.spellID)
+    end
 
+    -- C_TradeSkillUI.GetAllRecipeIDs can be expensive. Build the recipe-name
+    -- match cache once per profession data change rather than scanning the full
+    -- recipe list for every cooldown definition on every craft refresh.
     if C_TradeSkillUI and C_TradeSkillUI.GetAllRecipeIDs then
         local allRecipeIDs = SafeCall(C_TradeSkillUI.GetAllRecipeIDs)
         if type(allRecipeIDs) == "table" then
             for _, recipeID in ipairs(allRecipeIDs) do
                 local info = GetRecipeInfo(recipeID)
-                if RecipeInfoMatchesDefinition(info, def) then
-                    Add(recipeID)
+                if type(info) == "table" then
+                    for _, def in ipairs(defs) do
+                        if RecipeInfoMatchesDefinition(info, def) then
+                            Add(def, recipeID)
+                        end
+                    end
                 end
             end
         end
     end
 
-    return ids
+    RECIPE_MATCH_CACHE.byKey = byKey
+    return byKey
+end
+
+local function GetMatchingRecipeIDsForDefinition(def)
+    if not (def and def.key) then return {} end
+    local byKey = RECIPE_MATCH_CACHE.byKey or BuildRecipeMatchCache()
+    return byKey[def.key] or { def.spellID }
 end
 
 local function GetKnownRecipeInfoForDefinition(def)
@@ -1103,16 +1175,17 @@ end
 local ApplySharedCooldownGroups
 
 local function MarkCooldownCrafted(def)
-    if not (EL and def and def.key) then return false end
+    local profile = ProfileStart("Cooldowns:MarkCooldownCrafted")
+    if not (EL and def and def.key) then ProfileStop("Cooldowns:MarkCooldownCrafted", profile); return false end
     local store = EnsureProfessionCooldownStore()
-    if type(store) ~= "table" then return false end
+    if type(store) ~= "table" then ProfileStop("Cooldowns:MarkCooldownCrafted", profile); return false end
     local charKey = (EL.GetCurrentCharacter and select(1, EL:GetCurrentCharacter())) or (EL.GetCharacterKey and EL:GetCharacterKey())
-    if not charKey then return false end
+    if not charKey then ProfileStop("Cooldowns:MarkCooldownCrafted", profile); return false end
     store[charKey] = type(store[charKey]) == "table" and store[charKey] or {}
     local records = store[charKey]
     local now = Now()
     local recharge = SafeNumber(def.defaultRechargeSeconds, 0) or 0
-    if recharge <= 0 then return false end
+    if recharge <= 0 then ProfileStop("Cooldowns:MarkCooldownCrafted", profile); return false end
     local groupKey = def.sharedCooldownKey
     local affected = {}
     for _, candidate in ipairs(EL.PROFESSION_COOLDOWN_DEFS or {}) do
@@ -1220,10 +1293,15 @@ local function MarkCooldownCrafted(def)
         records[candidate.key] = record
     end
     records._lastUpdated = now
+    local sharedProfile = ProfileStart("Cooldowns:MarkCrafted:ApplySharedGroups")
     ApplySharedCooldownGroups(records)
-    EL._hasCooldownColumnData = nil
+    ProfileStop("Cooldowns:MarkCrafted:ApplySharedGroups", sharedProfile)
+    ClearCooldownDisplayCache()
+    ProfileStop("Cooldowns:MarkCooldownCrafted", profile)
     return true
 end
+
+local COOLDOWN_REFRESH_MIN_INTERVAL_SECONDS = 0.75
 
 local function QueueCooldownRefresh(delay, flagName)
     delay = SafeNumber(delay, 0.5) or 0.5
@@ -1232,10 +1310,15 @@ local function QueueCooldownRefresh(delay, flagName)
         if EL[flagName] then return end
         EL[flagName] = true
         C_Timer.After(delay, function()
+            local queuedProfile = ProfileStart("Cooldowns:QueuedRefresh:" .. tostring(flagName))
             if EL then EL[flagName] = nil end
-            if not EL or not EL.db then return end
+            if not EL or not EL.db then
+                ProfileStop("Cooldowns:QueuedRefresh:" .. tostring(flagName), queuedProfile)
+                return
+            end
             if EL.RefreshCurrentProfessionCooldowns then EL:RefreshCurrentProfessionCooldowns() end
             if EL.RequestUpdate then EL:RequestUpdate() end
+            ProfileStop("Cooldowns:QueuedRefresh:" .. tostring(flagName), queuedProfile)
         end)
     else
         if EL.RefreshCurrentProfessionCooldowns then EL:RefreshCurrentProfessionCooldowns() end
@@ -1245,6 +1328,7 @@ end
 
 function ApplySharedCooldownGroups(records)
     if type(records) ~= "table" then return end
+    local profile = ProfileStart("Cooldowns:ApplySharedCooldownGroups")
     local groups = {}
     for key, record in pairs(records) do
         if type(record) == "table" and not record.unlearned then
@@ -1386,6 +1470,7 @@ function ApplySharedCooldownGroups(records)
             end
         end
     end
+    ProfileStop("Cooldowns:ApplySharedCooldownGroups", profile)
 end
 
 
@@ -1559,6 +1644,13 @@ end
 
 function EL:RefreshCurrentProfessionCooldowns()
     local profile = self.ProfileStart and self:ProfileStart("RefreshCurrentProfessionCooldowns") or nil
+    local now = Now()
+    local lastRefresh = SafeNumber(self._lastProfessionCooldownRefreshAt, 0) or 0
+    if lastRefresh > 0 and (now - lastRefresh) < COOLDOWN_REFRESH_MIN_INTERVAL_SECONDS then
+        if self.ProfileStop then self:ProfileStop("RefreshCurrentProfessionCooldowns", profile) end
+        return false
+    end
+    self._lastProfessionCooldownRefreshAt = now
     self._hasCooldownColumnData = nil
     local cooldownStore = EnsureProfessionCooldownStore()
     if not cooldownStore then if self.ProfileStop then self:ProfileStop("RefreshCurrentProfessionCooldowns", profile) end return false end
@@ -1585,6 +1677,7 @@ function EL:RefreshCurrentProfessionCooldowns()
         if self.ProfileStop then self:ProfileStop("RefreshCurrentProfessionCooldowns", profile) end
         return false
     end
+    local previousSharedProfile = ProfileStart("Cooldowns:PreviousSharedState")
     local previousSharedStates = {}
     if type(previousRecords) == "table" then
         for _, def in ipairs(self.PROFESSION_COOLDOWN_DEFS or {}) do
@@ -1593,10 +1686,14 @@ function EL:RefreshCurrentProfessionCooldowns()
             end
         end
     end
+    ProfileStop("Cooldowns:PreviousSharedState", previousSharedProfile)
     local records = {}
+    local buildRecordsProfile = ProfileStart("Cooldowns:BuildRecords")
     for _, def in ipairs(self.PROFESSION_COOLDOWN_DEFS or {}) do
         if CharacterHasProfession(professions, def.professionID) then
+            local buildOneProfile = ProfileStart("Cooldowns:BuildCooldownRecord")
             local record, knownState = BuildCooldownRecord(def)
+            ProfileStop("Cooldowns:BuildCooldownRecord", buildOneProfile)
             if record then
                 record = PreserveInferredChargedState(record, previousRecords and previousRecords[def.key], def, def.sharedCooldownKey and previousSharedStates[def.sharedCooldownKey])
                 records[record.key] = record
@@ -1650,23 +1747,81 @@ function EL:RefreshCurrentProfessionCooldowns()
             end
         end
     end
+    ProfileStop("Cooldowns:BuildRecords", buildRecordsProfile)
 
     if HasFutureCooldownState(previousRecords) then
+        local reapplyProfile = ProfileStart("Cooldowns:ReapplyPreviousFutureState")
         ReapplyPreviousFutureCooldownState(records, previousRecords)
+        ProfileStop("Cooldowns:ReapplyPreviousFutureState", reapplyProfile)
     end
+    local applySharedProfile = ProfileStart("Cooldowns:Refresh:ApplySharedGroups")
     ApplySharedCooldownGroups(records)
+    ProfileStop("Cooldowns:Refresh:ApplySharedGroups", applySharedProfile)
 
     records._lastUpdated = Now()
     cooldownStore[charKey] = records
+    ClearCooldownDisplayCache()
     if self.ProfileStop then self:ProfileStop("RefreshCurrentProfessionCooldowns", profile) end
     return true
 end
 
+
+local function GetProfessionSignature(professions)
+    if type(professions) ~= "table" then return "" end
+    local parts = {}
+    for index, prof in ipairs(professions) do
+        local profID = SafeNumber(prof and (prof.professionID or prof.skillLineID or prof.skillLine), 0) or 0
+        local name = prof and (prof.name or prof.professionName or prof.skillLineName) or ""
+        parts[#parts + 1] = tostring(index) .. ":" .. tostring(profID) .. ":" .. tostring(name)
+    end
+    return table.concat(parts, "|")
+end
+
+local function GetCooldownVisibilitySignature()
+    local hidden = GetHiddenCooldownSettings()
+    if type(hidden) ~= "table" then return "" end
+    local parts = {}
+    for key, value in pairs(hidden) do
+        if value == true then parts[#parts + 1] = tostring(key) end
+    end
+    table.sort(parts)
+    return table.concat(parts, ",")
+end
+
+local function GetCooldownCacheKey(charKey, professions, stored)
+    return table.concat({
+        tostring(charKey or ""),
+        tostring(GetCooldownDisplayScope()),
+        tostring(SafeNumber(stored and stored._lastUpdated, 0) or 0),
+        GetProfessionSignature(professions),
+        GetCooldownVisibilitySignature(),
+    }, "\031")
+end
+
+local function IsCooldownDisplayCacheFresh(entry, key, now)
+    return entry
+        and entry.version == COOLDOWN_DISPLAY_CACHE_VERSION
+        and entry.key == key
+        and entry.expiresAt
+        and entry.expiresAt > now
+end
+
 function EL:GetProfessionCooldownEntriesForCharacter(charKey, professions)
+    local profile = ProfileStart("Cooldowns:GetEntriesForCharacter")
     local results = {}
-    if not charKey then return results end
+    if not charKey then
+        ProfileStop("Cooldowns:GetEntriesForCharacter", profile)
+        return results
+    end
     local store = EnsureProfessionCooldownStore()
     local stored = store and store[charKey]
+    local cacheNow = GetFineTime()
+    local cacheKey = GetCooldownCacheKey(charKey, professions, stored)
+    local cached = COOLDOWN_ENTRIES_CACHE[charKey]
+    if IsCooldownDisplayCacheFresh(cached, cacheKey, cacheNow) then
+        ProfileStop("Cooldowns:GetEntriesForCharacter", profile)
+        return cached.results
+    end
     local included = {}
 
     if type(stored) == "table" then
@@ -1723,9 +1878,20 @@ function EL:GetProfessionCooldownEntriesForCharacter(charKey, professions)
     -- Re-apply shared cooldown grouping to display copies/placeholders so tooltip and
     -- summary rows recover shared-bucket countdowns even after an individual member
     -- was copied as Unknown from a transient scan result.
+    local displaySharedProfile = ProfileStart("Cooldowns:GetEntries:ApplySharedGroups")
     ApplySharedCooldownGroups(results)
+    ProfileStop("Cooldowns:GetEntries:ApplySharedGroups", displaySharedProfile)
 
+    local sortProfile = ProfileStart("Cooldowns:GetEntries:Sort")
     table.sort(results, SortCooldownEntries)
+    ProfileStop("Cooldowns:GetEntries:Sort", sortProfile)
+    COOLDOWN_ENTRIES_CACHE[charKey] = {
+        version = COOLDOWN_DISPLAY_CACHE_VERSION,
+        key = cacheKey,
+        expiresAt = cacheNow + COOLDOWN_DISPLAY_CACHE_TTL_SECONDS,
+        results = results,
+    }
+    ProfileStop("Cooldowns:GetEntriesForCharacter", profile)
     return results
 end
 
@@ -1734,6 +1900,18 @@ local ComputeCanonicalCooldownState
 local FormatCooldownTooltipState
 
 function EL:GetProfessionCooldownSummary(charKey, professions)
+    if not charKey then
+        return { entries = {}, tracked = 0, ready = 0, recovering = 0, unknown = 0, unlearned = 0, nextRemaining = nil }
+    end
+    local store = EnsureProfessionCooldownStore()
+    local stored = store and store[charKey]
+    local cacheNow = GetFineTime()
+    local cacheKey = GetCooldownCacheKey(charKey, professions, stored)
+    local cached = COOLDOWN_SUMMARY_CACHE[charKey]
+    if IsCooldownDisplayCacheFresh(cached, cacheKey, cacheNow) then
+        return cached.summary
+    end
+
     local entries = self:GetProfessionCooldownEntriesForCharacter(charKey, professions)
     local tracked, ready, recovering, unknown, unlearned = 0, 0, 0, 0, 0
     local nextRemaining
@@ -1754,7 +1932,7 @@ function EL:GetProfessionCooldownSummary(charKey, professions)
             end
         end
     end
-    return {
+    local summary = {
         entries = entries,
         tracked = tracked,
         ready = ready,
@@ -1763,6 +1941,13 @@ function EL:GetProfessionCooldownSummary(charKey, professions)
         unlearned = unlearned,
         nextRemaining = nextRemaining,
     }
+    COOLDOWN_SUMMARY_CACHE[charKey] = {
+        version = COOLDOWN_DISPLAY_CACHE_VERSION,
+        key = cacheKey,
+        expiresAt = cacheNow + COOLDOWN_DISPLAY_CACHE_TTL_SECONDS,
+        summary = summary,
+    }
+    return summary
 end
 
 local function FormatCooldownColumnTimer(seconds)
@@ -1992,8 +2177,12 @@ function EL:ShowAllProfessionCooldowns()
     display.hiddenCooldowns = {}
     self._hasCooldownColumnData = nil
     if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
-    if self.RefreshPanel then self:RefreshPanel() end
-    if self.UpdateButton then self:UpdateButton() end
+    if self.RequestUpdate then
+        self:RequestUpdate(true)
+    else
+        if self.RefreshPanel then self:RefreshPanel() end
+        if self.UpdateButton then self:UpdateButton() end
+    end
     if self.RefreshMinimapButton then self:RefreshMinimapButton() end
     if self.Print then self:Print(self:T("All supported cooldown crafts are now shown.")) end
     return true
@@ -2056,14 +2245,42 @@ function EL:AddProfessionCooldownTooltipLines(tooltip, charKey, professions)
     end
 
     local currentCategory
+    local sharedPools = {}
+    local sharedOrder = {}
+    local normalEntries = {}
     for _, entry in ipairs(entries) do
-        local category = entry.category or self:T("Profession")
+        if entry.sharedCooldownKey then
+            local key = tostring(entry.category or self:T("Profession")) .. ":" .. tostring(entry.sharedCooldownKey)
+            local pool = sharedPools[key]
+            if not pool then
+                pool = {
+                    category = entry.category or self:T("Profession"),
+                    key = entry.sharedCooldownKey,
+                    label = entry.sharedCooldownLabel or entry.label or entry.shortLabel or self:T("Shared cooldown"),
+                    entries = {},
+                    names = {},
+                }
+                sharedPools[key] = pool
+                sharedOrder[#sharedOrder + 1] = key
+            end
+            pool.entries[#pool.entries + 1] = entry
+            pool.names[#pool.names + 1] = tostring(entry.shortLabel or entry.label or self:T("Cooldown"))
+        else
+            normalEntries[#normalEntries + 1] = entry
+        end
+    end
+
+    local function addCategory(category)
+        category = category or self:T("Profession")
         if category ~= currentCategory then
             tooltip:AddLine(category, categoryR, categoryG, categoryB)
             currentCategory = category
         end
-        local label = "   " .. tostring(entry.label or entry.shortLabel or self:T("Cooldown"))
-        local state = ComputeCanonicalCooldownState(entry)
+    end
+
+    local function addCooldownLine(entry, labelOverride, stateOverride)
+        local state = stateOverride or ComputeCanonicalCooldownState(entry)
+        local label = "   " .. tostring(labelOverride or entry.label or entry.shortLabel or self:T("Cooldown"))
         local right = FormatCooldownTooltipState(entry, state)
         if state.unknown then
             tooltip:AddDoubleLine(label, right, mutedR, mutedG, mutedB, valueR, valueG, valueB)
@@ -2073,6 +2290,33 @@ function EL:AddProfessionCooldownTooltipLines(tooltip, charKey, professions)
         else
             tooltip:AddDoubleLine(label, right, mutedR, mutedG, mutedB, state.ready and 0.35 or 1.00, state.ready and 1.00 or 0.82, state.ready and 0.45 or 0.32)
         end
+    end
+
+    local function addSharedPool(pool)
+        if not pool or #pool.entries == 0 then return end
+        addCategory(pool.category)
+        local representative = pool.entries[1]
+        local state = ComputeCanonicalCooldownState(representative)
+        local right = FormatCooldownTooltipState(representative, state)
+        tooltip:AddDoubleLine("   " .. tostring(pool.label or self:T("Shared cooldown")), right, mutedR, mutedG, mutedB, state.ready and 0.35 or 1.00, state.ready and 1.00 or 0.82, state.ready and 0.45 or 0.32)
+        if #pool.names > 0 then
+            tooltip:AddLine("      " .. self:T("Shared pool") .. ": " .. table.concat(pool.names, ", "), mutedR, mutedG, mutedB)
+        end
+    end
+
+    local sharedIndex = 1
+    for _, entry in ipairs(normalEntries) do
+        local category = entry.category or self:T("Profession")
+        while sharedIndex <= #sharedOrder and sharedPools[sharedOrder[sharedIndex]].category == category do
+            addSharedPool(sharedPools[sharedOrder[sharedIndex]])
+            sharedIndex = sharedIndex + 1
+        end
+        addCategory(category)
+        addCooldownLine(entry)
+    end
+    while sharedIndex <= #sharedOrder do
+        addSharedPool(sharedPools[sharedOrder[sharedIndex]])
+        sharedIndex = sharedIndex + 1
     end
 
     local store = EnsureProfessionCooldownStore()
@@ -2085,6 +2329,7 @@ function EL:AddProfessionCooldownTooltipLines(tooltip, charKey, professions)
 end
 
 function module:OnLoad()
+    ClearRecipeMatchCache()
     ArmLoginCooldownGuard()
     if EL.ValidateProfessionCooldownDefinitions then EL:ValidateProfessionCooldownDefinitions() end
     if EL.EnsureProfessionCooldownStore then EL:EnsureProfessionCooldownStore() end
@@ -2098,6 +2343,7 @@ function module:Refresh()
 end
 
 function module:OnEvent(event, ...)
+    local eventProfile = ProfileStart("Cooldowns:OnEvent:" .. tostring(event or "unknown"))
     if event == "PLAYER_ENTERING_WORLD" then
         ArmLoginCooldownGuard()
         QueueCooldownRefresh(LOGIN_READY_OVERWRITE_GUARD_SECONDS + 0.05, "_cooldownLoginSettledRefreshPending")
@@ -2110,16 +2356,17 @@ function module:OnEvent(event, ...)
         end
         -- Recipe cooldown availability can lag behind the craft-result event while
         -- the Blizzard profession UI remains open, especially for shared charged cooldowns.
-        -- Queue an early refresh for responsiveness and a second settling refresh so shared
-        -- cooldown buckets do not stay in a transient ready state until the window closes.
-        QueueCooldownRefresh(0.8, "_cooldownCraftRefreshPending")
-        QueueCooldownRefresh(2.5, "_cooldownCraftSettledRefreshPending")
-    elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_DATA_SOURCE_CHANGED" or event == "SKILL_LINES_CHANGED" or event == "SPELLS_CHANGED" then
-        QueueCooldownRefresh(0.5)
-        if event == "TRADE_SKILL_DATA_SOURCE_CHANGED" then
-            QueueCooldownRefresh(1.5, "_cooldownTradeSkillSettledRefreshPending")
-        end
+        -- Use one settled refresh to avoid stacking cooldown scans during batch crafting.
+        QueueCooldownRefresh(1.2, "_cooldownCraftSettledRefreshPending")
+    elseif event == "TRADE_SKILL_DATA_SOURCE_CHANGED" then
+        -- This event can fire repeatedly while crafting. Keep one settled refresh pending.
+        ClearRecipeMatchCache()
+        QueueCooldownRefresh(1.0, "_cooldownTradeSkillSettledRefreshPending")
+    elseif event == "TRADE_SKILL_SHOW" or event == "SKILL_LINES_CHANGED" or event == "SPELLS_CHANGED" then
+        ClearRecipeMatchCache()
+        QueueCooldownRefresh(0.75)
     end
+    ProfileStop("Cooldowns:OnEvent:" .. tostring(event or "unknown"), eventProfile)
 end
 
 EL:RegisterModule("ProfessionCooldowns", module)

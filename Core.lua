@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.0.7"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.1.3"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -127,6 +127,7 @@ function EL:ApplyVisualTheme()
 end
 
 EL.UPDATE_DEBOUNCE_SECONDS = 0.05
+EL.UPDATE_COALESCE_SECONDS = 0.12
 EL.ACTION_BAR_DEBOUNCE_SECONDS = 0.05
 
 EL.MOXIE_CURRENCY_BY_PROFESSION_ID = {
@@ -186,6 +187,10 @@ EL.UI_CONSTANTS = {
     SESSION_TITLE_LEFT_PAD = 10,
     SESSION_TITLE_RIGHT_PAD = -8,
     PANEL_DEFAULT_VISIBLE_ROWS = 12,
+    TRACKING_ROW_H = 23,
+    TRACKING_COMPACT_ROW_H = 18,
+    TRACKING_ROW_GAP = 0,
+    TRACKING_EMPTY_BODY_H = 42,
     PANEL_EXPANDED_MIN_H = 300,
     PANEL_MAX_W = 900,
     PANEL_MAX_H = 1600,
@@ -202,7 +207,7 @@ EL.UI_CONSTANTS = {
     OPTIONS_COOLDOWN_COLUMN_CHECK_Y = -62,
 }
 
-EL.DB_VERSION = 11612
+EL.DB_VERSION = 11613
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -476,11 +481,130 @@ local function CleanupSavedCharacterFlags(db)
     end
 end
 
+local function IsEmptyTableValue(value)
+    return value == nil or value == "" or (type(value) == "table" and next(value) == nil)
+end
+
+local function MergeTableMissingValues(target, source)
+    if type(target) ~= "table" or type(source) ~= "table" then return end
+    for key, value in pairs(source) do
+        if IsEmptyTableValue(target[key]) and value ~= nil then
+            target[key] = value
+        end
+    end
+end
+
+local function CanonicalizeLegacySpacedKey(key)
+    local name, realm = tostring(key or ""):match("^([^%-]+)%-(.+)$")
+    if not name or not realm or not realm:find("%s") then return nil end
+    local canonicalRealm = realm:gsub("%s+", "")
+    if canonicalRealm == "" then canonicalRealm = "UnknownRealm" end
+    local canonicalKey = name .. "-" .. canonicalRealm
+    if canonicalKey == key then return nil end
+    return canonicalKey
+end
+
+local function MoveOrMergeKeyedTable(tbl, oldKey, newKey)
+    if type(tbl) ~= "table" or not oldKey or not newKey or oldKey == newKey then return false end
+    local oldValue = tbl[oldKey]
+    if oldValue == nil then return false end
+    if tbl[newKey] == nil then
+        tbl[newKey] = oldValue
+    elseif type(tbl[newKey]) == "table" and type(oldValue) == "table" then
+        MergeTableMissingValues(tbl[newKey], oldValue)
+    end
+    tbl[oldKey] = nil
+    return true
+end
+
+local function MoveLegacyConcentrationEntries(resources, oldKey, newKey)
+    if type(resources) ~= "table" or type(resources.concentration) ~= "table" then return false end
+    local moved = false
+    local sep = EL and EL.DB_KEY_SEP or "\031"
+    local concentration = resources.concentration
+    local pending = {}
+    for resourceKey, data in pairs(concentration) do
+        if type(data) == "table" and data.charKey == oldKey then
+            local resourceKeyText = tostring(resourceKey or "")
+            local prefix = oldKey .. sep
+            local suffix
+            if resourceKeyText:sub(1, #prefix) == prefix then
+                suffix = resourceKeyText:sub(#prefix + 1)
+            end
+            suffix = suffix or tostring(data.professionID or data.skillLineID or data.skillLine or "default")
+            pending[#pending + 1] = { oldResourceKey = resourceKey, newResourceKey = newKey .. sep .. suffix, data = data }
+        end
+    end
+    for _, item in ipairs(pending) do
+        item.data.charKey = newKey
+        if concentration[item.newResourceKey] == nil then
+            concentration[item.newResourceKey] = item.data
+        elseif type(concentration[item.newResourceKey]) == "table" then
+            MergeTableMissingValues(concentration[item.newResourceKey], item.data)
+            concentration[item.newResourceKey].charKey = newKey
+        end
+        concentration[item.oldResourceKey] = nil
+        moved = true
+    end
+    return moved
+end
+
+local function MigrateSpacedCharacterKeys(db)
+    if type(db) ~= "table" or type(db.characters) ~= "table" then return false end
+    local migrations = {}
+    for key in pairs(db.characters) do
+        local canonicalKey = CanonicalizeLegacySpacedKey(key)
+        if canonicalKey then
+            migrations[#migrations + 1] = { old = key, new = canonicalKey }
+        end
+    end
+    if #migrations == 0 then return false end
+
+    local changed = false
+    db.resources = type(db.resources) == "table" and db.resources or {}
+    db.settings = type(db.settings) == "table" and db.settings or {}
+
+    for _, migration in ipairs(migrations) do
+        local oldKey, newKey = migration.old, migration.new
+        local oldChar = db.characters[oldKey]
+        if oldChar ~= nil then
+            if db.characters[newKey] == nil then
+                db.characters[newKey] = oldChar
+            elseif type(db.characters[newKey]) == "table" and type(oldChar) == "table" then
+                MergeTableMissingValues(db.characters[newKey], oldChar)
+                local oldSeen = tonumber(oldChar.lastSeen) or 0
+                local newSeen = tonumber(db.characters[newKey].lastSeen) or 0
+                if oldSeen > newSeen then db.characters[newKey].lastSeen = oldChar.lastSeen end
+            end
+            if type(db.characters[newKey]) == "table" then
+                db.characters[newKey].key = newKey
+            end
+            db.characters[oldKey] = nil
+            changed = true
+        end
+
+        for _, tblName in ipairs({ "mulch", "moxie", "professions", "professionCooldowns" }) do
+            if MoveOrMergeKeyedTable(db.resources[tblName], oldKey, newKey) then changed = true end
+        end
+        if MoveLegacyConcentrationEntries(db.resources, oldKey, newKey) then changed = true end
+
+        for _, flagsName in ipairs({ "hiddenCharacters", "favoriteCharacters" }) do
+            if MoveOrMergeKeyedTable(db.settings[flagsName], oldKey, newKey) then changed = true end
+        end
+    end
+    return changed
+end
+
 function EL:RunDatabaseCleanup(previousVersion)
     local current = tonumber(previousVersion) or tonumber(self.db and self.db.version) or 0
     if current < self.DB_VERSION then
         RemoveLegacySavedVariableFields(self.db)
+        MigrateSpacedCharacterKeys(self.db)
         CleanupSavedCharacterFlags(self.db)
+        if self.InvalidateCharacterRows then self:InvalidateCharacterRows() end
+        self._concentrationByCharKey = nil
+        self._professionLookupCache = nil
+        self._hasCooldownColumnData = nil
         self.db.version = self.DB_VERSION
     end
 end
@@ -1154,14 +1278,32 @@ function EL:EnsureDB()
     return EmberLedgerDB
 end
 
+local function TrimCharacterKeyPart(value)
+    return tostring(value or ""):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function CanonicalRealmKeyPart(value)
+    value = TrimCharacterKeyPart(value)
+    -- Realm values can appear with or without spaces depending on API timing or legacy data.
+    -- Keep display realm text separate, but use a stable no-space realm token for saved keys.
+    value = value:gsub("%s+", "")
+    if value == "" then value = "UnknownRealm" end
+    return value
+end
+
 function EL:GetRealm()
     return GetNormalizedRealmName() or GetRealmName() or "UnknownRealm"
 end
 
-function EL:GetCharacterKey(name, realm)
-    name = name or UnitName("player") or "Unknown"
-    realm = realm or self:GetRealm()
+function EL:GetCanonicalCharacterKey(name, realm)
+    name = TrimCharacterKeyPart(name or UnitName("player") or "Unknown")
+    if name == "" then name = "Unknown" end
+    realm = CanonicalRealmKeyPart(realm or self:GetRealm())
     return name .. "-" .. realm
+end
+
+function EL:GetCharacterKey(name, realm)
+    return self:GetCanonicalCharacterKey(name, realm)
 end
 
 function EL:GetCurrentCharacter()
@@ -1267,6 +1409,27 @@ EL.REQUIRED_MODULES = {
             "LayoutPanel",
             "RefreshPanel",
             "RestoreSavedTrackingHeightIfNeeded",
+        },
+    },
+    TrackingRows = {
+        functions = {
+            "GetRow",
+            "RefreshTrackingRows",
+            "GetTrackingRowHeight",
+        },
+    },
+    OptionsPanel = {
+        functions = {
+            "CreateSettingsPanel",
+            "RefreshSettingsPanel",
+            "ShowSettingsPanel",
+        },
+    },
+    Onboarding = {
+        functions = {
+            "CreateOnboardingPanel",
+            "ShowOnboardingPanel",
+            "RefreshOnboardingPanel",
         },
     },
     concentration = { registered = true },
@@ -3561,6 +3724,54 @@ function EL:InvalidateCharacterRows()
     self._characterRowsVersion = (self._characterRowsVersion or 0) + 1
 end
 
+local function NormalizeCharacterIdentityPart(value)
+    value = tostring(value or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+    -- Realm names may appear with or without spaces depending on client/API path.
+    -- Removing internal spaces lets legacy keys such as Area 52 and Area52 collapse.
+    return value:gsub("%s+", "")
+end
+
+local function ParseCharacterKeyParts(key)
+    local text = tostring(key or "")
+    local name, realm = text:match("^([^%-]+)%-(.+)$")
+    return name, realm
+end
+
+function EL:GetCanonicalCharacterIdentity(char, key)
+    char = type(char) == "table" and char or {}
+    local keyName, keyRealm = ParseCharacterKeyParts(key)
+    local name = char.name or keyName or key
+    local realm = char.realm or keyRealm or ""
+    return NormalizeCharacterIdentityPart(name) .. "-" .. NormalizeCharacterIdentityPart(realm)
+end
+
+function EL:IsPreferredCharacterRowCandidate(candidate, existing, currentCharKey)
+    if not existing then return true end
+
+    local candidateLastSeen = tonumber(candidate.char and candidate.char.lastSeen) or 0
+    local existingLastSeen = tonumber(existing.char and existing.char.lastSeen) or 0
+
+    if currentCharKey then
+        if candidate.key == currentCharKey and existing.key ~= currentCharKey then
+            return candidateLastSeen > 0 or existingLastSeen == 0
+        end
+        if existing.key == currentCharKey and candidate.key ~= currentCharKey then
+            return candidateLastSeen > 0 and existingLastSeen == 0
+        end
+    end
+
+    local candidateCanonicalKey = candidate.char and candidate.char.name and candidate.char.realm and self.GetCharacterKey and self:GetCharacterKey(candidate.char.name, candidate.char.realm) or nil
+    local existingCanonicalKey = existing.char and existing.char.name and existing.char.realm and self.GetCharacterKey and self:GetCharacterKey(existing.char.name, existing.char.realm) or nil
+    if candidateCanonicalKey and candidate.key == candidateCanonicalKey and existing.key ~= existingCanonicalKey then
+        return candidateLastSeen > 0 or existingLastSeen == 0
+    end
+    if existingCanonicalKey and existing.key == existingCanonicalKey and candidate.key ~= candidateCanonicalKey then
+        return not (candidateLastSeen > 0 and existingLastSeen == 0)
+    end
+
+    return candidateLastSeen > existingLastSeen
+end
+
 function EL:GetCharacterRows()
     local chars = self.db and self.db.characters or {}
     local display = self.db and self.db.settings and self.db.settings.display or {}
@@ -3571,15 +3782,36 @@ function EL:GetCharacterRows()
     end
 
     local rows = {}
+    local candidatesByIdentity = {}
+    local currentCharKey = self.currentCharKey or (self.GetCharacterKey and self:GetCharacterKey() or nil)
+
     for key, char in pairs(chars) do
+        local identity = self.GetCanonicalCharacterIdentity and self:GetCanonicalCharacterIdentity(char, key) or tostring(key or ""):lower()
         local displayName = self:GetCharacterDisplayName(char, key)
-        rows[#rows + 1] = {
+        local candidate = {
             key = key,
             char = char,
             displayName = displayName,
             displayNameLower = tostring(displayName or key or ""):lower(),
+            duplicateIdentity = identity,
         }
+        local existing = candidatesByIdentity[identity]
+        if self:IsPreferredCharacterRowCandidate(candidate, existing, currentCharKey) then
+            if existing and self.Debug then
+                self:Debug("Suppressing duplicate character row candidate: " .. tostring(existing.key) .. " -> " .. tostring(key) .. " [identity=" .. tostring(identity) .. "]")
+            end
+            candidatesByIdentity[identity] = candidate
+        else
+            if self.Debug then
+                self:Debug("Suppressing duplicate character row candidate: " .. tostring(key) .. " -> " .. tostring(existing and existing.key or identity) .. " [identity=" .. tostring(identity) .. "]")
+            end
+        end
     end
+
+    for _, row in pairs(candidatesByIdentity) do
+        rows[#rows + 1] = row
+    end
+
     table.sort(rows, SortCharacterRowsByName)
     self._characterRowsCache = {
         rows = rows,
@@ -3665,6 +3897,8 @@ end
 
 function EL:RequestUpdate(immediate)
     if self.HasVisibleUpdateConsumers and not self:HasVisibleUpdateConsumers() then
+        self.updateRefreshQueued = nil
+        self.updateRefreshPending = nil
         if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
         return
     end
@@ -3675,16 +3909,33 @@ function EL:RequestUpdate(immediate)
     end
 
     if immediate or not (C_Timer and C_Timer.After) then
+        self.updateRefreshQueued = nil
+        self.updateRefreshPending = nil
+        self._lastUpdateRefreshTime = GetTime and GetTime() or self._lastUpdateRefreshTime
         self:PerformUpdate()
         return
     end
 
+    self.updateRefreshPending = true
     if self.updateRefreshQueued then return end
     self.updateRefreshQueued = true
 
-    C_Timer.After(self.UPDATE_DEBOUNCE_SECONDS or 0.05, function()
+    local now = GetTime and GetTime() or 0
+    local debounce = self.UPDATE_DEBOUNCE_SECONDS or 0.05
+    local coalesce = self.UPDATE_COALESCE_SECONDS or debounce
+    local last = tonumber(self._lastUpdateRefreshTime) or 0
+    local delay = debounce
+    if now > 0 and last > 0 then
+        local remaining = coalesce - (now - last)
+        if remaining > delay then delay = remaining end
+    end
+
+    C_Timer.After(delay, function()
         if not EL then return end
         EL.updateRefreshQueued = nil
+        if not EL.updateRefreshPending then return end
+        EL.updateRefreshPending = nil
+        EL._lastUpdateRefreshTime = GetTime and GetTime() or EL._lastUpdateRefreshTime
         if EL.PerformUpdate then EL:PerformUpdate() end
     end)
 end
@@ -3744,12 +3995,43 @@ end
 
 function EL:PrintSlashHelp()
     self:Print(self:T("Commands:"))
-    self:Print(self:T("General: /el, /el main, /el settings, /el help, /el welcome"))
+    self:Print(self:T("General: /el, /el main, /el recover, /el settings, /el help, /el welcome"))
     self:Print(self:T("Sessions: /el session, /el history, /el session start, /el session pause, /el reset session"))
     self:Print(self:T("Characters: /el restore, /el restore hidden, /el reset pinned"))
     self:Print(self:T("Display: /el scale, /el scale 0.85, /el lock, /el unlock, /el threshold 900, /el threshold alchemy 900"))
     self:Print(self:T("Maintenance: /el refresh, /el refresh professions, /el debug"))
     self:Print(self:T("Profiling: /el profile on, /el profile off, /el profile report, /el profile dump, /el profile reset"))
+end
+
+
+local function PreserveMainWindowForProfileCommand(callback)
+    local wasShown = EL and EL.panel and EL.panel.IsShown and EL.panel:IsShown()
+
+    if callback then callback() end
+
+    if not wasShown then return end
+
+    -- Profile commands must not hide or disable an already-visible tracker.
+    -- Force only the main tracker visibility flags back on after profiling actions.
+    local function restore()
+        local panelSettings = EL and EL.db and EL.db.settings and EL.db.settings.panel or nil
+        if panelSettings then
+            panelSettings.charactersShown = true
+            panelSettings.windowOpen = true
+        end
+        if EL and EL.panel and EL.panel.Show and not EL.panel:IsShown() then
+            EL.panel:Show()
+        elseif EL and EL.ShowPanelFromSavedState then
+            EL:ShowPanelFromSavedState()
+        end
+        if EL and EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
+    end
+
+    restore()
+    if C_Timer and C_Timer.After then
+        C_Timer.After(0, restore)
+        C_Timer.After(0.10, restore)
+    end
 end
 
 SLASH_EMBERLEDGER1 = "/ember"
@@ -3776,6 +4058,17 @@ SlashCmdList.EMBERLEDGER = function(msg)
         EL:Print(EL:T("Current window scale: %.2f. Use /el scale 0.85, /el scale 1, etc.", current))
     elseif msg == "reset" or msg == "reset windows" or msg == "reset layout" then
         if EL.ResetWindowPositions then EL:ResetWindowPositions() end
+    elseif msg == "recover" or msg == "restore window" or msg == "reset main" then
+        if EL.db and EL.db.settings and EL.db.settings.panel then
+            EL.db.settings.panel.point = "CENTER"
+            EL.db.settings.panel.relativePoint = "CENTER"
+            EL.db.settings.panel.x = 0
+            EL.db.settings.panel.y = 0
+            EL.db.settings.panel.charactersShown = true
+            EL.db.settings.panel.windowOpen = true
+        end
+        if EL.ShowPanelFromSavedState then EL:ShowPanelFromSavedState() end
+        EL:Print(EL:T("Main window restored."))
     elseif msg == "lock" or msg == "unlock" then
         EL.db.settings.lockWindows = (msg == "lock")
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
@@ -3787,13 +4080,21 @@ SlashCmdList.EMBERLEDGER = function(msg)
         EL:Print(enabled and EL:T("Performance profiling is enabled.") or EL:T("Performance profiling is disabled. Use /el profile on to enable it."))
         if EL.PrintProfileReport then EL:PrintProfileReport() end
     elseif msg == "profile on" or msg == "profile start" then
-        if EL.SetProfilingEnabled then EL:SetProfilingEnabled(true) end
+        PreserveMainWindowForProfileCommand(function()
+            if EL.SetProfilingEnabled then EL:SetProfilingEnabled(true) end
+        end)
     elseif msg == "profile off" or msg == "profile stop" then
-        if EL.SetProfilingEnabled then EL:SetProfilingEnabled(false) end
+        PreserveMainWindowForProfileCommand(function()
+            if EL.SetProfilingEnabled then EL:SetProfilingEnabled(false) end
+        end)
     elseif msg == "profile reset" then
-        if EL.ResetProfileStats then EL:ResetProfileStats() end
+        PreserveMainWindowForProfileCommand(function()
+            if EL.ResetProfileStats then EL:ResetProfileStats() end
+        end)
     elseif msg == "profile report" or msg == "profile summary" or msg == "profile dump" then
-        if EL.PrintProfileReport then EL:PrintProfileReport() end
+        PreserveMainWindowForProfileCommand(function()
+            if EL.PrintProfileReport then EL:PrintProfileReport() end
+        end)
     elseif msg == "refresh" then
         if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
         EL:ForEachModule("Refresh")
@@ -3923,8 +4224,8 @@ end)
 local function RegisterCoreEvent(eventName)
     if not EL.frame or not eventName then return end
     local ok, err = pcall(EL.frame.RegisterEvent, EL.frame, eventName)
-    if not ok and EL.DebugPrint then
-        EL:DebugPrint("Skipping unsupported event", eventName, err)
+    if not ok and EL.Debug then
+        EL:Debug("Skipping unsupported event: " .. tostring(eventName) .. " - " .. tostring(err))
     end
 end
 

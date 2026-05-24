@@ -25,6 +25,8 @@ local BLOCKED_MAIL_KEYWORDS = {
     "expired",
 }
 
+local BAG_DIFF_DEBOUNCE_SECONDS = 0.75
+
 local function TextContainsAny(value, patterns)
     local lower = tostring(value or ""):lower()
     if lower == "" then return false end
@@ -712,6 +714,21 @@ function M:ProcessCraftedItemMessage(msg)
     EL:MarkPendingSessionCraftedItem(itemID, quantity)
 end
 
+function M:QueueBagDiff(delay)
+    if self._bagDiffPending then return end
+    self._bagDiffPending = true
+    local function run()
+        self._bagDiffPending = nil
+        if not EL or not EL.db then return end
+        self:ProcessBagDiff()
+    end
+    if C_Timer and C_Timer.After then
+        C_Timer.After(delay or BAG_DIFF_DEBOUNCE_SECONDS, run)
+    else
+        run()
+    end
+end
+
 function M:OnEvent(event, ...)
     if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then return end
     if event == "CHAT_MSG_LOOT" then
@@ -721,10 +738,7 @@ function M:OnEvent(event, ...)
     elseif event == "TRADE_SKILL_ITEM_CRAFTED_RESULT" then
         self:ProcessCraftedItemResult(...)
     elseif event == "BAG_UPDATE_DELAYED" then
-        C_Timer.After(0.2, function()
-            if not EL or not EL.db then return end
-            self:ProcessBagDiff()
-        end)
+        self:QueueBagDiff(BAG_DIFF_DEBOUNCE_SECONDS)
     elseif event == "PLAYER_MONEY" then
         local s = EL:GetSessionDB()
         local currentMoney = N(s.lastMoneyCopper, 0, "session.lastMoneyCopper") or 0

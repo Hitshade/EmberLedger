@@ -31,6 +31,8 @@ local enUS = {
     ["Unlearned"] = "Unlearned",
     ["READY"] = "READY",
     ["charges"] = "charges",
+    ["Shared pool"] = "Shared pool",
+    ["Shared cooldown"] = "Shared cooldown",
     ["ready"] = "ready",
     ["next"] = "next",
     ["full"] = "full",
@@ -155,6 +157,10 @@ local enUS = {
     ["Session tracking resumed."] = "Session tracking resumed.",
     ["Session tracking paused."] = "Session tracking paused.",
     ["Concentration alert threshold set to %d."] = "Concentration alert threshold set to %d.",
+    ["Welcome to EmberLedger"] = "Welcome to EmberLedger",
+    ["EmberLedger learns your profession characters as you visit them.\n\nGetting Started:\n1. Log into each profession character you want to track.\n2. Open the Trade Skill window (press K, then choose a profession) once.\n3. Repeat this for each profession alt.\n\nConcentration, Artisan Moxie, and profession cooldowns are only available after opening the profession window. Your dashboard updates automatically as more characters are scanned.\n\nTip: /el help lists all commands and row interactions."] = "EmberLedger learns your profession characters as you visit them.\n\nGetting Started:\n1. Log into each profession character you want to track.\n2. Open the Trade Skill window (press K, then choose a profession) once.\n3. Repeat this for each profession alt.\n\nConcentration, Artisan Moxie, and profession cooldowns are only available after opening the profession window. Your dashboard updates automatically as more characters are scanned.\n\nTip: /el help lists all commands and row interactions.",
+    ["Open Options"] = "Open Options",
+    ["Got It"] = "Got It",
 }
 
 for key, value in pairs(enUS) do
