@@ -487,7 +487,7 @@ local function MakeIconActionButton(parent, info)
 
     b.highlight = b:CreateTexture(nil, "HIGHLIGHT")
     b.highlight:SetAllPoints(b.icon)
-    b.highlight:SetColorTexture(1, 0.82, 0.35, 0.16)
+    b.highlight:SetColorTexture(BORDER_R, BORDER_G, BORDER_B, 0.14)
 
     b:SetScript("OnEnter", function(self)
         local inf = self.actionInfo or {}
@@ -497,16 +497,16 @@ local function MakeIconActionButton(parent, info)
             if resolved and resolved.spellID and GameTooltip.SetSpellByID then
                 GameTooltip:SetSpellByID(resolved.spellID)
             else
-                GameTooltip:SetText((resolved and resolved.label) or self.actionLabel or "Spell", 1, 0.82, 0.24)
+                GameTooltip:SetText((resolved and resolved.label) or self.actionLabel or "Spell", BORDER_R, BORDER_G, BORDER_B)
             end
             if inf.zoneGroup then
                 GameTooltip:AddLine(" ")
                 GameTooltip:AddLine("Hidden outside the matching expansion zones.", 0.72, 0.72, 0.72)
             end
         elseif inf.kind == "toy" then
-            if inf.itemID then GameTooltip:SetItemByID(inf.itemID) else GameTooltip:SetText(self.actionLabel or "Toy", 1, 0.82, 0.24) end
+            if inf.itemID then GameTooltip:SetItemByID(inf.itemID) else GameTooltip:SetText(self.actionLabel or "Toy", BORDER_R, BORDER_G, BORDER_B) end
         else
-            if inf.itemID then GameTooltip:SetHyperlink("item:" .. tostring(inf.itemID)) else GameTooltip:SetText(self.actionLabel or "Item", 1, 0.82, 0.24) end
+            if inf.itemID then GameTooltip:SetHyperlink("item:" .. tostring(inf.itemID)) else GameTooltip:SetText(self.actionLabel or "Item", BORDER_R, BORDER_G, BORDER_B) end
             local count = GetItemCountSafe(inf.itemID, inf.name)
             GameTooltip:AddLine(" ")
             GameTooltip:AddDoubleLine("Available", tostring(count or 0), 0.72, 0.72, 0.72, 1, 1, 1)
@@ -631,7 +631,7 @@ function EL:CreateActionBar(parent)
     end
 
     bar.logout = MakeLogoutButton(bar)
-    bar.logout:SetPoint("RIGHT", bar, "RIGHT", -34, 0)
+    bar.logout:SetPoint("RIGHT", bar, "RIGHT", -4, 0)
 
     if self.LayoutActionBar then self:LayoutActionBar() end
     if self:IsActionBarEnabled() then self:RequestActionBarRefresh() end
@@ -673,7 +673,8 @@ function EL:LayoutActionBar()
         bar:SetParent(panel)
         local actionBottom = ((EL.db and EL.db.settings and EL.db.settings.display and EL.db.settings.display.compactMode == true) and 8 or 10)
         bar:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 12, actionBottom)
-        bar:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -14, actionBottom)
+        -- Use the shared footer tray; leave the rightmost corner for the resize grip.
+        bar:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, actionBottom)
         bar:SetShown(enabled and panel:IsShown())
     else
         bar:SetShown(false)
@@ -750,6 +751,7 @@ function EL:UpdateActionBar()
 
     if bar.logout then
         bar.logout:ClearAllPoints()
+        -- Keep Logout clear of the resize/menu corner in both anchored and floating modes.
         bar.logout:SetPoint("RIGHT", bar, "RIGHT", -34, 0)
     end
     if self.IsActionBarFloating and self:IsActionBarFloating() then

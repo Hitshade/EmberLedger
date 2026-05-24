@@ -1,3 +1,71 @@
+## v2.0.8
+
+- Strengthened the current-character row highlight with a warmer amber/gold treatment and a clearer left accent.
+- Added a subtle row-hover overlay for better table readability and row interaction feedback.
+- Added a Maintenance reset button for restoring UI settings, thresholds, window positions, launcher, minimap, and action-bar settings to defaults without deleting tracked character or session data.
+
+## v2.0.7
+
+- Improved the CD column ready marker so it uses a larger gold texture instead of an inline font texture.
+- Updated row tooltip section headers to use a clearer muted blue for better visual separation.
+
+## v2.0.6
+
+- Replaced the CD ready Unicode checkmark with a built-in gold checkbox-check texture so WoW clients display an actual checkmark instead of a missing-glyph rectangle.
+- Kept the CD column behavior unchanged: actionable cooldowns show the compact ready marker, timers still show when cooldowns are unavailable.
+
+## v2.0.5
+
+- Changed the compact CD column ready state from a raw ready count to a single checkmark for clearer cooldown scanning.
+- Colored the CD ready checkmark gold/yellow so it is visually distinct from the adjacent green Imbued Mulch ready state.
+- Kept cooldown timers, tooltip details, launcher summaries, and saved cooldown data unchanged.
+
+## v2.0.4
+
+- Removed registration for unsupported `TRADE_SKILL_UPDATE` event on current Retail clients.
+- Added guarded event registration so unsupported optional events cannot stop addon loading.
+- Kept cooldown settled-refresh hardening on supported profession events.
+
+## v2.0.3
+
+- Hardened shared charged profession cooldown normalization by trusting future recipe-lock timing over transient spell-charge Ready states.
+- Added TRADE_SKILL_UPDATE handling with a short settled refresh to improve cooldown accuracy after profession UI updates and shared cooldown craft events.
+- Bumped SavedVariables schema for cooldown timing normalization cleanup.
+
+## v2.0.2
+
+### Audit Fixes and Release Hardening
+
+- Fixed unescaped fallback texture paths that could prevent Lua files from loading.
+- Added missing UI and tooltip compatibility wrappers required by module verification.
+- Updated module refresh iteration to preserve module registration order while keeping a safe fallback.
+- Updated minimap and LibDataBroker fallback icons to use the bundled EmberLedger logo when available.
+- Removed hidden legacy controls from the Modules options page so it only builds true top-level module toggles.
+- Clarified character-data removal wording to note that account-wide session history is kept.
+
+## v2.0.1
+
+### Audit Cleanup and Asset Optimization
+
+- Reduced bundled EmberLedger logo assets to 256x256 for lighter in-game memory usage.
+- Removed obsolete visual theme SavedVariables left over from staged visual testing.
+- Added tracked profession coverage to the CD column header tooltip.
+- Removed unused legacy color locals and cleaned stale fallback color values.
+- Standardized Moxie threshold fallback usage around the shared default constant.
+
+## v2.0.0
+
+### Visual Refresh and Interface Polish
+
+- Audited and tightened main tracker column spacing to reduce horizontal footprint without cutting off common values.
+- Reworked EmberLedger around a single Dark visual style with black, charcoal, silver, and muted white UI tones.
+- Added bundled EmberLedger logo artwork for Options, main tracker, and session window headers.
+- Refreshed the Options window with a darker header, stronger framing, cleaner sidebar styling, and improved section spacing.
+- Polished the main tracker header, table spacing, row highlights, footer/action bar area, and resize grip alignment.
+- Improved tooltip, minimap tooltip, launcher, session window, and session history styling to better match the Dark visual identity.
+- Removed the temporary Steel and Gold theme selector from the v2.0 development passes.
+- Preserved existing tracking behavior, cooldown logic, SavedVariables, and session history behavior.
+
 ## v1.31.6
 
 ### Tracked Cooldown Dropdown Polish
@@ -256,12 +324,6 @@
 
 ---
 
-## v1.29.10
-### Cooldown Timer Source Hardening
-- Expanded profession cooldown timing detection to try recipe IDs, craft spell IDs, schematic IDs, and recipe-info cooldown fields.
-- Fixed cases where shared cooldown rows could still show `Unknown` even while the Blizzard profession UI had a valid cooldown timer available.
-- Preserved shared cooldown availability handling and saved cooldown data.
-
 ## v1.29.11
 
 ### Cooldown Tooltip Timer Fix
@@ -272,6 +334,12 @@
 ---
 
 ---
+
+## v1.29.10
+### Cooldown Timer Source Hardening
+- Expanded profession cooldown timing detection to try recipe IDs, craft spell IDs, schematic IDs, and recipe-info cooldown fields.
+- Fixed cases where shared cooldown rows could still show `Unknown` even while the Blizzard profession UI had a valid cooldown timer available.
+- Preserved shared cooldown availability handling and saved cooldown data.
 
 ## v1.29.9
 

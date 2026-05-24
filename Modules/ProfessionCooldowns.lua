@@ -975,13 +975,18 @@ local function NormalizeCooldownRecordTiming(record)
             record.recipeRemaining = nil
             recipeReadyTime = nil
         end
-        if recipeReadyTime and recipeReadyTime > now then
-            currentCharges = 0
-        end
         if sharedRecipeReadyTime and sharedRecipeReadyTime <= now then
             record.sharedRecipeReadyTime = nil
             record.sharedRecipeRemaining = nil
             sharedRecipeReadyTime = nil
+        end
+
+        -- Recipe cooldown data is the most reliable signal while the profession UI is
+        -- open. If it reports a future lock, trust it over spell-charge APIs that can
+        -- briefly report full/ready for shared charged cooldown buckets after login or craft events.
+        local recipeLockTime = SharedCooldownBucket.GetRecipeLockTime(record, now)
+        if recipeLockTime and recipeLockTime > now then
+            currentCharges = 0
         end
 
         if currentCharges < maxCharges and nextChargeTime and chargeDuration > 0 then
@@ -1899,12 +1904,13 @@ FormatCooldownTooltipState = function(entry, state)
 end
 
 function EL:GetProfessionCooldownDisplayText(charKey, professions)
-    -- Priority: ready count > active timer > unknown > not tracked.
-    -- Charged cooldowns with 1/max charges are still usable, so Ready wins over
-    -- the recharge timer in the compact CD column.
+    -- Priority: actionable > active timer > unknown > not tracked.
+    -- The compact CD column uses an inline gold checkmark texture for actionable cooldowns
+    -- instead of raw ready counts. This avoids missing-glyph font boxes and keeps the column stable while avoiding
+    -- implying that shared charged cooldown buckets are separate independent crafts.
     local summary = self:GetProfessionCooldownSummary(charKey, professions)
     if summary.tracked <= 0 then return "-", summary end
-    if summary.ready > 0 then return tostring(summary.ready), summary end
+    if summary.ready > 0 then return "", summary end
     if summary.nextRemaining and summary.nextRemaining > 0 then
         return FormatCooldownColumnTimer(summary.nextRemaining), summary
     end
@@ -2020,13 +2026,32 @@ function EL:HasProfessionCooldownColumnData(rows)
     return hasData
 end
 
+
+local function ThemeTooltipRGB(kind, fallbackR, fallbackG, fallbackB)
+    local colors = EL and EL.THEME_COLORS or {}
+    if kind == "text" then
+        return tonumber(colors.TEXT_R) or fallbackR, tonumber(colors.TEXT_G) or fallbackG, tonumber(colors.TEXT_B) or fallbackB
+    elseif kind == "muted" then
+        return tonumber(colors.MUTED_TEXT_R) or fallbackR, tonumber(colors.MUTED_TEXT_G) or fallbackG, tonumber(colors.MUTED_TEXT_B) or fallbackB
+    elseif kind == "value" then
+        return tonumber(colors.VALUE_TEXT_R) or fallbackR, tonumber(colors.VALUE_TEXT_G) or fallbackG, tonumber(colors.VALUE_TEXT_B) or fallbackB
+    elseif kind == "accent" then
+        return tonumber(colors.ACCENT_R) or fallbackR, tonumber(colors.ACCENT_G) or fallbackG, tonumber(colors.ACCENT_B) or fallbackB
+    end
+    return fallbackR, fallbackG, fallbackB
+end
+
 function EL:AddProfessionCooldownTooltipLines(tooltip, charKey, professions)
     if not tooltip or not charKey then return end
+    local accentR, accentG, accentB = 0.46, 0.68, 0.96
+    local mutedR, mutedG, mutedB = ThemeTooltipRGB("muted", 0.72, 0.72, 0.72)
+    local valueR, valueG, valueB = ThemeTooltipRGB("value", 0.90, 0.91, 0.93)
+    local categoryR, categoryG, categoryB = accentR, accentG, accentB
     local entries = self:GetProfessionCooldownEntriesForCharacter(charKey, professions)
     tooltip:AddLine(" ")
-    tooltip:AddLine(self:T("Profession Cooldowns"), 0.62, 0.78, 0.92)
+    tooltip:AddLine(self:T("Profession Cooldowns"), accentR, accentG, accentB)
     if #entries == 0 then
-        tooltip:AddLine(self:T("No supported profession cooldowns tracked."), 0.70, 0.70, 0.70)
+        tooltip:AddLine(self:T("No supported profession cooldowns tracked."), mutedR, mutedG, mutedB)
         return
     end
 
@@ -2034,19 +2059,19 @@ function EL:AddProfessionCooldownTooltipLines(tooltip, charKey, professions)
     for _, entry in ipairs(entries) do
         local category = entry.category or self:T("Profession")
         if category ~= currentCategory then
-            tooltip:AddLine(category, 0.95, 0.82, 0.38)
+            tooltip:AddLine(category, categoryR, categoryG, categoryB)
             currentCategory = category
         end
         local label = "   " .. tostring(entry.label or entry.shortLabel or self:T("Cooldown"))
         local state = ComputeCanonicalCooldownState(entry)
         local right = FormatCooldownTooltipState(entry, state)
         if state.unknown then
-            tooltip:AddDoubleLine(label, right, 0.72, 0.72, 0.72, 0.58, 0.68, 0.78)
-            tooltip:AddLine("      " .. EL:T("Open profession to refresh."), 0.58, 0.68, 0.78)
+            tooltip:AddDoubleLine(label, right, mutedR, mutedG, mutedB, valueR, valueG, valueB)
+            tooltip:AddLine("      " .. EL:T("Open profession to refresh."), mutedR, mutedG, mutedB)
         elseif state.unlearned then
-            tooltip:AddDoubleLine(label, right, 0.72, 0.72, 0.72, 0.78, 0.62, 0.42)
+            tooltip:AddDoubleLine(label, right, mutedR, mutedG, mutedB, valueR, valueG, valueB)
         else
-            tooltip:AddDoubleLine(label, right, 0.72, 0.72, 0.72, state.ready and 0.35 or 1.00, state.ready and 1.00 or 0.82, state.ready and 0.45 or 0.32)
+            tooltip:AddDoubleLine(label, right, mutedR, mutedG, mutedB, state.ready and 0.35 or 1.00, state.ready and 1.00 or 0.82, state.ready and 0.45 or 0.32)
         end
     end
 
@@ -2055,7 +2080,7 @@ function EL:AddProfessionCooldownTooltipLines(tooltip, charKey, professions)
     local age = type(stored) == "table" and FormatCooldownScanAge(stored._lastUpdated) or nil
     if age then
         tooltip:AddLine(" ")
-        tooltip:AddDoubleLine(self:T("Last scanned"), age, 0.62, 0.78, 0.92, 0.72, 0.72, 0.72)
+        tooltip:AddDoubleLine(self:T("Last scanned"), age, accentR, accentG, accentB, mutedR, mutedG, mutedB)
     end
 end
 
@@ -2091,6 +2116,9 @@ function module:OnEvent(event, ...)
         QueueCooldownRefresh(2.5, "_cooldownCraftSettledRefreshPending")
     elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_DATA_SOURCE_CHANGED" or event == "SKILL_LINES_CHANGED" or event == "SPELLS_CHANGED" then
         QueueCooldownRefresh(0.5)
+        if event == "TRADE_SKILL_DATA_SOURCE_CHANGED" then
+            QueueCooldownRefresh(1.5, "_cooldownTradeSkillSettledRefreshPending")
+        end
     end
 end
 

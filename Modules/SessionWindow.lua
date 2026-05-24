@@ -33,8 +33,27 @@ local SESSION_CLOSE_SIZE = UIC.SESSION_CLOSE_SIZE or 18
 local SESSION_CLOSE_RIGHT_PAD = UIC.SESSION_CLOSE_RIGHT_PAD or -5
 local SESSION_TITLE_LEFT_PAD = UIC.SESSION_TITLE_LEFT_PAD or 10
 local SESSION_TITLE_RIGHT_PAD = UIC.SESSION_TITLE_RIGHT_PAD or -8
-local THEME = EL.THEME_COLORS or {}
-local BORDER_R, BORDER_G, BORDER_B = THEME.BORDER_R or 0.82, THEME.BORDER_G or 0.66, THEME.BORDER_B or 0.34
+local function ThemeValue(key, fallback)
+    local colors = EL and EL.THEME_COLORS or {}
+    return tonumber(colors[key]) or fallback
+end
+
+local function ThemeBorderRGB()
+    return ThemeValue("BORDER_R", 0.82), ThemeValue("BORDER_G", 0.66), ThemeValue("BORDER_B", 0.34)
+end
+
+local function ThemeTextRGB()
+    return ThemeValue("TEXT_R", 0.90), ThemeValue("TEXT_G", 0.91), ThemeValue("TEXT_B", 0.93)
+end
+
+local function ThemeMutedTextRGB()
+    return ThemeValue("MUTED_TEXT_R", 0.80), ThemeValue("MUTED_TEXT_G", 0.82), ThemeValue("MUTED_TEXT_B", 0.85)
+end
+
+local function ThemeValueTextRGB()
+    return ThemeValue("VALUE_TEXT_R", 0.93), ThemeValue("VALUE_TEXT_G", 0.94), ThemeValue("VALUE_TEXT_B", 0.96)
+end
+
 local BORDER_ALPHA_STRONG = 0.78
 
 local function AddBackdrop(frame, alpha, borderAlpha)
@@ -189,19 +208,19 @@ function EL:RefreshBagSummaryView(frame)
             row.texts[3]:SetText(self:FormatSessionHistoryMoneyText(tonumber(entry.unitPrice) or 0))
             row.texts[4]:SetText(self:FormatSessionHistoryMoneyText(tonumber(entry.totalSilver) or 0))
             row.texts[4]:SetTextColor(0.55, 1.00, 0.36)
-            row.texts[1]:SetTextColor(0.90, 0.91, 0.92)
-            row.texts[2]:SetTextColor(0.90, 0.91, 0.92)
-            row.texts[3]:SetTextColor(0.90, 0.91, 0.92)
+            row.texts[1]:SetTextColor(ThemeTextRGB())
+            row.texts[2]:SetTextColor(ThemeTextRGB())
+            row.texts[3]:SetTextColor(ThemeTextRGB())
         else
             row:Show()
             if i == 1 then
                 row.texts[1]:SetText("No currently held tracked materials found.")
-                row.texts[1]:SetTextColor(0.68, 0.68, 0.64)
+                row.texts[1]:SetTextColor(ThemeMutedTextRGB())
                 row.texts[2]:SetText("")
                 row.texts[3]:SetText("")
                 row.texts[4]:SetText("")
             else
-                for _, fs in ipairs(row.texts or {}) do fs:SetText(""); fs:SetTextColor(0.88, 0.90, 0.92) end
+                for _, fs in ipairs(row.texts or {}) do fs:SetText(""); fs:SetTextColor(ThemeTextRGB()) end
             end
         end
     end
@@ -254,7 +273,10 @@ function EL:LayoutSessionWindow()
     settings.width = width
     w:SetSize(width, height)
     ApplyFrameOpacity(w, GetSessionOpacity())
-    if w.SetBackdropBorderColor then w:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, BORDER_ALPHA_STRONG) end
+    if w.SetBackdropBorderColor then
+        local borderR, borderG, borderB = ThemeBorderRGB()
+        w:SetBackdropBorderColor(borderR, borderG, borderB, BORDER_ALPHA_STRONG)
+    end
     w.sessionPanel:ClearAllPoints()
     w.sessionPanel:SetPoint("TOPLEFT", w, "TOPLEFT", SESSION_WINDOW_PAD, -SESSION_WINDOW_PAD)
     w.sessionPanel:SetPoint("BOTTOMRIGHT", w, "BOTTOMRIGHT", -SESSION_WINDOW_PAD, SESSION_WINDOW_PAD)

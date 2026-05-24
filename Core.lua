@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.31.6"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.0.7"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -25,6 +25,7 @@ end
 -- frame/layout helpers after the shared Core helpers are available, and
 -- ActionBar.lua loads last so secure button setup can use the completed UI layer.
 EL.modules = {}
+EL.moduleOrder = {}
 -- Concentration threshold overrides only apply to crafting professions that use
 -- concentration. Gathering professions such as Herbalism, Mining, and Skinning are
 -- intentionally excluded because they do not have concentration values.
@@ -105,20 +106,25 @@ function EL:GetExpansionName(expansionID)
 end
 
 
+EL.LOGO_TEXTURE = "Interface\\AddOns\\EmberLedger\\Media\\EmberLedgerLogo"
+
 EL.THEME_COLORS = {
-    BORDER_R = 0.82,
-    BORDER_G = 0.66,
-    BORDER_B = 0.34,
-    BG_R = 0.030,
-    BG_G = 0.024,
-    BG_B = 0.075,
-    ACTION_BUTTON_BG_R = 0.10,
-    ACTION_BUTTON_BG_G = 0.08,
-    ACTION_BUTTON_BG_B = 0.16,
-    ACTION_BUTTON_TEXT_R = 1.00,
-    ACTION_BUTTON_TEXT_G = 0.86,
-    ACTION_BUTTON_TEXT_B = 0.36,
+    -- EmberLedger v2.0 standard: near-black panels with neutral silver/grey accents.
+    BORDER_R = 0.42, BORDER_G = 0.42, BORDER_B = 0.44,
+    BG_R = 0.000, BG_G = 0.000, BG_B = 0.000,
+    ACCENT_R = 0.68, ACCENT_G = 0.68, ACCENT_B = 0.70,
+    GLOW_R = 0.26, GLOW_G = 0.26, GLOW_B = 0.28,
+    ACTION_BUTTON_BG_R = 0.010, ACTION_BUTTON_BG_G = 0.010, ACTION_BUTTON_BG_B = 0.012,
+    ACTION_BUTTON_TEXT_R = 0.88, ACTION_BUTTON_TEXT_G = 0.89, ACTION_BUTTON_TEXT_B = 0.91,
+    TEXT_R = 0.90, TEXT_G = 0.91, TEXT_B = 0.93,
+    MUTED_TEXT_R = 0.80, MUTED_TEXT_G = 0.82, MUTED_TEXT_B = 0.85,
+    VALUE_TEXT_R = 0.93, VALUE_TEXT_G = 0.94, VALUE_TEXT_B = 0.96,
 }
+
+function EL:ApplyVisualTheme()
+    self.THEME_COLORS = self.THEME_COLORS or {}
+    return "dark"
+end
 
 EL.UPDATE_DEBOUNCE_SECONDS = 0.05
 EL.ACTION_BAR_DEBOUNCE_SECONDS = 0.05
@@ -196,7 +202,7 @@ EL.UI_CONSTANTS = {
     OPTIONS_COOLDOWN_COLUMN_CHECK_Y = -62,
 }
 
-EL.DB_VERSION = 11611
+EL.DB_VERSION = 11612
 
 
 EL.PROFESSION_ICON_TEXTURES = {
@@ -401,6 +407,19 @@ local function CopyDefaults(src, dst)
     end
 end
 
+local function DeepCopy(src)
+    if type(src) ~= "table" then return src end
+    local dst = {}
+    for k, v in pairs(src) do
+        dst[k] = DeepCopy(v)
+    end
+    return dst
+end
+
+function EL:GetDefaultSettingsSnapshot()
+    return DeepCopy(defaults.settings)
+end
+
 local function RemoveLegacySavedVariableFields(db)
     if type(db) ~= "table" then return end
     if type(db.settings) == "table" then
@@ -415,6 +434,10 @@ local function RemoveLegacySavedVariableFields(db)
         end
         if type(db.settings.session) == "table" then
             db.settings.session.collapsed = nil
+        end
+        if type(db.settings.display) == "table" then
+            db.settings.display.visualTheme = nil
+            db.settings.display.themePreset = nil
         end
     end
 
@@ -1175,6 +1198,17 @@ end
 
 function EL:RegisterModule(name, module)
     self.modules[name] = module
+    self.moduleOrder = type(self.moduleOrder) == "table" and self.moduleOrder or {}
+    local known = false
+    for _, registeredName in ipairs(self.moduleOrder) do
+        if registeredName == name then
+            known = true
+            break
+        end
+    end
+    if not known then
+        self.moduleOrder[#self.moduleOrder + 1] = name
+    end
     module.name = name
     module.EL = self
 end
@@ -1184,8 +1218,20 @@ function EL:GetModule(name)
 end
 
 function EL:ForEachModule(fn)
-    for _, module in pairs(self.modules) do
+    local orderedNames = type(self.moduleOrder) == "table" and self.moduleOrder or {}
+    local seen = {}
+    for _, name in ipairs(orderedNames) do
+        local module = self.modules and self.modules[name]
+        seen[name] = true
         if module and module[fn] then
+            local ok, err = pcall(module[fn], module)
+            if not ok and self.Debug then
+                self:Debug("Module error [" .. tostring(module.name or "?") .. "." .. tostring(fn) .. "]: " .. tostring(err))
+            end
+        end
+    end
+    for name, module in pairs(self.modules or {}) do
+        if not seen[name] and module and module[fn] then
             local ok, err = pcall(module[fn], module)
             if not ok and self.Debug then
                 self:Debug("Module error [" .. tostring(module.name or "?") .. "." .. tostring(fn) .. "]: " .. tostring(err))
@@ -3818,6 +3864,7 @@ EL.frame:SetScript("OnEvent", function(_, event, ...)
         local loaded = ...
         if loaded ~= addonName then return end
         EL:EnsureDB()
+        if EL.ApplyVisualTheme then EL:ApplyVisualTheme() end
         if EL.CaptureOnboardingLoadState then EL:CaptureOnboardingLoadState() end
         EL:GetCurrentCharacter()
         if EL.RefreshCurrentProfessionIdentity then EL:RefreshCurrentProfessionIdentity() end
@@ -3873,23 +3920,31 @@ EL.frame:SetScript("OnEvent", function(_, event, ...)
     end
 end)
 
-EL.frame:RegisterEvent("ADDON_LOADED")
-EL.frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-EL.frame:RegisterEvent("SKILL_LINES_CHANGED")
-EL.frame:RegisterEvent("TRADE_SKILL_SHOW")
-EL.frame:RegisterEvent("TRADE_SKILL_DATA_SOURCE_CHANGED")
-EL.frame:RegisterEvent("TRADE_SKILL_ITEM_CRAFTED_RESULT")
-EL.frame:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
-EL.frame:RegisterEvent("BAG_UPDATE_DELAYED")
-EL.frame:RegisterEvent("CHAT_MSG_LOOT")
-EL.frame:RegisterEvent("CHAT_MSG_TRADESKILLS")
-EL.frame:RegisterEvent("PLAYER_MONEY")
-EL.frame:RegisterEvent("MAIL_SHOW")
-EL.frame:RegisterEvent("MAIL_INBOX_UPDATE")
-EL.frame:RegisterEvent("MAIL_CLOSED")
-EL.frame:RegisterEvent("PLAYER_REGEN_ENABLED")
-EL.frame:RegisterEvent("PLAYER_LOGOUT")
-EL.frame:RegisterEvent("SPELLS_CHANGED")
-EL.frame:RegisterEvent("ZONE_CHANGED")
-EL.frame:RegisterEvent("ZONE_CHANGED_INDOORS")
-EL.frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+local function RegisterCoreEvent(eventName)
+    if not EL.frame or not eventName then return end
+    local ok, err = pcall(EL.frame.RegisterEvent, EL.frame, eventName)
+    if not ok and EL.DebugPrint then
+        EL:DebugPrint("Skipping unsupported event", eventName, err)
+    end
+end
+
+RegisterCoreEvent("ADDON_LOADED")
+RegisterCoreEvent("PLAYER_ENTERING_WORLD")
+RegisterCoreEvent("SKILL_LINES_CHANGED")
+RegisterCoreEvent("TRADE_SKILL_SHOW")
+RegisterCoreEvent("TRADE_SKILL_DATA_SOURCE_CHANGED")
+RegisterCoreEvent("TRADE_SKILL_ITEM_CRAFTED_RESULT")
+RegisterCoreEvent("CURRENCY_DISPLAY_UPDATE")
+RegisterCoreEvent("BAG_UPDATE_DELAYED")
+RegisterCoreEvent("CHAT_MSG_LOOT")
+RegisterCoreEvent("CHAT_MSG_TRADESKILLS")
+RegisterCoreEvent("PLAYER_MONEY")
+RegisterCoreEvent("MAIL_SHOW")
+RegisterCoreEvent("MAIL_INBOX_UPDATE")
+RegisterCoreEvent("MAIL_CLOSED")
+RegisterCoreEvent("PLAYER_REGEN_ENABLED")
+RegisterCoreEvent("PLAYER_LOGOUT")
+RegisterCoreEvent("SPELLS_CHANGED")
+RegisterCoreEvent("ZONE_CHANGED")
+RegisterCoreEvent("ZONE_CHANGED_INDOORS")
+RegisterCoreEvent("ZONE_CHANGED_NEW_AREA")

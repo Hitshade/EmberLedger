@@ -4,7 +4,23 @@ local M = {}
 EL:RegisterModule("Minimap", M)
 
 local MINIMAP_BUTTON_NAME = "EmberLedgerMinimapButton"
-local DEFAULT_ICON = "Interface\\Icons\\INV_Misc_Coin_01"
+local DEFAULT_ICON = (EL and EL.LOGO_TEXTURE) or "Interface\\Icons\\INV_Misc_Coin_01"
+
+local function ThemeRGB(kind, fallbackR, fallbackG, fallbackB)
+    local colors = EL and EL.THEME_COLORS or {}
+    local prefix = {
+        accent = "ACCENT",
+        border = "BORDER",
+        text = "TEXT",
+        muted = "MUTED_TEXT",
+        value = "VALUE_TEXT",
+    }
+    local key = prefix[kind]
+    if key then
+        return colors[key .. "_R"] or fallbackR, colors[key .. "_G"] or fallbackG, colors[key .. "_B"] or fallbackB
+    end
+    return fallbackR, fallbackG, fallbackB
+end
 
 local function GetMinimapSettings()
     EL.db = EL.db or {}
@@ -31,22 +47,26 @@ local function PopulateTooltipLines(tooltip)
     if not tooltip then return end
 
     local ready, mulch, total, rate, elapsed = GetDisplaySummary()
-    tooltip:AddLine("Profession alt dashboard", 0.86, 0.86, 0.78, true)
+    local tr, tg, tb = ThemeRGB("text", 0.90, 0.91, 0.93)
+    local mr, mg, mb = ThemeRGB("muted", 0.80, 0.82, 0.85)
+    local vr, vg, vb = ThemeRGB("value", 0.93, 0.94, 0.96)
+    tooltip:AddLine("Profession alt dashboard", tr, tg, tb, true)
     tooltip:AddLine(" ")
-    tooltip:AddDoubleLine("Concentration ready", tostring(ready), 0.78, 0.78, 0.72, 1.00, 0.92, 0.56)
-    tooltip:AddDoubleLine("Mulch ready", tostring(mulch), 0.78, 0.78, 0.72, 1.00, 0.92, 0.56)
-    tooltip:AddDoubleLine("Session total", total, 0.78, 0.78, 0.72, 1.00, 0.92, 0.56)
-    tooltip:AddDoubleLine("Session rate", rate .. "/hr", 0.78, 0.78, 0.72, 1.00, 0.92, 0.56)
-    tooltip:AddDoubleLine("Session time", elapsed, 0.78, 0.78, 0.72, 1.00, 0.92, 0.56)
+    tooltip:AddDoubleLine("Concentration ready", tostring(ready), mr, mg, mb, vr, vg, vb)
+    tooltip:AddDoubleLine("Mulch ready", tostring(mulch), mr, mg, mb, vr, vg, vb)
+    tooltip:AddDoubleLine("Session total", total, mr, mg, mb, vr, vg, vb)
+    tooltip:AddDoubleLine("Session rate", rate .. "/hr", mr, mg, mb, vr, vg, vb)
+    tooltip:AddDoubleLine("Session time", elapsed, mr, mg, mb, vr, vg, vb)
     tooltip:AddLine(" ")
-    tooltip:AddLine("Left-click: Toggle tracker", 0.72, 0.72, 0.72)
-    tooltip:AddLine("Right-click: Options", 0.72, 0.72, 0.72)
+    tooltip:AddLine("Left-click: Toggle tracker", mr, mg, mb)
+    tooltip:AddLine("Right-click: Options", mr, mg, mb)
 end
 
 function EL:ShowMinimapTooltip(owner)
     if not GameTooltip then return end
     if owner then GameTooltip:SetOwner(owner, "ANCHOR_LEFT") end
-    GameTooltip:SetText("EmberLedger", 1.00, 0.82, 0.24)
+    local ar, ag, ab = ThemeRGB("accent", 0.68, 0.68, 0.70)
+    GameTooltip:SetText("EmberLedger", ar, ag, ab)
     PopulateTooltipLines(GameTooltip)
     GameTooltip:Show()
 end
@@ -117,7 +137,8 @@ local function CreateFallbackButton()
 
     button.highlight = button:CreateTexture(nil, "HIGHLIGHT")
     button.highlight:SetAllPoints(button.icon)
-    button.highlight:SetColorTexture(1.00, 0.82, 0.24, 0.18)
+    local ar, ag, ab = ThemeRGB("accent", 0.68, 0.68, 0.70)
+    button.highlight:SetColorTexture(ar, ag, ab, 0.18)
 
     button:SetScript("OnDragStart", function(self)
         self.dragging = true
@@ -207,7 +228,8 @@ local function TryRegisterLibDataBroker()
         OnClick = function(_, button) HandleMinimapClick(button) end,
         OnTooltipShow = function(tooltip)
             if not tooltip then return end
-            tooltip:SetText("EmberLedger", 1.00, 0.82, 0.24)
+            local ar, ag, ab = ThemeRGB("accent", 0.68, 0.68, 0.70)
+            tooltip:SetText("EmberLedger", ar, ag, ab)
             PopulateTooltipLines(tooltip)
         end,
     })

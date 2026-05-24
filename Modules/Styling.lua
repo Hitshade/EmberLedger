@@ -4,8 +4,27 @@ EL.Style = EL.Style or {}
 local Style = EL.Style
 
 local THEME = EL.THEME_COLORS or {}
-local BORDER_R, BORDER_G, BORDER_B = THEME.BORDER_R or 0.82, THEME.BORDER_G or 0.66, THEME.BORDER_B or 0.34
-local EL_BG_R, EL_BG_G, EL_BG_B = THEME.BG_R or 0.030, THEME.BG_G or 0.024, THEME.BG_B or 0.075
+
+local function ThemeValue(key, fallback)
+    local colors = EL and EL.THEME_COLORS or THEME or {}
+    return tonumber(colors[key]) or fallback
+end
+
+local function BorderRGB()
+    return ThemeValue("BORDER_R", 0.82), ThemeValue("BORDER_G", 0.66), ThemeValue("BORDER_B", 0.34)
+end
+
+local function BackgroundRGB()
+    return ThemeValue("BG_R", 0.020), ThemeValue("BG_G", 0.016), ThemeValue("BG_B", 0.040)
+end
+
+local function AccentRGB()
+    return ThemeValue("ACCENT_R", 1.00), ThemeValue("ACCENT_G", 0.72), ThemeValue("ACCENT_B", 0.18)
+end
+
+local function GlowRGB()
+    return ThemeValue("GLOW_R", 1.00), ThemeValue("GLOW_G", 0.46), ThemeValue("GLOW_B", 0.10)
+end
 
 function Style:ColorTextByRGB(text, r, g, b)
     text = tostring(text or "")
@@ -23,11 +42,13 @@ function Style:AddBackdrop(frame, alpha, borderAlpha)
         edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
         tile = true,
         tileSize = 16,
-        edgeSize = 12,
-        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        edgeSize = 14,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
     })
-    frame:SetBackdropColor(EL_BG_R, EL_BG_G, EL_BG_B, alpha or 0.55)
-    frame:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, borderAlpha or 0.55)
+    local bgR, bgG, bgB = BackgroundRGB()
+    local borderR, borderG, borderB = BorderRGB()
+    frame:SetBackdropColor(bgR, bgG, bgB, alpha or 0.55)
+    frame:SetBackdropBorderColor(borderR, borderG, borderB, borderAlpha or 0.55)
 end
 
 function Style:AddFlatBackdrop(frame, alpha, borderAlpha)
@@ -38,13 +59,16 @@ function Style:AddFlatBackdrop(frame, alpha, borderAlpha)
         edgeSize = 1,
         insets = { left = 0, right = 0, top = 0, bottom = 0 },
     })
-    if frame.SetBackdropColor then frame:SetBackdropColor(EL_BG_R, EL_BG_G, EL_BG_B, alpha or 0.38) end
-    if frame.SetBackdropBorderColor then frame:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, borderAlpha or 0.46) end
+    local bgR, bgG, bgB = BackgroundRGB()
+    local borderR, borderG, borderB = BorderRGB()
+    if frame.SetBackdropColor then frame:SetBackdropColor(bgR, bgG, bgB, alpha or 0.38) end
+    if frame.SetBackdropBorderColor then frame:SetBackdropBorderColor(borderR, borderG, borderB, borderAlpha or 0.46) end
 end
 
 function Style:ApplyFrameOpacity(frame, alpha)
     if frame and frame.SetBackdropColor then
-        frame:SetBackdropColor(EL_BG_R, EL_BG_G, EL_BG_B, alpha or 0.55)
+        local bgR, bgG, bgB = BackgroundRGB()
+        frame:SetBackdropColor(bgR, bgG, bgB, alpha or 0.55)
     end
 end
 
@@ -53,7 +77,8 @@ function Style:AddInnerBorder(frame)
     frame.innerBorder = frame:CreateTexture(nil, "BORDER")
     frame.innerBorder:SetPoint("TOPLEFT", 4, -4)
     frame.innerBorder:SetPoint("BOTTOMRIGHT", -4, 4)
-    frame.innerBorder:SetColorTexture(1.00, 0.78, 0.28, 0.090)
+    local r, g, b = AccentRGB()
+    frame.innerBorder:SetColorTexture(r, g, b, 0.12)
 end
 
 function Style:AddHeaderAccent(frame)
@@ -63,12 +88,67 @@ function Style:AddHeaderAccent(frame)
     frame.accentTop:SetHeight(1)
     frame.accentTop:SetPoint("TOPLEFT", 3, -2)
     frame.accentTop:SetPoint("TOPRIGHT", -3, -2)
-    frame.accentTop:SetColorTexture(1.00, 0.78, 0.28, 0.34)
+    local r, g, b = AccentRGB()
+    frame.accentTop:SetColorTexture(r, g, b, 0.34)
     frame.accentBottom = frame:CreateTexture(nil, "BORDER")
     frame.accentBottom:SetHeight(1)
     frame.accentBottom:SetPoint("BOTTOMLEFT", 3, 2)
     frame.accentBottom:SetPoint("BOTTOMRIGHT", -3, 2)
     frame.accentBottom:SetColorTexture(0.00, 0.00, 0.00, 0.50)
+end
+
+function Style:AddEmberCornerAccents(frame)
+    if not frame or frame._emberCornerAccents then return end
+    frame._emberCornerAccents = true
+    local points = {
+        {"TOPLEFT", 6, -6}, {"TOPRIGHT", -6, -6}, {"BOTTOMLEFT", 6, 6}, {"BOTTOMRIGHT", -6, 6},
+    }
+    frame.emberCorners = {}
+    for i, point in ipairs(points) do
+        local tex = frame:CreateTexture(nil, "BORDER")
+        tex:SetSize(14, 14)
+        tex:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+        local r, g, b = AccentRGB()
+        tex:SetVertexColor(r, g, b, 0.24)
+        tex:SetPoint(point[1], frame, point[1], point[2], point[3])
+        frame.emberCorners[i] = tex
+    end
+end
+
+function Style:AddEmberLogo(parent, size, layer)
+    if not parent then return nil end
+    local tex = parent:CreateTexture(nil, layer or "ARTWORK")
+    tex:SetSize(size or 36, size or 36)
+    tex:SetTexture((EL and EL.LOGO_TEXTURE) or "Interface\\Icons\\INV_Misc_Book_11")
+    tex:SetTexCoord(0.02, 0.98, 0.02, 0.98)
+    tex:SetVertexColor(1.00, 1.00, 1.00, 1.00)
+    return tex
+end
+
+function Style:AddEmberLogoBadge(parent, size, layer)
+    if not parent or not CreateFrame then return nil end
+    local frame = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    frame:SetSize(size or 42, size or 42)
+    frame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 10,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    if frame.SetBackdropColor then frame:SetBackdropColor(0.015, 0.017, 0.022, 0.82) end
+    if frame.SetBackdropBorderColor then
+        local borderR, borderG, borderB = BorderRGB()
+        frame:SetBackdropBorderColor(borderR, borderG, borderB, 0.82)
+    end
+    frame.glow = frame:CreateTexture(nil, "BACKGROUND")
+    frame.glow:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    frame.glow:SetSize((size or 42) + 12, (size or 42) + 12)
+    frame.glow:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+    local glowR, glowG, glowB = GlowRGB()
+    frame.glow:SetVertexColor(glowR, glowG, glowB, 0.18)
+    frame.logo = self:AddEmberLogo(frame, math.max(16, (size or 42) - 8), layer or "ARTWORK")
+    if frame.logo then frame.logo:SetPoint("CENTER", frame, "CENTER", 0, 0) end
+    return frame
 end
 
 function Style:StyleScrollBar(scrollFrame)
@@ -128,12 +208,12 @@ function Style:StyleActionBarButton(button)
     self:DisableButtonArt(button)
     self:AddFlatBackdrop(button, 0.86, 0.60)
     if button.SetBackdropColor then
-        button:SetBackdropColor(THEME.ACTION_BUTTON_BG_R or 0.10, THEME.ACTION_BUTTON_BG_G or 0.08, THEME.ACTION_BUTTON_BG_B or 0.16, 0.86)
+        button:SetBackdropColor(ThemeValue("ACTION_BUTTON_BG_R", 0.10), ThemeValue("ACTION_BUTTON_BG_G", 0.08), ThemeValue("ACTION_BUTTON_BG_B", 0.16), 0.86)
     end
     if button.SetBackdropBorderColor then
-        button:SetBackdropBorderColor(0.72, 0.56, 0.28, 0.60)
+        local borderR, borderG, borderB = BorderRGB(); button:SetBackdropBorderColor(borderR, borderG, borderB, 0.68)
     end
-    if button.SetTextColor then button:SetTextColor(THEME.ACTION_BUTTON_TEXT_R or 1.00, THEME.ACTION_BUTTON_TEXT_G or 0.86, THEME.ACTION_BUTTON_TEXT_B or 0.36) end
+    if button.SetTextColor then button:SetTextColor(ThemeValue("ACTION_BUTTON_TEXT_R", 0.86), ThemeValue("ACTION_BUTTON_TEXT_G", 0.90), ThemeValue("ACTION_BUTTON_TEXT_B", 0.96)) end
 end
 
 function EL:StyleBlizzardButton(button)

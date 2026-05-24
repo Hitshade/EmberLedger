@@ -27,22 +27,31 @@ local PANEL_SCREEN_MARGIN = 18
 local PANEL_MIN_SCALE = UIC.PANEL_MIN_SCALE or 0.6
 local PANEL_MAX_SCALE = UIC.PANEL_MAX_SCALE or 1.4
 local READY_ICON = "|TInterface\\RaidFrame\\ReadyCheck-Ready:14|t"
-local PIN_GLOW_R, PIN_GLOW_G, PIN_GLOW_B = 1.00, 0.72, 0.18
+local CD_READY_ICON_TEXTURE = "Interface\\Buttons\\UI-CheckBox-Check"
+local CD_READY_ICON_R, CD_READY_ICON_G, CD_READY_ICON_B = 1.00, 0.82, 0.25
+local PIN_GLOW_R, PIN_GLOW_G, PIN_GLOW_B = 0.70, 0.78, 0.88
 local PIN_GLOW_ALPHA = 0.060
 local PIN_ACCENT_ALPHA = 0.20
-local PIN_HOVER_ALPHA = 0.040
+local PIN_HOVER_ALPHA = 0.070
+local CURRENT_ROW_R, CURRENT_ROW_G, CURRENT_ROW_B = 0.42, 0.68, 1.00
+local CURRENT_ROW_BG_ALPHA = 0.145
+local CURRENT_ROW_BG_ALPHA_COMPACT = 0.125
+local CURRENT_ROW_LINE_ALPHA = 0.44
+local CURRENT_ROW_EDGE_ALPHA = 0.70
+local TRACKING_ROW_HOVER_R, TRACKING_ROW_HOVER_G, TRACKING_ROW_HOVER_B = 0.50, 0.66, 0.88
+local TRACKING_ROW_HOVER_ALPHA = 0.075
+local TRACKING_CURRENT_ROW_HOVER_ALPHA = 0.115
 local THEME = EL.THEME_COLORS or {}
 local BORDER_R, BORDER_G, BORDER_B = THEME.BORDER_R or 0.82, THEME.BORDER_G or 0.66, THEME.BORDER_B or 0.34
 local BORDER_ALPHA_STRONG = 0.78
 local BORDER_ALPHA_SOFT = 0.52
-local EL_BG_R, EL_BG_G, EL_BG_B = THEME.BG_R or 0.030, THEME.BG_G or 0.024, THEME.BG_B or 0.075
-local EL_PANEL_R, EL_PANEL_G, EL_PANEL_B = 0.050, 0.040, 0.115
+local EL_BG_R, EL_BG_G, EL_BG_B = THEME.BG_R or 0.000, THEME.BG_G or 0.000, THEME.BG_B or 0.000
 local EL_HEADER_R, EL_HEADER_G, EL_HEADER_B = 0.030, 0.024, 0.070
 local HEADER_LINE_ALPHA_TOP = 0.16
 local HEADER_LINE_ALPHA_BOTTOM = 0.30
 local ROW_STRIPE_ALPHA = 0.32
 local ROW_STRIPE_ALPHA_COMPACT = 0.28
-local ROW_SEPARATOR_ALPHA = 0.14
+local ROW_SEPARATOR_ALPHA = 0.18
 
 local function T(key, ...)
     if EL and EL.T then return EL:T(key, ...) end
@@ -93,6 +102,16 @@ local function GetTrackingRowHeight()
     return IsCompactModeEnabled() and TRACKING_COMPACT_ROW_H or TRACKING_ROW_H
 end
 
+local function ApplyTrackingRowHoverState(row, hovered)
+    if not row or not row.hover then return end
+    if row.isCurrentCharacter then
+        row.hover:SetColorTexture(CURRENT_ROW_R, CURRENT_ROW_G, CURRENT_ROW_B, TRACKING_CURRENT_ROW_HOVER_ALPHA)
+    else
+        row.hover:SetColorTexture(TRACKING_ROW_HOVER_R, TRACKING_ROW_HOVER_G, TRACKING_ROW_HOVER_B, TRACKING_ROW_HOVER_ALPHA)
+    end
+    row.hover:SetShown(hovered and true or false)
+end
+
 local function GetTrackingTopPadding()
     return IsCompactModeEnabled() and 42 or 68
 end
@@ -115,9 +134,10 @@ local function IsAnchoredActionBarShown()
 end
 
 local function GetTrackingBottomPadding(actionBarShown)
-    -- Match the scroll frame's bottom anchor when the action bar is hidden so
-    -- auto-height calculations do not clip the last visible character row.
-    return actionBarShown and (GetTrackingActionBarBottomOffset() + ACTION_BAR_H + 4) or 24
+    -- Keep one compact footer area in both anchored and floating modes. This
+    -- prevents the resize grip from looking detached while avoiding the overly
+    -- tall empty tray used by older layouts.
+    return actionBarShown and (GetTrackingActionBarBottomOffset() + ACTION_BAR_H + 5) or 41
 end
 
 local function GetTrackingEmptyBodyHeight()
@@ -137,6 +157,14 @@ local function ApplyTrackingTextStyle(row)
     if not row then return end
     local fontObject = IsCompactModeEnabled() and GameFontHighlightSmall or GameFontHighlight
     for _, fs in ipairs({row.name, row.prof1, row.conc1, row.prof2, row.conc2, row.moxie, row.moxieLeft, row.moxieSep, row.moxieRight, row.forecast, row.cooldown, row.mulch}) do
+        if fs and fs.SetFontObject then fs:SetFontObject(fontObject) end
+    end
+end
+
+local function ApplyTrackingHeaderTextStyle(header)
+    if not header then return end
+    local fontObject = IsCompactModeEnabled() and GameFontHighlightSmall or GameFontHighlight
+    for _, fs in ipairs({header.name, header.prof1, header.conc1, header.prof2, header.conc2, header.moxie, header.forecast, header.cooldown, header.mulch}) do
         if fs and fs.SetFontObject then fs:SetFontObject(fontObject) end
     end
 end
@@ -218,6 +246,24 @@ end
 
 local function AddHeaderAccent(frame)
     return EL.Style:AddHeaderAccent(frame)
+end
+
+local function AddEmberCornerAccents(frame)
+    if EL.Style and EL.Style.AddEmberCornerAccents then return EL.Style:AddEmberCornerAccents(frame) end
+end
+
+local function AddEmberLogo(parent, size, layer)
+    if EL.Style and EL.Style.AddEmberLogo then return EL.Style:AddEmberLogo(parent, size, layer) end
+    if not parent then return nil end
+    local tex = parent:CreateTexture(nil, layer or "ARTWORK")
+    tex:SetSize(size or 32, size or 32)
+    tex:SetTexture((EL and EL.LOGO_TEXTURE) or "Interface\\Icons\\INV_Misc_Book_11")
+    return tex
+end
+
+local function AddEmberLogoBadge(parent, size, layer)
+    if EL.Style and EL.Style.AddEmberLogoBadge then return EL.Style:AddEmberLogoBadge(parent, size, layer) end
+    return AddEmberLogo(parent, size, layer)
 end
 
 local function StyleScrollBar(scrollFrame)
@@ -393,6 +439,10 @@ local function RestoreSavedTrackingHeightIfNeeded(panel, rowCount)
     panel._emberRestoredSavedHeightWithRows = true
 end
 
+function EL:RestoreSavedTrackingHeightIfNeeded(panel, rowCount)
+    return RestoreSavedTrackingHeightIfNeeded(panel, rowCount)
+end
+
 function EL:AutoSizeTrackingPanel(reason, visibleRowCount)
     local panel = self.panel
     local settings = self.db and self.db.settings and self.db.settings.panel
@@ -475,20 +525,31 @@ local HEADER_TOOLTIPS = {
     conc2 = {"Concentration for the secondary tracked profession.", "Colors use the configured threshold for that profession."},
     moxie = {"Artisan Moxie tracked after scanning a profession window."},
     forecast = {"Time until the next concentration threshold or full state is reached."},
-    cooldown = {"Readiness for supported profession cooldown crafts."},
+    cooldown = {
+        "Readiness for supported profession cooldown crafts.",
+        function()
+            if EL.GetTrackedCooldownProfessionList then
+                local professions = EL:GetTrackedCooldownProfessionList()
+                if professions and professions ~= "" then
+                    return "Tracking: " .. professions
+                end
+            end
+            return "Tracking: none"
+        end,
+    },
     mulch = {"Imbued Mulch readiness and remaining time."},
 }
 
 local TRACKING_COLUMN_DEFS = {
-    { key = "character", label = "Character", width = 138, minWidth = 118, compactWidth = 112, compactMinWidth = 94, justify = "LEFT", sortKey = "character", alwaysVisible = true },
-    { key = "prof1", label = "P1", width = 34, minWidth = 30, compactWidth = 28, compactMinWidth = 26, justify = "CENTER", sortKey = "prof1", setting = "showProfession1Column", toggleLabel = "Prof 1 column" },
-    { key = "conc1", label = "Conc 1", width = 86, minWidth = 86, compactWidth = 68, compactMinWidth = 68, justify = "RIGHT", sortKey = "conc1", setting = "showConcentration1Column", toggleLabel = "Conc 1 column" },
-    { key = "prof2", label = "P2", width = 34, minWidth = 30, compactWidth = 28, compactMinWidth = 26, justify = "CENTER", sortKey = "prof2", setting = "showProfession2Column", toggleLabel = "Prof 2 column", secondary = true },
-    { key = "conc2", label = "Conc 2", width = 86, minWidth = 86, compactWidth = 68, compactMinWidth = 68, justify = "RIGHT", sortKey = "conc2", setting = "showConcentration2Column", toggleLabel = "Conc 2 column", secondary = true },
-    { key = "forecast", label = "Next", width = 84, minWidth = 72, compactWidth = 72, compactMinWidth = 64, justify = "RIGHT", sortKey = "forecast", setting = "showForecastColumn", toggleLabel = "Next column" },
-    { key = "moxie", label = "Moxie", width = 82, minWidth = 78, compactWidth = 70, compactMinWidth = 64, justify = "RIGHT", sortKey = "moxie", setting = "showMoxieColumn", toggleLabel = "Moxie column" },
-    { key = "cooldown", label = "CD", width = 42, minWidth = 36, compactWidth = 34, compactMinWidth = 30, justify = "CENTER", sortKey = "cooldown", setting = "showCooldownColumn", toggleLabel = "Cooldown readiness column" },
-    { key = "mulch", label = "Mulch", width = 68, minWidth = 64, compactWidth = 60, compactMinWidth = 58, justify = "RIGHT", sortKey = "mulch", setting = "showMulchColumn", toggleLabel = "Mulch column" },
+    { key = "character", label = "Character", width = 132, minWidth = 108, compactWidth = 104, compactMinWidth = 88, justify = "LEFT", sortKey = "character", alwaysVisible = true },
+    { key = "prof1", label = "P1", width = 30, minWidth = 28, compactWidth = 26, compactMinWidth = 24, justify = "CENTER", sortKey = "prof1", setting = "showProfession1Column", toggleLabel = "Prof 1 column" },
+    { key = "conc1", label = "Conc 1", width = 80, minWidth = 76, compactWidth = 64, compactMinWidth = 60, justify = "RIGHT", sortKey = "conc1", setting = "showConcentration1Column", toggleLabel = "Conc 1 column" },
+    { key = "prof2", label = "P2", width = 30, minWidth = 28, compactWidth = 26, compactMinWidth = 24, justify = "CENTER", sortKey = "prof2", setting = "showProfession2Column", toggleLabel = "Prof 2 column", secondary = true },
+    { key = "conc2", label = "Conc 2", width = 80, minWidth = 76, compactWidth = 64, compactMinWidth = 60, justify = "RIGHT", sortKey = "conc2", setting = "showConcentration2Column", toggleLabel = "Conc 2 column", secondary = true },
+    { key = "forecast", label = "Next", width = 76, minWidth = 68, compactWidth = 66, compactMinWidth = 60, justify = "RIGHT", sortKey = "forecast", setting = "showForecastColumn", toggleLabel = "Next column" },
+    { key = "moxie", label = "Moxie", width = 74, minWidth = 70, compactWidth = 64, compactMinWidth = 60, justify = "RIGHT", sortKey = "moxie", setting = "showMoxieColumn", toggleLabel = "Moxie column" },
+    { key = "cooldown", label = "CD", width = 36, minWidth = 32, compactWidth = 30, compactMinWidth = 28, justify = "CENTER", sortKey = "cooldown", setting = "showCooldownColumn", toggleLabel = "Cooldown readiness column" },
+    { key = "mulch", label = "Mulch", width = 58, minWidth = 56, compactWidth = 54, compactMinWidth = 52, justify = "RIGHT", sortKey = "mulch", setting = "showMulchColumn", toggleLabel = "Mulch column" },
 }
 
 local TRACKING_COLUMN_BY_KEY = {}
@@ -584,7 +645,7 @@ function EL:GetTrackingPanelMinWidth()
     for _, def in ipairs(columns) do
         totalWidth = totalWidth + GetTrackingColumnWidth(def, true)
     end
-    totalWidth = totalWidth + (math.max(0, #columns - 1) * 6)
+    totalWidth = totalWidth + (math.max(0, #columns - 1) * 4)
     local baseMin = IsCompactModeEnabled() and TRACKING_COMPACT_MIN_W or TRACKING_DYNAMIC_MIN_W
     return math.max(baseMin, math.min(PANEL_MAX_W, totalWidth))
 end
@@ -602,18 +663,19 @@ function EL:GetTrackingPanelMaxWidth()
     local realmShown = self.db and self.db.settings and self.db.settings.display and self.db.settings.display.showCharacterRealm ~= false
     local compact = IsCompactModeEnabled()
     local characterMax = realmShown and (optionalCount <= 1 and (compact and 140 or 176) or GetTrackingColumnWidth(TRACKING_COLUMN_BY_KEY.character, false)) or (optionalCount <= 1 and (compact and 92 or 104) or GetTrackingColumnWidth(TRACKING_COLUMN_BY_KEY.character, false))
-    local framePadding = 36
-    local tableMargins = 6
-    local gaps = math.max(0, #columns - 1) * 6
+    local framePadding = 16
+    local tableMargins = 0
+    local gaps = math.max(0, #columns - 1) * 4
     local naturalMax = framePadding + tableMargins + characterMax + optionalWidth + gaps
     local minW = self:GetTrackingPanelMinWidth()
     return math.max(minW, math.min(PANEL_MAX_W, naturalMax))
 end
 
 local function GetColumnLayout(width)
+    -- v2.0 visual pass 16: keep the Character header and row names aligned with a safe border inset.
     width = math.max(1, tonumber(width) or 1)
-    local margin = 3
-    local gap = 6
+    local margin = 6
+    local gap = 4
     local columns = EL:GetVisibleTrackingColumns()
     local layout = { columns = columns }
     local fixedW = margin * 2
@@ -664,6 +726,12 @@ local function AnchorColumnText(fs, parent, x, width, justify)
     fs:SetJustifyH(justify or "LEFT")
     if fs.SetWordWrap then fs:SetWordWrap(false) end
     if fs.SetNonSpaceWrap then fs:SetNonSpaceWrap(false) end
+end
+
+local function AnchorColumnTexture(texture, parent, x, width)
+    if not texture or not parent then return end
+    texture:ClearAllPoints()
+    texture:SetPoint("CENTER", parent, "LEFT", x + (math.max(1, tonumber(width) or 1) / 2), 0)
 end
 
 local function AnchorMoxieCell(row, parent, x, width)
@@ -776,6 +844,8 @@ local function FormatActionCooldownText(seconds)
     return tostring(seconds)
 end
 
+local ThemeColor, ThemeAccentRGB, ThemeBorderRGB, ThemeTextRGB, ThemeMutedTextRGB, ThemeValueTextRGB, RegisterThemeText, ApplyThemeTextCollections
+
 local function CreateHeaderButton(parent, fontString, sortKey)
     local b = CreateFrame("Button", nil, parent)
     DisableButtonArt(b)
@@ -783,20 +853,27 @@ local function CreateHeaderButton(parent, fontString, sortKey)
     b.fontString = fontString
     b.bg = b:CreateTexture(nil, "BACKGROUND")
     b.bg:SetAllPoints()
-    b.bg:SetColorTexture(1, 0.72, 0.22, 0)
+    b.bg:SetColorTexture(0.70, 0.78, 0.88, 0)
     b:SetScript("OnClick", function(self)
         EL:SetSortKey(self.sortKey)
     end)
     b:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText(T("Sort by %s", HEADER_LABELS[self.sortKey] or self.sortKey), 1, 0.82, 0.24)
+        local ar, ag, ab = ThemeAccentRGB(); GameTooltip:SetText(T("Sort by %s", HEADER_LABELS[self.sortKey] or self.sortKey), ar, ag, ab)
         local tipLines = HEADER_TOOLTIPS and HEADER_TOOLTIPS[self.sortKey]
         if tipLines then
             for _, line in ipairs(tipLines) do
-                GameTooltip:AddLine(T(line), 0.86, 0.86, 0.78, true)
+                local textLine = line
+                if type(line) == "function" then
+                    local ok, value = pcall(line)
+                    textLine = ok and value or nil
+                end
+                if textLine and textLine ~= "" then
+                    local tr, tg, tb = ThemeTextRGB(); GameTooltip:AddLine(T(textLine), tr, tg, tb, true)
+                end
             end
         end
-        GameTooltip:AddLine(T("Click again to reverse the order."), 0.7, 0.7, 0.7)
+        local mr, mg, mb = ThemeMutedTextRGB(); GameTooltip:AddLine(T("Click again to reverse the order."), mr, mg, mb)
         GameTooltip:Show()
     end)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -843,7 +920,8 @@ end
 local function AddSoftDivider(parent, x, yTop, yBottom)
     local line = parent:CreateTexture(nil, "BORDER")
     line:SetWidth(1)
-    line:SetColorTexture(0.95, 0.82, 0.42, 0.22)
+    local r, g, b = ThemeBorderRGB()
+    line:SetColorTexture(r, g, b, 0.34)
     line:SetPoint("TOPLEFT", parent, "TOPLEFT", x, yTop)
     line:SetPoint("BOTTOMLEFT", parent, "TOPLEFT", x, yBottom)
     return line
@@ -854,10 +932,10 @@ local function CreateMetricBlock(parent, label)
     f.label = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     f.label:SetPoint("TOP", f, "TOP", 0, 0)
     f.label:SetText(label)
-    f.label:SetTextColor(0.55, 0.78, 0.98)
+    f.label:SetTextColor(ThemeMutedTextRGB())
     f.value = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.value:SetPoint("TOP", f.label, "BOTTOM", 0, -3)
-    f.value:SetTextColor(0.92, 0.90, 0.84)
+    f.value:SetTextColor(ThemeValueTextRGB())
     f.value:SetJustifyH("CENTER")
     return f
 end
@@ -1064,6 +1142,12 @@ function EL:ConfirmResetWindowPositions()
     end)
 end
 
+function EL:ConfirmResetUISettings()
+    ShowSettingsConfirm(T("Reset EmberLedger UI settings and window positions to default? Tracked characters, profession data, cooldowns, mulch data, session history, hidden characters, and pinned characters will not be deleted."), T("Reset UI"), function()
+        if EL.ResetUISettingsToDefaults then EL:ResetUISettingsToDefaults() end
+    end, "EMBERLEDGER_CONFIRM_RESET_UI_SETTINGS", true)
+end
+
 function EL:ConfirmResetSession()
     ShowSettingsConfirm(T("Reset the current session totals and tracked item list?"), T("Reset"), function()
         if EL.ResetSession then EL:ResetSession() end
@@ -1089,14 +1173,14 @@ function EL:ConfirmRestoreHiddenCharacters()
 end
 
 function EL:ConfirmRemoveHiddenCharacterData()
-    ShowSettingsConfirm(T("Remove all EmberLedger data for currently hidden characters? This only affects EmberLedger saved data and cannot be undone."), T("Remove Data"), function()
+    ShowSettingsConfirm(T("Remove tracked EmberLedger character data for currently hidden characters? Account-wide session history is kept. This cannot be undone."), T("Remove Data"), function()
         if EL.RemoveHiddenCharacterData then EL:RemoveHiddenCharacterData() end
     end, "EMBERLEDGER_CONFIRM_REMOVE_HIDDEN_DATA", true)
 end
 
 function EL:ConfirmRemoveCharacterData(charKey, displayName)
     if not charKey then return end
-    ShowSettingsConfirm(T("Remove EmberLedger data for %s? This only affects EmberLedger saved data and cannot be undone.", tostring(displayName or charKey)), T("Remove Data"), function()
+    ShowSettingsConfirm(T("Remove tracked EmberLedger character data for %s? Account-wide session history is kept. This cannot be undone.", tostring(displayName or charKey)), T("Remove Data"), function()
         if EL.ResetCharacterData then EL:ResetCharacterData(charKey) end
     end, "EMBERLEDGER_CONFIRM_REMOVE_CHARACTER_DATA", true)
 end
@@ -1111,8 +1195,10 @@ local function MakeSettingsCheck(parent, text, onClick)
     local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     cb:SetSize(24, 24)
     cb.Text:SetText(text)
-    cb.Text:SetTextColor(0.88, 0.86, 0.78)
+    local tr, tg, tb = ThemeTextRGB()
+    cb.Text:SetTextColor(tr, tg, tb)
     cb.Text:SetFontObject(GameFontHighlightSmall)
+    RegisterThemeText(cb.Text, "themeTextWidgets")
     cb:SetScript("OnClick", onClick)
     cb.text = cb.Text
     return cb
@@ -1123,10 +1209,12 @@ local function SetSettingsTooltip(widget, title, lines)
     widget:SetScript("OnEnter", function(self)
         if not GameTooltip then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(title or "EmberLedger", 1.00, 0.82, 0.24)
+        local ar, ag, ab = ThemeAccentRGB()
+        GameTooltip:SetText(title or "EmberLedger", ar, ag, ab)
         if lines then
             for _, line in ipairs(lines) do
-                GameTooltip:AddLine(line, 0.86, 0.86, 0.78, true)
+                local mr, mg, mb = ThemeMutedTextRGB()
+                GameTooltip:AddLine(line, mr, mg, mb, true)
             end
         end
         GameTooltip:Show()
@@ -1219,11 +1307,11 @@ local function ShowSessionHistoryDisplayDropdown(anchor)
             btn.text:SetJustifyH("LEFT")
             btn.highlight = btn:CreateTexture(nil, "BACKGROUND")
             btn.highlight:SetAllPoints(btn)
-            btn.highlight:SetColorTexture(1.00, 0.78, 0.24, 0.10)
+            btn.highlight:SetColorTexture(0.76, 0.82, 0.92, 0.10)
             btn.highlight:Hide()
             btn:SetScript("OnEnter", function(self)
                 if self.highlight then self.highlight:Show() end
-                if self.text then self.text:SetTextColor(1.00, 0.82, 0.24) end
+                if self.text then self.text:SetTextColor(0.82, 0.88, 0.96) end
             end)
             btn:SetScript("OnLeave", function(self)
                 local currentMode = (EL.GetSessionHistoryDisplayMode and EL:GetSessionHistoryDisplayMode()) or "30"
@@ -1232,7 +1320,7 @@ local function ShowSessionHistoryDisplayDropdown(anchor)
                     if self.mode == currentMode then
                         self.text:SetTextColor(0.42, 1.00, 0.32)
                     else
-                        self.text:SetTextColor(0.92, 0.90, 0.82)
+                        self.text:SetTextColor(ThemeTextRGB())
                     end
                 end
             end)
@@ -1261,7 +1349,7 @@ local function ShowSessionHistoryDisplayDropdown(anchor)
                 if currentMode == option.mode then
                     btn.text:SetTextColor(0.42, 1.00, 0.32)
                 else
-                    btn.text:SetTextColor(0.92, 0.90, 0.82)
+                    btn.text:SetTextColor(ThemeTextRGB())
                 end
             end
             if btn.highlight then btn.highlight:SetShown(currentMode == option.mode) end
@@ -1289,12 +1377,16 @@ local function MakeSettingsSlider(parent, labelText, minValue, maxValue, step, v
     box.label:SetWidth(156)
     box.label:SetJustifyH("LEFT")
     box.label:SetText(labelText)
-    box.label:SetTextColor(0.92, 0.86, 0.72)
+    local tr, tg, tb = ThemeTextRGB()
+    box.label:SetTextColor(tr, tg, tb)
+    RegisterThemeText(box.label, "themeTextWidgets")
 
     box.value = box:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     box.value:SetPoint("RIGHT", box, "RIGHT", 0, 0)
     box.value:SetWidth(52)
-    box.value:SetTextColor(1.00, 0.92, 0.56)
+    local vr, vg, vb = ThemeValueTextRGB()
+    box.value:SetTextColor(vr, vg, vb)
+    RegisterThemeText(box.value, "themeValueTextWidgets")
     box.value:SetJustifyH("RIGHT")
 
     local slider = CreateFrame("Slider", nil, box, "OptionsSliderTemplate")
@@ -1329,24 +1421,99 @@ local function SetSliderValue(box, value)
     if box.formatter then box.value:SetText(box.formatter(value)) end
 end
 
+
+function ThemeColor(key, fallback)
+    local colors = EL and EL.THEME_COLORS or THEME or {}
+    return tonumber(colors[key]) or fallback
+end
+
+function ThemeAccentRGB()
+    return ThemeColor("ACCENT_R", 1.00), ThemeColor("ACCENT_G", 0.72), ThemeColor("ACCENT_B", 0.18)
+end
+
+function ThemeBorderRGB()
+    return ThemeColor("BORDER_R", 0.82), ThemeColor("BORDER_G", 0.66), ThemeColor("BORDER_B", 0.34)
+end
+
+function ThemeTextRGB()
+    return ThemeColor("TEXT_R", 0.88), ThemeColor("TEXT_G", 0.89), ThemeColor("TEXT_B", 0.91)
+end
+
+function ThemeMutedTextRGB()
+    return ThemeColor("MUTED_TEXT_R", 0.76), ThemeColor("MUTED_TEXT_G", 0.77), ThemeColor("MUTED_TEXT_B", 0.80)
+end
+
+function ThemeValueTextRGB()
+    return ThemeColor("VALUE_TEXT_R", 0.90), ThemeColor("VALUE_TEXT_G", 0.91), ThemeColor("VALUE_TEXT_B", 0.93)
+end
+
+function RegisterThemeText(fontString, bucket)
+    if not fontString or not EL or not EL.settingsPanel then return end
+    bucket = bucket or "themeTextWidgets"
+    local panel = EL.settingsPanel
+    panel[bucket] = panel[bucket] or {}
+    panel[bucket][#panel[bucket] + 1] = fontString
+end
+
+function ApplyThemeTextCollections(f)
+    if not f then return end
+    local r, g, b = ThemeTextRGB()
+    if f.themeTextWidgets then
+        for _, fs in ipairs(f.themeTextWidgets) do
+            if fs and fs.SetTextColor then fs:SetTextColor(r, g, b) end
+        end
+    end
+    r, g, b = ThemeMutedTextRGB()
+    if f.themeMutedTextWidgets then
+        for _, fs in ipairs(f.themeMutedTextWidgets) do
+            if fs and fs.SetTextColor then fs:SetTextColor(r, g, b) end
+        end
+    end
+    r, g, b = ThemeValueTextRGB()
+    if f.themeValueTextWidgets then
+        for _, fs in ipairs(f.themeValueTextWidgets) do
+            if fs and fs.SetTextColor then fs:SetTextColor(r, g, b) end
+        end
+    end
+end
+
+local function ApplySettingsSectionTheme(section)
+    if not section then return end
+    AddBackdrop(section, math.max(0.24, GetPanelOpacity() - 0.08), 0.42)
+    local bgR, bgG, bgB = ThemeColor("BG_R", 0.020), ThemeColor("BG_G", 0.016), ThemeColor("BG_B", 0.040)
+    local accentR, accentG, accentB = ThemeAccentRGB()
+    if section.SetBackdropColor then section:SetBackdropColor(bgR, bgG, bgB, math.max(0.56, GetPanelOpacity())) end
+    if section.SetBackdropBorderColor then
+        local borderR, borderG, borderB = ThemeBorderRGB()
+        section:SetBackdropBorderColor(borderR, borderG, borderB, 0.42)
+    end
+    if section.sideAccent then section.sideAccent:SetColorTexture(accentR, accentG, accentB, 0.28) end
+    if section.title then section.title:SetTextColor(accentR, accentG, accentB) end
+    if section.line then section.line:SetColorTexture(accentR, accentG, accentB, 0.18) end
+    if section.accentTop then section.accentTop:SetColorTexture(accentR, accentG, accentB, 0.34) end
+end
+
 local function MakeSettingsSection(parent, title, x, y, w, h)
     local section = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     section:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     section:SetSize(w, h)
-    AddBackdrop(section, math.max(0.20, GetPanelOpacity() - 0.10), 0.25)
+    AddBackdrop(section, math.max(0.24, GetPanelOpacity() - 0.08), 0.42)
+    AddHeaderAccent(section)
+    section.sideAccent = section:CreateTexture(nil, "ARTWORK")
+    section.sideAccent:SetWidth(2)
+    section.sideAccent:SetPoint("TOPLEFT", section, "TOPLEFT", 5, -8)
+    section.sideAccent:SetPoint("BOTTOMLEFT", section, "BOTTOMLEFT", 5, 8)
     section.title = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    section.title:SetPoint("TOPLEFT", 12, -9)
+    section.title:SetPoint("TOPLEFT", 14, -9)
     section.title:SetText(title)
-    section.title:SetTextColor(1.00, 0.72, 0.18)
     section.line = section:CreateTexture(nil, "BORDER")
-    section.line:SetColorTexture(1.00, 0.72, 0.18, 0.18)
     section.line:SetHeight(1)
-    section.line:SetPoint("TOPLEFT", 12, -28)
-    section.line:SetPoint("TOPRIGHT", -12, -28)
+    section.line:SetPoint("TOPLEFT", 14, -28)
+    section.line:SetPoint("TOPRIGHT", -14, -28)
+    ApplySettingsSectionTheme(section)
     return section
 end
 
--- EMBERLEDGER_OPTIONS_LAYOUT_FINAL_316
 function EL:CreateSettingsPanel(parent)
     if self.settingsPanel then
         self.settingsPanel:SetParent(UIParent)
@@ -1375,7 +1542,10 @@ function EL:CreateSettingsPanel(parent)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    AddBackdrop(f, GetPanelOpacity(), 0.55)
+    AddBackdrop(f, GetPanelOpacity(), 0.72)
+    if f.SetBackdropColor then f:SetBackdropColor(0.014, 0.010, 0.030, GetPanelOpacity()) end
+    AddInnerBorder(f)
+    AddEmberCornerAccents(f)
     self.db.settings.options = self.db.settings.options or {}
     if self.db.settings.options.point then
         SetFramePointFromDB(f, self.db.settings.options)
@@ -1393,18 +1563,49 @@ function EL:CreateSettingsPanel(parent)
     end)
     f:Hide()
 
-    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    f.title:SetPoint("TOPLEFT", 16, -12)
-    f.title:SetText(T("EmberLedger Options"))
-    f.title:SetTextColor(1.00, 0.82, 0.24)
+    f.headerPanel = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    f.headerPanel:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -8)
+    f.headerPanel:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -8)
+    f.headerPanel:SetHeight(48)
+    AddBackdrop(f.headerPanel, 0.96, 0.58)
+    if f.headerPanel.SetBackdropColor then f.headerPanel:SetBackdropColor(0.006, 0.007, 0.010, 0.96) end
+    if f.headerPanel.SetBackdropBorderColor then
+        local borderR, borderG, borderB = ThemeBorderRGB()
+        f.headerPanel:SetBackdropBorderColor(borderR, borderG, borderB, 0.58)
+    end
+    AddHeaderAccent(f.headerPanel)
 
-    f.close = MakeSettingsButton(f, "×", 24, function() f:Hide() end)
-    f.close:SetPoint("TOPRIGHT", -10, -10)
+    f.headerGlow = f.headerPanel:CreateTexture(nil, "BACKGROUND")
+    f.headerGlow:SetPoint("TOPLEFT", f.headerPanel, "TOPLEFT", 6, -5)
+    f.headerGlow:SetPoint("BOTTOMRIGHT", f.headerPanel, "BOTTOMRIGHT", -6, 5)
+    local headerGlowR, headerGlowG, headerGlowB = ThemeAccentRGB()
+    f.headerGlow:SetColorTexture(headerGlowR, headerGlowG, headerGlowB, 0.040)
+
+    f.logo = AddEmberLogoBadge(f.headerPanel, 38, "ARTWORK")
+    if f.logo then f.logo:SetPoint("LEFT", f.headerPanel, "LEFT", 10, 0) end
+
+    f.title = f.headerPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    f.title:SetPoint("TOPLEFT", f.headerPanel, "TOPLEFT", 58, -9)
+    f.title:SetText(T("EmberLedger Options"))
+    f.title:SetTextColor(ThemeAccentRGB())
+
+    f.subtitle = f.headerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.subtitle:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -2)
+    f.subtitle:SetText(T("Configure profession tracking, cooldowns, sessions, and display polish."))
+    f.subtitle:SetTextColor(0.84, 0.78, 0.66)
+
+    f.close = CreateFrame("Button", nil, f.headerPanel, "UIPanelCloseButton")
+    f.close:SetSize(24, 24)
+    f.close:SetPoint("RIGHT", f.headerPanel, "RIGHT", -6, 0)
+    f.close:SetScript("OnClick", function() f:Hide() end)
+    f.close:SetFrameLevel(((f.headerPanel.GetFrameLevel and f.headerPanel:GetFrameLevel()) or 1) + 5)
 
     f.nav = CreateFrame("Frame", nil, f, "BackdropTemplate")
-    f.nav:SetPoint("TOPLEFT", 14, -42)
-    f.nav:SetSize(140, 690)
-    AddBackdrop(f.nav, 0.28, 0.35)
+    f.nav:SetPoint("TOPLEFT", 14, -58)
+    f.nav:SetSize(140, 674)
+    AddBackdrop(f.nav, 0.42, 0.48)
+    if f.nav.SetBackdropColor then f.nav:SetBackdropColor(0.012, 0.010, 0.026, 0.78) end
+    AddInnerBorder(f.nav)
 
     local navItems = {
         {"General", "Interface\\Icons\\INV_Misc_Gear_01"},
@@ -1422,17 +1623,23 @@ function EL:CreateSettingsPanel(parent)
     for i, data in ipairs(navItems) do
         local row = CreateFrame("Button", nil, f.nav, "BackdropTemplate")
         row:SetPoint("TOPLEFT", 8, ny)
-        row:SetSize(134, 30)
-        AddBackdrop(row, 0.10, 0.10)
-        if row.SetBackdropColor then row:SetBackdropColor(0.02, 0.02, 0.03, 0.00) end
-        if row.SetBackdropBorderColor then row:SetBackdropBorderColor(1.0, 0.72, 0.18, 0.00) end
+        row:SetSize(124, 32)
+        AddBackdrop(row, 0.16, 0.16)
+        if row.SetBackdropColor then row:SetBackdropColor(0.02, 0.018, 0.030, 0.20) end
+        if row.SetBackdropBorderColor then row:SetBackdropBorderColor(0.70, 0.78, 0.88, 0.10) end
+        row.selectedBar = row:CreateTexture(nil, "ARTWORK")
+        row.selectedBar:SetWidth(3)
+        row.selectedBar:SetPoint("TOPLEFT", row, "TOPLEFT", 2, -4)
+        row.selectedBar:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 2, 4)
+        local r, g, b = ThemeAccentRGB(); row.selectedBar:SetColorTexture(r, g, b, 0.70)
+        row.selectedBar:Hide()
         row.pageName = data[1]
         row.icon = row:CreateTexture(nil, "ARTWORK")
-        row.icon:SetSize(18, 18)
-        row.icon:SetPoint("LEFT", 4, 0)
+        row.icon:SetSize(20, 20)
+        row.icon:SetPoint("LEFT", 8, 0)
         row.icon:SetTexture(data[2])
         row.text = row:CreateFontString(nil, "OVERLAY", i == 1 and "GameFontNormalSmall" or "GameFontHighlightSmall")
-        row.text:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
+        row.text:SetPoint("LEFT", row.icon, "RIGHT", 10, 0)
         row.text:SetText(T(data[1]))
         row.text:SetTextColor(i == 1 and 1 or 0.86, i == 1 and 0.82 or 0.84, i == 1 and 0.24 or 0.78)
         row:SetScript("OnClick", function(self)
@@ -1440,7 +1647,8 @@ function EL:CreateSettingsPanel(parent)
         end)
         row:SetScript("OnEnter", function(self)
             if self.SetBackdropColor and EL.settingsPanel and EL.settingsPanel.currentPage ~= self.pageName then
-                self:SetBackdropColor(0.18, 0.10, 0.06, 0.35)
+                local r, g, b = ThemeAccentRGB()
+                self:SetBackdropColor(r * 0.18, g * 0.14, b * 0.10, 0.35)
             end
         end)
         row:SetScript("OnLeave", function(self)
@@ -1471,23 +1679,23 @@ function EL:CreateSettingsPanel(parent)
     f.toggleCharactersSection:Hide()
     f.toggleSessionSection:Hide()
     f.showMinimapButton:Hide()
-    f.appearanceSection = MakeSettingsSection(f, "Appearance", contentX, -118, contentW, 180)
+    f.appearanceSection = MakeSettingsSection(f, "Appearance", contentX, -118, contentW, 178)
     f.launcherOpacitySlider = MakeSettingsSlider(f.appearanceSection, "Launcher opacity", 20, 100, 5, function(v) return string.format("%d%%", v) end, function(v)
         EL:SetAbsoluteSetting("launcherOpacity", v / 100)
     end)
-    f.launcherOpacitySlider:SetPoint("TOPLEFT", 12, -38)
+    f.launcherOpacitySlider:SetPoint("TOPLEFT", 12, -40)
     f.panelOpacitySlider = MakeSettingsSlider(f.appearanceSection, "Main window opacity", 20, 100, 5, function(v) return string.format("%d%%", v) end, function(v)
         EL:SetAbsoluteSetting("panelOpacity", v / 100)
     end)
-    f.panelOpacitySlider:SetPoint("TOPLEFT", 12, -72)
+    f.panelOpacitySlider:SetPoint("TOPLEFT", 12, -74)
     f.sessionOpacitySlider = MakeSettingsSlider(f.appearanceSection, "Session opacity", 20, 100, 5, function(v) return string.format("%d%%", v) end, function(v)
         EL:SetAbsoluteSetting("sessionOpacity", v / 100)
     end)
-    f.sessionOpacitySlider:SetPoint("TOPLEFT", 12, -106)
+    f.sessionOpacitySlider:SetPoint("TOPLEFT", 12, -108)
     f.matchOpacityButton = MakeSettingsButton(f.appearanceSection, "Match Main", 112, function()
         if EL.MatchOpacityToMainWindow then EL:MatchOpacityToMainWindow() end
     end)
-    f.matchOpacityButton:SetPoint("TOPLEFT", 12, -140)
+    f.matchOpacityButton:SetPoint("TOPLEFT", 12, -142)
     f.resetOpacityButton = MakeSettingsButton(f.appearanceSection, "Reset Opacity", 122, function()
         if EL.ResetOpacityDefaults then EL:ResetOpacityDefaults() end
     end)
@@ -1495,7 +1703,7 @@ function EL:CreateSettingsPanel(parent)
     SetSettingsTooltip(f.matchOpacityButton, "Match Main", {"Sets launcher and session opacity to the current main-window opacity."})
     SetSettingsTooltip(f.resetOpacityButton, "Reset Opacity", {"Restores default opacity values for launcher, main window, and session window."})
 
-    f.scaleSection = MakeSettingsSection(f, "Scale", contentX, -280, contentW, 112)
+    f.scaleSection = MakeSettingsSection(f, "Scale", contentX, -278, contentW, 112)
     f.scaleSlider = MakeSettingsSlider(f.scaleSection, "Main window scale", 60, 140, 5, function(v) return string.format("%d%%", v) end, function(v)
         EL:SetAbsoluteSetting("panelScale", v / 100)
     end)
@@ -1510,7 +1718,8 @@ function EL:CreateSettingsPanel(parent)
     f.moduleDesc:SetPoint("TOPLEFT", 12, -36)
     f.moduleDesc:SetWidth(contentW - 24)
     f.moduleDesc:SetJustifyH("LEFT")
-    f.moduleDesc:SetTextColor(0.82, 0.80, 0.72)
+    f.moduleDesc:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.moduleDesc, "themeMutedTextWidgets")
     f.moduleDesc:SetText("Enable only the EmberLedger systems you care about. These controls collect only the top-level systems. Column visibility and detailed display options remain on their own pages.")
     f.moduleMainWindow = MakeSettingsCheck(f.moduleSection, "Main tracker", function() EL:ToggleSectionSetting("characters") end)
     f.moduleMainWindow:SetPoint("TOPLEFT", 12, -78)
@@ -1522,39 +1731,11 @@ function EL:CreateSettingsPanel(parent)
     f.moduleLauncher:SetPoint("TOPLEFT", 238, -104)
     f.moduleMinimap = MakeSettingsCheck(f.moduleSection, "Minimap button", function() if EL.ToggleMinimapButton then EL:ToggleMinimapButton() end end)
     f.moduleMinimap:SetPoint("TOPLEFT", 12, -130)
-    f.moduleSessionWindow = MakeSettingsCheck(f.moduleSection, "Session window", function() EL:ToggleSectionSetting("session") end)
-    f.moduleSessionWindow:SetPoint("TOPLEFT", 238, -130)
-    f.moduleCooldowns = MakeSettingsCheck(f.moduleSection, "Cooldown column", function() EL:ToggleTrackingColumn("cooldown") end)
-    f.moduleCooldowns:SetPoint("TOPLEFT", 12, -156)
-    f.moduleMulch = MakeSettingsCheck(f.moduleSection, "Imbued Mulch column", function() EL:ToggleTrackingColumn("mulch") end)
-    f.moduleMulch:SetPoint("TOPLEFT", 238, -156)
-    f.moduleMoxie = MakeSettingsCheck(f.moduleSection, "Moxie column", function() EL:ToggleTrackingColumn("moxie") end)
-    f.moduleMoxie:SetPoint("TOPLEFT", 12, -182)
-    f.moduleNext = MakeSettingsCheck(f.moduleSection, "Next forecast column", function() EL:ToggleTrackingColumn("forecast") end)
-    f.moduleNext:SetPoint("TOPLEFT", 238, -182)
     SetSettingsTooltip(f.moduleMainWindow, "Main tracker", {"Shows the main profession dashboard window."})
     SetSettingsTooltip(f.moduleSessionTracking, "Session tracking", {"Enables session value, item tracking, bag summaries, and session history processing."})
     SetSettingsTooltip(f.moduleActionBar, "Action Bar", {"Enables EmberLedger utility button processing."})
     SetSettingsTooltip(f.moduleLauncher, "Launcher", {"Shows the compact EmberLedger launcher button."})
     SetSettingsTooltip(f.moduleMinimap, "Minimap button", {"Shows or hides EmberLedger's minimap button."})
-    SetSettingsTooltip(f.moduleSessionWindow, "Session window", {"Shows the standalone Session window independently from session tracking."})
-    SetSettingsTooltip(f.moduleCooldowns, "Cooldown column", {"Shows or hides the profession cooldown readiness column."})
-    SetSettingsTooltip(f.moduleMulch, "Imbued Mulch column", {"Shows or hides the Imbued Mulch column."})
-    SetSettingsTooltip(f.moduleMoxie, "Moxie column", {"Shows or hides the Artisan Moxie column."})
-    SetSettingsTooltip(f.moduleNext, "Next forecast column", {"Shows or hides the next concentration readiness forecast column."})
-    -- The Modules page intentionally exposes only true top-level systems. These
-    -- legacy controls are kept as hidden frame references so older refresh logic
-    -- can safely no-op, while column visibility stays on the Main Window page.
-    for _, control in ipairs({
-        f.moduleSessionWindow,
-        f.moduleCooldowns,
-        f.moduleMulch,
-        f.moduleMoxie,
-        f.moduleNext,
-    }) do
-        if control then control:Hide() end
-    end
-
     f.mainWindowTogglesSection = MakeSettingsSection(f, "Main Window Toggles", contentX, -498, contentW, 136)
     local mainWindowToggleLeftX = 12
     local mainWindowToggleRightX = 250
@@ -1586,7 +1767,8 @@ function EL:CreateSettingsPanel(parent)
     f.profThresholdDesc:SetPoint("TOPLEFT", 12, -34)
     f.profThresholdDesc:SetWidth(contentW - 24)
     f.profThresholdDesc:SetJustifyH("LEFT")
-    f.profThresholdDesc:SetTextColor(0.82, 0.80, 0.72)
+    f.profThresholdDesc:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.profThresholdDesc, "themeMutedTextWidgets")
     f.profThresholdDesc:SetText("Set optional concentration thresholds per profession. Set a profession to 0 to use the global threshold.")
     f.profThresholdSliders = {}
     local thresholdY = -72
@@ -1630,7 +1812,8 @@ function EL:CreateSettingsPanel(parent)
     f.nextColumnDesc:SetPoint("TOPRIGHT", (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_COLUMN_DESC_RIGHT) or -12, (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_COLUMN_DESC_TOP) or -36)
     f.nextColumnDesc:SetJustifyH("LEFT")
     if f.nextColumnDesc.SetWordWrap then f.nextColumnDesc:SetWordWrap(true) end
-    f.nextColumnDesc:SetTextColor(0.82, 0.82, 0.76)
+    f.nextColumnDesc:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.nextColumnDesc, "themeMutedTextWidgets")
     f.nextColumnDesc:SetText("Shows the next concentration readiness forecast based on your threshold and regeneration timing.")
     f.toggleForecastColumn = MakeSettingsCheck(f.nextColumnSection, "Show Next column", function() EL:ToggleTrackingColumn("forecast") end)
     f.toggleForecastColumn:SetPoint("TOPLEFT", (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_COLUMN_DESC_LEFT) or 12, (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_NEXT_COLUMN_CHECK_Y) or -62)
@@ -1641,7 +1824,8 @@ function EL:CreateSettingsPanel(parent)
     f.cooldownColumnDesc:SetPoint("TOPRIGHT", (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_COLUMN_DESC_RIGHT) or -12, (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_COLUMN_DESC_TOP) or -36)
     f.cooldownColumnDesc:SetJustifyH("LEFT")
     if f.cooldownColumnDesc.SetWordWrap then f.cooldownColumnDesc:SetWordWrap(true) end
-    f.cooldownColumnDesc:SetTextColor(0.82, 0.82, 0.76)
+    f.cooldownColumnDesc:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.cooldownColumnDesc, "themeMutedTextWidgets")
     f.cooldownColumnDesc:SetText("Shows readiness for supported profession cooldown crafts. Use Expansion Scope to reduce older-expansion cooldown clutter.")
     f.toggleCooldownColumn = MakeSettingsCheck(f.cooldownColumnSection, "Show CD column", function() EL:ToggleTrackingColumn("cooldown") end)
     f.toggleCooldownColumn:SetPoint("TOPLEFT", (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_COLUMN_DESC_LEFT) or 12, (EL.UI_CONSTANTS and EL.UI_CONSTANTS.OPTIONS_COOLDOWN_COLUMN_CHECK_Y) or -68)
@@ -1674,7 +1858,8 @@ function EL:CreateSettingsPanel(parent)
     f.cooldownVisibilityDesc:SetWidth(contentW - 28)
     f.cooldownVisibilityDesc:SetJustifyH("LEFT")
     if f.cooldownVisibilityDesc.SetWordWrap then f.cooldownVisibilityDesc:SetWordWrap(true) end
-    f.cooldownVisibilityDesc:SetTextColor(0.82, 0.82, 0.76)
+    f.cooldownVisibilityDesc:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.cooldownVisibilityDesc, "themeMutedTextWidgets")
     f.cooldownVisibilityDesc:SetText("Choose which cooldown crafts appear after Expansion Scope is applied.")
     f.cooldownVisibilityDropdown = MakeCooldownVisibilityDropdown(f.cooldownColumnSection, 206)
     f.cooldownVisibilityDropdown:SetPoint("TOPRIGHT", f.cooldownColumnSection, "TOPRIGHT", -14, -158)
@@ -1724,10 +1909,12 @@ function EL:CreateSettingsPanel(parent)
     f.pricingSourceLabel = f.sessionOptions:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.pricingSourceLabel:SetPoint("TOPLEFT", 12, -134)
     f.pricingSourceLabel:SetText("Pricing:")
-    f.pricingSourceLabel:SetTextColor(0.76, 0.76, 0.70)
+    f.pricingSourceLabel:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.pricingSourceLabel, "themeMutedTextWidgets")
     f.pricingSourceValue = f.sessionOptions:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     f.pricingSourceValue:SetPoint("LEFT", f.pricingSourceLabel, "RIGHT", 5, 0)
     f.pricingSourceValue:SetTextColor(1.00, 0.92, 0.56)
+    RegisterThemeText(f.pricingSourceValue, "themeValueTextWidgets")
     f.toggleSessionHistory = MakeSettingsCheck(f.sessionOptions, "Session history", function() if EL.ToggleSessionHistoryEnabled then EL:ToggleSessionHistoryEnabled() end end)
     f.toggleSessionHistory:SetPoint("TOPLEFT", 12, -112)
     SetSettingsTooltip(f.toggleSessionHistory, "Session History", {"Saves account-wide summary records on reset and logout/reload."})
@@ -1749,20 +1936,22 @@ function EL:CreateSettingsPanel(parent)
     f.craftedItemsWarning = f.craftedItemsSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     f.craftedItemsWarning:SetPoint("TOPLEFT", 12, -66)
     f.craftedItemsWarning:SetText("Warning: read before enabling")
-    f.craftedItemsWarning:SetTextColor(1.00, 0.82, 0.24)
+    f.craftedItemsWarning:SetTextColor(ThemeTextRGB())
     f.craftedItemsBody = f.craftedItemsSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.craftedItemsBody:SetPoint("TOPLEFT", 12, -86)
     f.craftedItemsBody:SetWidth(contentW - 24)
     f.craftedItemsBody:SetJustifyH("LEFT")
     f.craftedItemsBody:SetText("Most users should leave this off. Use it only when you specifically want crafted outputs counted at craft time. It may double-count value if the crafted item is later sold and AH/mail gold is also tracked, and reagent costs are not deducted.")
-    f.craftedItemsBody:SetTextColor(0.76, 0.76, 0.70)
+    f.craftedItemsBody:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.craftedItemsBody, "themeMutedTextWidgets")
 
     f.actionPlacementSection = MakeSettingsSection(f, "Placement", contentX, -42, contentW, 156)
     f.actionPlacementDesc = f.actionPlacementSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.actionPlacementDesc:SetPoint("TOPLEFT", 12, -34)
     f.actionPlacementDesc:SetWidth(contentW - 24)
     f.actionPlacementDesc:SetJustifyH("LEFT")
-    f.actionPlacementDesc:SetTextColor(0.76, 0.76, 0.70)
+    f.actionPlacementDesc:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.actionPlacementDesc, "themeMutedTextWidgets")
     f.actionPlacementDesc:SetText("Anchor the action bar inside the main tracker, or let it float as a small draggable utility strip.")
     f.actionBarFloating = MakeSettingsCheck(f.actionPlacementSection, "Floating action bar", function() EL:ToggleActionBarFloating() end)
     f.actionBarFloating:SetPoint("TOPLEFT", 12, -72)
@@ -1782,7 +1971,7 @@ function EL:CreateSettingsPanel(parent)
     f.actionGeneralLabel = f.actionButtonsSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     f.actionGeneralLabel:SetPoint("TOPLEFT", 12, -32)
     f.actionGeneralLabel:SetText("General")
-    f.actionGeneralLabel:SetTextColor(1.00, 0.82, 0.24)
+    f.actionGeneralLabel:SetTextColor(ThemeTextRGB())
     f.actionMulchButton = MakeSettingsCheck(f.actionButtonsSection, "Imbued Mulch", function() EL:ToggleActionBarButton("mulch", "Imbued Mulch") end)
     f.actionMulchButton:SetPoint("TOPLEFT", 12, -54)
     SetSettingsTooltip(f.actionMulchButton, "Action bar button visibility", {"Controls whether this button is allowed to appear.", "The button may still hide when the item or spell is unavailable."})
@@ -1800,7 +1989,7 @@ function EL:CreateSettingsPanel(parent)
     f.actionSeedsLabel = f.actionButtonsSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     f.actionSeedsLabel:SetPoint("TOPLEFT", 12, -136)
     f.actionSeedsLabel:SetText("Seeds")
-    f.actionSeedsLabel:SetTextColor(1.00, 0.82, 0.24)
+    f.actionSeedsLabel:SetTextColor(ThemeTextRGB())
     f.actionSeedButton = MakeSettingsCheck(f.actionButtonsSection, "Resilient Seed", function() EL:ToggleActionBarButton("seed", "Resilient Seed") end)
     f.actionSeedButton:SetPoint("TOPLEFT", 12, -158)
     f.actionGlowingSeedButton = MakeSettingsCheck(f.actionButtonsSection, "Glowing Resilient Seed", function() EL:ToggleActionBarButton("glowingSeed", "Glowing Resilient Seed") end)
@@ -1872,7 +2061,7 @@ function EL:CreateSettingsPanel(parent)
     f.performanceWarningText:SetPoint("TOPLEFT", 12, -56)
     f.performanceWarningText:SetWidth(contentW - 24)
     f.performanceWarningText:SetJustifyH("LEFT")
-    f.performanceWarningText:SetTextColor(0.88, 0.84, 0.74)
+    f.performanceWarningText:SetTextColor(ThemeMutedTextRGB())
     f.performanceWarningText:SetText("The defaults are recommended for nearly everyone. These controls are only for reducing background work or limiting visible session-log size if you understand the tradeoff.")
 
     f.enableSessionTracking = MakeSettingsCheck(f.performanceSection, "Enable session tracking", function() EL:TogglePerformanceSetting("sessionTracking") end)
@@ -1881,7 +2070,8 @@ function EL:CreateSettingsPanel(parent)
     f.sessionTrackingTip:SetPoint("TOPLEFT", 34, -130)
     f.sessionTrackingTip:SetWidth(contentW - 46)
     f.sessionTrackingTip:SetJustifyH("LEFT")
-    f.sessionTrackingTip:SetTextColor(0.76, 0.74, 0.66)
+    f.sessionTrackingTip:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.sessionTrackingTip, "themeMutedTextWidgets")
     f.sessionTrackingTip:SetText("Leave this on for gold/hour, item value, session history, stats, and bag summaries. Turn it off only if you do not want EmberLedger tracking session activity.")
 
     f.enableActionBar = MakeSettingsCheck(f.performanceSection, "Enable action bar", function() EL:TogglePerformanceSetting("actionBar") end)
@@ -1890,7 +2080,8 @@ function EL:CreateSettingsPanel(parent)
     f.actionBarTip:SetPoint("TOPLEFT", 34, -196)
     f.actionBarTip:SetWidth(contentW - 46)
     f.actionBarTip:SetJustifyH("LEFT")
-    f.actionBarTip:SetTextColor(0.76, 0.74, 0.66)
+    f.actionBarTip:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.actionBarTip, "themeMutedTextWidgets")
     f.actionBarTip:SetText("Disable this if you do not use EmberLedger's utility buttons or want to skip action-bar refresh work. This does not affect profession tracking.")
     -- Session tracking and Action Bar module switches are centralized on the Modules page.
     f.enableSessionTracking:Hide()
@@ -1902,7 +2093,8 @@ function EL:CreateSettingsPanel(parent)
     f.historyCapTip:SetPoint("TOPLEFT", 12, -116)
     f.historyCapTip:SetWidth(contentW - 24)
     f.historyCapTip:SetJustifyH("LEFT")
-    f.historyCapTip:SetTextColor(0.88, 0.84, 0.74)
+    f.historyCapTip:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.historyCapTip, "themeMutedTextWidgets")
     f.historyCapTip:SetText("Session history cap: 500 is already enough for almost everyone, including extreme players, because stats use compact aggregates. Increase this only if you specifically want a deeper visible Sessions list and do not mind larger SavedVariables.")
 
     SetSettingsTooltip(f.enableSessionTracking, "Enable session tracking", {"Tracks session time, gathered items, session value, bag summaries, and recent/lifetime stats.", "Turn off to stop most background loot and bag processing."})
@@ -1914,28 +2106,32 @@ function EL:CreateSettingsPanel(parent)
     f.historyMaxEntriesSlider:SetPoint("TOPLEFT", f.performanceSection, "TOPLEFT", 12, -164)
     SetSettingsTooltip(f.historyMaxEntriesSlider, "Session history cap", {"Limits the visible saved session list after the 30-day retention filter is applied.", "Default: 500. Stats remain accurate through compact aggregates even when old visible list entries are pruned."})
 
-    f.maintenanceSection = MakeSettingsSection(f, T("Maintenance / Resets"), contentX, -438, contentW, 218)
+    f.maintenanceSection = MakeSettingsSection(f, T("Maintenance / Resets"), contentX, -438, contentW, 252)
     f.hiddenStatus = f.maintenanceSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.hiddenStatus:SetPoint("TOPLEFT", 12, -36)
     f.hiddenStatus:SetWidth(contentW - 24)
     f.hiddenStatus:SetJustifyH("LEFT")
-    f.hiddenStatus:SetTextColor(0.88, 0.86, 0.78)
+    f.hiddenStatus:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.hiddenStatus, "themeMutedTextWidgets")
+    f.resetUISettings = MakeSettingsButton(f.maintenanceSection, "Reset UI Settings", 288, function() if EL.ConfirmResetUISettings then EL:ConfirmResetUISettings() end end)
+    f.resetUISettings:SetPoint("TOPLEFT", 12, -62)
     f.resetPos = MakeSettingsButton(f.maintenanceSection, "Reset Windows", 138, function() EL:ConfirmResetWindowPositions() end)
-    f.resetPos:SetPoint("TOPLEFT", 12, -62)
+    f.resetPos:SetPoint("TOPLEFT", 12, -96)
     f.resetSession = MakeSettingsButton(f.maintenanceSection, "Reset Session", 138, function() EL:ConfirmResetSession() end)
     f.resetSession:SetPoint("LEFT", f.resetPos, "RIGHT", 12, 0)
     f.resetHidden = MakeSettingsButton(f.maintenanceSection, "Unhide All", 138, function() EL:ConfirmRestoreHiddenCharacters() end)
-    f.resetHidden:SetPoint("TOPLEFT", 12, -96)
+    f.resetHidden:SetPoint("TOPLEFT", 12, -130)
     f.resetPinned = MakeSettingsButton(f.maintenanceSection, "Reset Pinned", 138, function() EL:ConfirmResetPinnedCharacters() end)
     f.resetPinned:SetPoint("LEFT", f.resetHidden, "RIGHT", 12, 0)
     f.resetHistory = MakeSettingsButton(f.maintenanceSection, "Clear History", 138, function() if EL.ConfirmResetSessionHistory then EL:ConfirmResetSessionHistory() end end)
-    f.resetHistory:SetPoint("TOPLEFT", 12, -130)
+    f.resetHistory:SetPoint("TOPLEFT", 12, -164)
     f.resetLifetimeStats = MakeSettingsButton(f.maintenanceSection, "Reset Lifetime", 138, function() if EL.ConfirmResetLifetimeSessionStats then EL:ConfirmResetLifetimeSessionStats() end end)
     f.resetLifetimeStats:SetPoint("LEFT", f.resetHistory, "RIGHT", 12, 0)
     f.removeHiddenData = MakeSettingsButton(f.maintenanceSection, "Remove Hidden", 138, function() if EL.ConfirmRemoveHiddenCharacterData then EL:ConfirmRemoveHiddenCharacterData() end end)
-    f.removeHiddenData:SetPoint("TOPLEFT", 12, -164)
+    f.removeHiddenData:SetPoint("TOPLEFT", 12, -198)
     f.showWelcome = MakeSettingsButton(f.maintenanceSection, "Show Welcome", 138, function() if EL.ShowOnboardingPanel then EL:ShowOnboardingPanel(true) end end)
     f.showWelcome:SetPoint("LEFT", f.removeHiddenData, "RIGHT", 12, 0)
+    SetSettingsTooltip(f.resetUISettings, "Reset UI Settings", {"Restores EmberLedger UI options, thresholds, window positions, scales, launcher, minimap, and action-bar settings to defaults.", "Tracked characters, cooldowns, mulch data, session history, hidden characters, and pinned characters are kept."})
     SetSettingsTooltip(f.resetPos, "Reset Windows", {"Returns EmberLedger windows to their default screen positions.", "Scale and visibility settings are kept."})
     SetSettingsTooltip(f.resetSession, "Reset Session", {"Clears current session totals and tracked items."})
     SetSettingsTooltip(f.resetHidden, "Unhide All", {"Restores every hidden character to the main window table."})
@@ -1948,8 +2144,9 @@ function EL:CreateSettingsPanel(parent)
     f.footerSection = MakeSettingsSection(f, T("Information"), contentX, -846, contentW, 78)
     f.versionLabel = f.footerSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.versionLabel:SetPoint("TOPLEFT", 12, -34)
-    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "1.31.6")))
-    f.versionLabel:SetTextColor(0.88, 0.86, 0.78)
+    f.versionLabel:SetText(T("Version: %s", tostring(EL.version or "2.0.0")))
+    f.versionLabel:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.versionLabel, "themeMutedTextWidgets")
 
     f.allSettingsSections = {
         f.generalSection,
@@ -1991,17 +2188,152 @@ end
 function EL:UpdateSettingsNavHighlight()
     local f = self.settingsPanel
     if not f or not f.navLabels then return end
+    local accentR, accentG, accentB = ThemeAccentRGB()
+    local borderR, borderG, borderB = ThemeBorderRGB()
     for _, row in ipairs(f.navLabels) do
         local selected = f.currentPage == row.pageName
         if row.SetBackdropColor then
-            row:SetBackdropColor(selected and 0.45 or 0.02, selected and 0.10 or 0.02, selected and 0.04 or 0.03, selected and 0.72 or 0.00)
+            row:SetBackdropColor(selected and (accentR * 0.34) or 0.02, selected and (accentG * 0.18) or 0.018, selected and (accentB * 0.12) or 0.030, selected and 0.82 or 0.20)
         end
         if row.SetBackdropBorderColor then
-            row:SetBackdropBorderColor(1.0, 0.72, 0.18, selected and 0.45 or 0.00)
+            row:SetBackdropBorderColor(borderR, borderG, borderB, selected and 0.66 or 0.10)
         end
+        if row.selectedBar then
+            row.selectedBar:SetShown(selected and true or false)
+            if row.selectedBar.SetColorTexture then row.selectedBar:SetColorTexture(accentR, accentG, accentB, 0.78) end
+        end
+        if row.icon and row.icon.SetVertexColor then row.icon:SetVertexColor(1.00, 1.00, 1.00, selected and 1.00 or 0.86) end
         if row.text then
             row.text:SetFontObject(selected and GameFontNormalSmall or GameFontHighlightSmall)
-            row.text:SetTextColor(selected and 1.00 or 0.86, selected and 0.82 or 0.84, selected and 0.24 or 0.78)
+            local tr, tg, tb = ThemeTextRGB(); row.text:SetTextColor(selected and accentR or tr, selected and accentG or tg, selected and accentB or tb)
+        end
+    end
+end
+
+function EL:RefreshVisualTheme()
+    if self.ApplyVisualTheme then self:ApplyVisualTheme() end
+    local accentR, accentG, accentB = ThemeAccentRGB()
+    local borderR, borderG, borderB = ThemeBorderRGB()
+    local bgR, bgG, bgB = ThemeColor("BG_R", 0.020), ThemeColor("BG_G", 0.016), ThemeColor("BG_B", 0.040)
+
+    local f = self.settingsPanel
+    if f then
+        AddBackdrop(f, GetPanelOpacity(), 0.62)
+        if f.SetBackdropColor then f:SetBackdropColor(bgR, bgG, bgB, GetPanelOpacity()) end
+        if f.SetBackdropBorderColor then f:SetBackdropBorderColor(borderR, borderG, borderB, 0.72) end
+        if f.nav then
+            AddBackdrop(f.nav, 0.44, 0.42)
+            if f.nav.SetBackdropColor then f.nav:SetBackdropColor(bgR, bgG, bgB, 0.58) end
+            if f.nav.SetBackdropBorderColor then f.nav:SetBackdropBorderColor(borderR, borderG, borderB, 0.48) end
+        end
+        if f.headerPanel then
+            AddBackdrop(f.headerPanel, 0.96, 0.58)
+            if f.headerPanel.SetBackdropColor then f.headerPanel:SetBackdropColor(0.006, 0.007, 0.010, 0.96) end
+            if f.headerPanel.SetBackdropBorderColor then f.headerPanel:SetBackdropBorderColor(borderR, borderG, borderB, 0.58) end
+        end
+        if f.headerGlow then f.headerGlow:SetColorTexture(accentR, accentG, accentB, 0.040) end
+        if f.title then f.title:SetTextColor(accentR, accentG, accentB) end
+        if f.subtitle then local mr, mg, mb = ThemeMutedTextRGB(); f.subtitle:SetTextColor(mr, mg, mb) end
+        ApplyThemeTextCollections(f)
+        if f.allSettingsSections then
+            for _, section in ipairs(f.allSettingsSections) do
+                ApplySettingsSectionTheme(section)
+            end
+        end
+        if self.UpdateSettingsNavHighlight then self:UpdateSettingsNavHighlight() end
+    end
+
+    if self.panel then
+        AddBackdrop(self.panel, GetPanelOpacity(), 0.78)
+        if self.panel.SetBackdropColor then self.panel:SetBackdropColor(bgR, bgG, bgB, GetPanelOpacity()) end
+        if self.panel.SetBackdropBorderColor then self.panel:SetBackdropBorderColor(borderR, borderG, borderB, 0.88) end
+        if self.panel.topBar then
+            AddBackdrop(self.panel.topBar, 0.48, 0.52)
+            if self.panel.topBar.SetBackdropColor then self.panel.topBar:SetBackdropColor(0.006, 0.007, 0.010, 0.92) end
+            if self.panel.topBar.SetBackdropBorderColor then self.panel.topBar:SetBackdropBorderColor(borderR, borderG, borderB, 0.64) end
+        end
+        if self.panel.topBarGlow then self.panel.topBarGlow:SetColorTexture(accentR, accentG, accentB, 0.055) end
+        if self.panel.title then self.panel.title:SetTextColor(accentR, accentG, accentB) end
+        if self.panel.subtitle then local mr, mg, mb = ThemeMutedTextRGB(); self.panel.subtitle:SetTextColor(mr, mg, mb) end
+        if self.panel.header then
+            AddBackdrop(self.panel.header, 0.42, 0.34)
+            if self.panel.header.SetBackdropBorderColor then self.panel.header:SetBackdropBorderColor(borderR, borderG, borderB, 0.42) end
+        end
+        if self.panel.header and self.panel.header.topLine then self.panel.header.topLine:SetColorTexture(accentR, accentG, accentB, HEADER_LINE_ALPHA_TOP) end
+        if self.panel.header and self.panel.header.bottomLine then self.panel.header.bottomLine:SetColorTexture(accentR, accentG, accentB, HEADER_LINE_ALPHA_BOTTOM) end
+        if self.panel.header and self.panel.header.warmth then self.panel.header.warmth:SetColorTexture(accentR, accentG, accentB, 0.040) end
+        if self.panel.footerShade then self.panel.footerShade:SetColorTexture(0.030, 0.032, 0.036, 0.34) end
+        if self.panel.footerTopLine then self.panel.footerTopLine:SetColorTexture(borderR, borderG, borderB, 0.22) end
+        if self.panel.rows then
+            for _, row in ipairs(self.panel.rows) do
+                if row and row.hover then ApplyTrackingRowHoverState(row, false) end
+                if row and row.sep then row.sep:SetColorTexture(borderR, borderG, borderB, ROW_SEPARATOR_ALPHA) end
+                if row and row.edge then row.edge:SetColorTexture(accentR, accentG, accentB, 0.00) end
+                if row and row.currentHighlight then row.currentHighlight:SetColorTexture(accentR, accentG, accentB, 0.00) end
+                if row and row._highlightLines then
+                    for _, line in ipairs(row._highlightLines) do
+                        if line then line:SetColorTexture(accentR, accentG, accentB, 0.00) end
+                    end
+                end
+            end
+        end
+    end
+
+    if self.button then
+        AddBackdrop(self.button, GetLauncherOpacity(), 0.58)
+        if self.button.SetBackdropColor then self.button:SetBackdropColor(bgR, bgG, bgB, GetLauncherOpacity()) end
+        if self.button.SetBackdropBorderColor then self.button:SetBackdropBorderColor(borderR, borderG, borderB, 0.78) end
+        if self.button.title then self.button.title:SetTextColor(accentR, accentG, accentB) end
+        if self.button.titleRule then self.button.titleRule:SetColorTexture(accentR, accentG, accentB, 0.38) end
+        if self.button.hover then self.button.hover:SetColorTexture(accentR, accentG, accentB, 0.10) end
+    end
+
+    if self.sessionWindow and self.sessionWindow.sessionPanel then
+        local session = self.sessionWindow.sessionPanel
+        AddBackdrop(session, 0.30, 0.36)
+        if session.SetBackdropColor then session:SetBackdropColor(bgR, bgG, bgB, 0.46) end
+        if session.SetBackdropBorderColor then session:SetBackdropBorderColor(borderR, borderG, borderB, 0.52) end
+        if session.header then
+            AddBackdrop(session.header, 0.24, 0.30)
+            if session.header.SetBackdropColor then session.header:SetBackdropColor(bgR, bgG, bgB, 0.78) end
+            if session.header.SetBackdropBorderColor then session.header:SetBackdropBorderColor(borderR, borderG, borderB, 0.42) end
+        end
+        if session.title then session.title:SetTextColor(accentR, accentG, accentB) end
+        if session.metrics then
+            for _, child in ipairs({session.metricTime, session.metricValue, session.metricRate}) do
+                if child and child.label then child.label:SetTextColor(ThemeMutedTextRGB()) end
+                if child and child.value then child.value:SetTextColor(ThemeValueTextRGB()) end
+            end
+        end
+        if session.buttonBar then
+            for _, btn in ipairs({session.toggle, session.history, session.reset}) do
+                if btn and EL.Style and EL.Style.StyleActionBarButton then EL.Style:StyleActionBarButton(btn) end
+            end
+        end
+    end
+
+    local history = self.sessionHistoryWindow or self.sessionHistoryFrame
+    if history then
+        AddBackdrop(history, GetPanelOpacity(), 0.62)
+        if history.SetBackdropColor then history:SetBackdropColor(bgR, bgG, bgB, GetPanelOpacity()) end
+        if history.SetBackdropBorderColor then history:SetBackdropBorderColor(borderR, borderG, borderB, 0.78) end
+        if history.header then
+            AddBackdrop(history.header, 0.96, 0.66)
+            if history.header.SetBackdropColor then history.header:SetBackdropColor(bgR, bgG, bgB, 0.96) end
+            if history.header.SetBackdropBorderColor then history.header:SetBackdropBorderColor(borderR, borderG, borderB, 0.66) end
+        end
+        if history.title then history.title:SetTextColor(accentR, accentG, accentB) end
+        if history.rangeBox then AddBackdrop(history.rangeBox, 0.92, 0.66) end
+        if history.displayRange then AddBackdrop(history.displayRange, 0.86, 0.70) end
+        if history.displayRange and history.displayRange.arrowBox and history.displayRange.arrowBox.SetBackdropBorderColor then
+            history.displayRange.arrowBox:SetBackdropBorderColor(borderR, borderG, borderB, 0.55)
+        end
+        if history.table then AddBackdrop(history.table, 0.88, 0.64) end
+        if history.tableHeaderGlow then history.tableHeaderGlow:SetColorTexture(accentR, accentG, accentB, 0.055) end
+        if history.headers then
+            for _, header in ipairs(history.headers) do
+                if header and header.SetTextColor then header:SetTextColor(accentR, accentG, accentB) end
+            end
         end
     end
 end
@@ -2024,8 +2356,8 @@ function EL:SelectSettingsPage(pageName)
     local sections = f.settingsPages and f.settingsPages[pageName]
     if sections then
         local contentX = 168
-        local y = -42
-        local spacing = 12
+        local y = -64
+        local spacing = 14
         for _, section in ipairs(sections) do
             if section then
                 section:ClearAllPoints()
@@ -2050,12 +2382,13 @@ function EL:RefreshSettingsPanel()
     if f.launcherOpacityValue then f.launcherOpacityValue:SetText(string.format("%d%%", math.floor((tonumber(display.launcherOpacity) or 0.50) * 100 + 0.5))) end
     if f.sessionOpacityValue then f.sessionOpacityValue:SetText(string.format("%d%%", math.floor((tonumber(display.sessionOpacity) or 0.55) * 100 + 0.5))) end
     if f.thresholdValue then f.thresholdValue:SetText(tostring(tonumber(alerts.concentrationThreshold) or self.CONCENTRATION_THRESHOLD_DEFAULT or 900)) end
-    if f.moxieThresholdValue then f.moxieThresholdValue:SetText(tostring(tonumber(alerts.moxieThreshold) or 600)) end
+    if f.moxieThresholdValue then f.moxieThresholdValue:SetText(tostring(tonumber(alerts.moxieThreshold) or (EL.MOXIE_THRESHOLD_DEFAULT or 600))) end
     SetSliderValue(f.panelOpacitySlider, math.floor((tonumber(display.panelOpacity) or 0.55) * 100 + 0.5))
     SetSliderValue(f.launcherOpacitySlider, math.floor((tonumber(display.launcherOpacity) or 0.50) * 100 + 0.5))
     SetSliderValue(f.sessionOpacitySlider, math.floor((tonumber(display.sessionOpacity) or 0.55) * 100 + 0.5))
+    ApplyThemeTextCollections(f) -- keep all option tabs theme text refreshed
     SetSliderValue(f.thresholdSlider, tonumber(alerts.concentrationThreshold) or self.CONCENTRATION_THRESHOLD_DEFAULT or 900)
-    SetSliderValue(f.moxieThresholdSlider, tonumber(alerts.moxieThreshold) or 600)
+    SetSliderValue(f.moxieThresholdSlider, tonumber(alerts.moxieThreshold) or (EL.MOXIE_THRESHOLD_DEFAULT or 600))
     if f.profThresholdSliders then
         for _, slider in ipairs(f.profThresholdSliders) do
             local value = alerts.professionThresholds and alerts.professionThresholds[slider.professionID] or 0
@@ -2068,7 +2401,14 @@ function EL:RefreshSettingsPanel()
     local function setToggle(btn, on)
         if not btn then return end
         if btn.SetChecked then btn:SetChecked(on and true or false) end
-        if btn.text then btn.text:SetTextColor(on and 0.95 or 0.55, on and 0.92 or 0.58, on and 0.80 or 0.62) end
+        if btn.text then
+            if on then
+                btn.text:SetTextColor(ThemeTextRGB())
+            else
+                local r, g, b = ThemeMutedTextRGB()
+                btn.text:SetTextColor(r * 0.72, g * 0.72, b * 0.72)
+            end
+        end
     end
     setToggle(f.showLauncher, self.db.settings.button and self.db.settings.button.shown ~= false)
     local minimapSettings = self.db.settings.minimap or {}
@@ -2230,7 +2570,7 @@ function EL:SetAbsoluteSetting(kind, value)
     elseif kind == "concThreshold" then
         self.db.settings.alerts.concentrationThreshold = math.max(0, math.min(1000, math.floor((tonumber(value) or self.CONCENTRATION_THRESHOLD_DEFAULT or 900) + 0.5)))
     elseif kind == "moxieThreshold" then
-        self.db.settings.alerts.moxieThreshold = math.max(0, math.min(1000, math.floor((tonumber(value) or 600) + 0.5)))
+        self.db.settings.alerts.moxieThreshold = math.max(0, math.min(1000, math.floor((tonumber(value) or (EL.MOXIE_THRESHOLD_DEFAULT or 600)) + 0.5)))
     elseif kind == "panelScale" then
         self.db.settings.panel.scale = math.max(PANEL_MIN_SCALE, math.min(PANEL_MAX_SCALE, tonumber(value) or 1))
         if self.ApplyPanelScale then self:ApplyPanelScale() end
@@ -2264,7 +2604,7 @@ function EL:AdjustSetting(kind, delta)
         local v = tonumber(self.db.settings.alerts.concentrationThreshold) or self.CONCENTRATION_THRESHOLD_DEFAULT or 900
         self.db.settings.alerts.concentrationThreshold = math.max(0, math.min(1000, v + (delta or 0)))
     elseif kind == "moxieThreshold" then
-        local v = tonumber(self.db.settings.alerts.moxieThreshold) or 600
+        local v = tonumber(self.db.settings.alerts.moxieThreshold) or (EL.MOXIE_THRESHOLD_DEFAULT or 600)
         self.db.settings.alerts.moxieThreshold = math.max(0, math.min(1000, v + (delta or 0)))
     elseif kind == "panelScale" then
         self.db.settings.panel = self.db.settings.panel or {}
@@ -2635,7 +2975,7 @@ function EL:RegisterBlizzardSettings()
 
     canvas.version = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.version:SetPoint("TOP", canvas.title, "BOTTOM", 0, -12)
-    canvas.version:SetText(T("Version %s", tostring(self.version or "1.31.6")))
+    canvas.version:SetText(T("Version %s", tostring(self.version or "2.0.0")))
 
     canvas.desc = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     canvas.desc:SetPoint("TOP", canvas.version, "BOTTOM", 0, -16)
@@ -2692,10 +3032,13 @@ function EL:CreateSessionHistoryWindow()
     if frame.header.SetBackdropColor then frame.header:SetBackdropColor(0.010, 0.008, 0.020, 0.96) end
     AddHeaderAccent(frame.header)
 
+    frame.logo = AddEmberLogoBadge(frame.header, 32, "ARTWORK")
+    if frame.logo then frame.logo:SetPoint("LEFT", frame.header, "LEFT", 8, 0) end
+
     frame.title = frame.header:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     frame.title:SetPoint("CENTER", frame.header, "CENTER", 0, 1)
     frame.title:SetText(T("EmberLedger") .. " - Stats")
-    frame.title:SetTextColor(1.00, 0.82, 0.24)
+    frame.title:SetTextColor(ThemeAccentRGB())
 
     frame.close = CreateFrame("Button", nil, frame.header, "UIPanelCloseButton")
     frame.close:SetSize(24, 24)
@@ -2722,7 +3065,7 @@ function EL:CreateSessionHistoryWindow()
     frame.viewMode = "stats"
     frame.statsView = CreateFrame("Button", nil, frame.header, "UIPanelButtonTemplate")
     frame.statsView:SetSize(58, 21)
-    frame.statsView:SetPoint("LEFT", frame.header, "LEFT", 10, 0)
+    frame.statsView:SetPoint("LEFT", frame.header, "LEFT", 54, 0)
     frame.statsView:SetText("Stats")
     StyleBlizzardButton(frame.statsView)
     frame.statsView:SetScript("OnClick", function()
@@ -2762,7 +3105,7 @@ function EL:CreateSessionHistoryWindow()
     frame.info:SetJustifyH("LEFT")
     frame.info:SetJustifyV("TOP")
     if frame.info.SetWordWrap then frame.info:SetWordWrap(true) end
-    frame.info:SetTextColor(0.86, 0.86, 0.84)
+    frame.info:SetTextColor(ThemeTextRGB())
     frame.info:SetText("Account-wide session history for all characters.")
 
     frame.rangeBox = CreateFrame("Frame", nil, frame, "BackdropTemplate")
@@ -2781,7 +3124,7 @@ function EL:CreateSessionHistoryWindow()
     frame.rangeText:SetPoint("LEFT", frame.rangeIcon, "RIGHT", 10, 0)
     frame.rangeText:SetPoint("RIGHT", frame.rangeBox, "RIGHT", -300, 0)
     frame.rangeText:SetJustifyH("LEFT")
-    frame.rangeText:SetTextColor(1.00, 0.82, 0.24)
+    frame.rangeText:SetTextColor(ThemeTextRGB())
 
     frame.displayRange = CreateFrame("Button", nil, frame.rangeBox, "BackdropTemplate")
     frame.displayRange:SetSize(190, 24)
@@ -2794,13 +3137,13 @@ function EL:CreateSessionHistoryWindow()
     frame.displayLabel:SetWidth(58)
     frame.displayLabel:SetJustifyH("RIGHT")
     frame.displayLabel:SetText("Display:")
-    frame.displayLabel:SetTextColor(1.00, 0.82, 0.24)
+    frame.displayLabel:SetTextColor(ThemeTextRGB())
 
     frame.displayRange.selectedText = frame.displayRange:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     frame.displayRange.selectedText:SetPoint("LEFT", frame.displayRange, "LEFT", 10, 0)
     frame.displayRange.selectedText:SetPoint("RIGHT", frame.displayRange, "RIGHT", -30, 0)
     frame.displayRange.selectedText:SetJustifyH("LEFT")
-    frame.displayRange.selectedText:SetTextColor(0.92, 0.90, 0.82)
+    frame.displayRange.selectedText:SetTextColor(ThemeTextRGB())
 
     frame.displayRange.arrowBox = CreateFrame("Frame", nil, frame.displayRange, "BackdropTemplate")
     frame.displayRange.arrowBox:SetSize(22, 20)
@@ -2821,13 +3164,13 @@ function EL:CreateSessionHistoryWindow()
     frame.displayRange.arrowTexture:SetTexCoord(0.20, 0.80, 0.20, 0.80)
 
     frame.displayRange:SetScript("OnEnter", function(self)
-        if self.SetBackdropBorderColor then self:SetBackdropBorderColor(1.00, 0.82, 0.24, 0.85) end
-        if self.selectedText then self.selectedText:SetTextColor(1.00, 0.82, 0.24) end
-        if self.arrowBox and self.arrowBox.SetBackdropBorderColor then self.arrowBox:SetBackdropBorderColor(1.00, 0.82, 0.24, 0.85) end
+        if self.SetBackdropBorderColor then self:SetBackdropBorderColor(0.82, 0.88, 0.96, 0.85) end
+        if self.selectedText then self.selectedText:SetTextColor(0.82, 0.88, 0.96) end
+        if self.arrowBox and self.arrowBox.SetBackdropBorderColor then self.arrowBox:SetBackdropBorderColor(0.82, 0.88, 0.96, 0.85) end
     end)
     frame.displayRange:SetScript("OnLeave", function(self)
         if self.SetBackdropBorderColor then self:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, 0.70) end
-        if self.selectedText then self.selectedText:SetTextColor(0.92, 0.90, 0.82) end
+        if self.selectedText then self.selectedText:SetTextColor(ThemeTextRGB()) end
         if self.arrowBox and self.arrowBox.SetBackdropBorderColor then self.arrowBox:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, 0.55) end
     end)
     frame.displayRange:SetScript("OnClick", function(self) ShowSessionHistoryDisplayDropdown(self) end)
@@ -2863,6 +3206,11 @@ function EL:CreateSessionHistoryWindow()
     AddBackdrop(frame.table, 0.88, 0.64)
     if frame.table.SetBackdropColor then frame.table:SetBackdropColor(0.012, 0.010, 0.024, 0.88) end
     AddInnerBorder(frame.table)
+    frame.tableHeaderGlow = frame.table:CreateTexture(nil, "BACKGROUND")
+    frame.tableHeaderGlow:SetPoint("TOPLEFT", frame.table, "TOPLEFT", 6, -5)
+    frame.tableHeaderGlow:SetPoint("TOPRIGHT", frame.table, "TOPRIGHT", -24, -5)
+    frame.tableHeaderGlow:SetHeight(24)
+    frame.tableHeaderGlow:SetColorTexture(1.00, 0.62, 0.18, 0.055)
     frame.historyOffset = 0
 
     local function ScrollHistory(delta)
@@ -2901,7 +3249,7 @@ function EL:CreateSessionHistoryWindow()
         fs:SetWidth(col[3])
         fs:SetJustifyH(col[4])
         fs:SetText(col[1])
-        fs:SetTextColor(1.00, 0.82, 0.24)
+        fs:SetTextColor(ThemeTextRGB())
         table.insert(frame.headers, fs)
     end
 
@@ -2924,7 +3272,7 @@ function EL:CreateSessionHistoryWindow()
             fs:SetPoint("LEFT", row, "LEFT", col[2] - 10, 0)
             fs:SetWidth(col[3])
             fs:SetJustifyH(col[4])
-            fs:SetTextColor(0.90, 0.91, 0.92)
+            fs:SetTextColor(ThemeTextRGB())
             table.insert(row.texts, fs)
         end
         row:EnableMouse(true)
@@ -2935,12 +3283,16 @@ function EL:CreateSessionHistoryWindow()
             local entry = self.entry
             if not entry then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText("Session Details")
-            GameTooltip:AddLine((entry.character or "Unknown") .. " - " .. (entry.realm or "Unknown"), 0.90, 0.90, 0.90)
-            GameTooltip:AddLine("Duration: " .. EL:FormatDuration(tonumber(entry.duration) or 0), 0.76, 0.76, 0.70)
-            GameTooltip:AddLine("Item value: " .. EL:FormatMoneyText(tonumber(entry.itemValueSilver) or 0), 0.76, 0.76, 0.70)
-            GameTooltip:AddLine("Raw gold: " .. EL:FormatMoneyText(tonumber(entry.rawGoldGainedSilver) or 0), 0.76, 0.76, 0.70)
-            GameTooltip:AddLine("Spent: " .. EL:FormatMoneyText(-(tonumber(entry.goldSpentSilver) or 0)), 0.95, 0.55, 0.45)
+            local ar, ag, ab = ThemeAccentRGB()
+            local tr, tg, tb = ThemeTextRGB()
+            local mr, mg, mb = ThemeMutedTextRGB()
+            local vr, vg, vb = ThemeValueTextRGB()
+            GameTooltip:SetText("Session Details", ar, ag, ab)
+            GameTooltip:AddLine((entry.character or "Unknown") .. " - " .. (entry.realm or "Unknown"), tr, tg, tb)
+            GameTooltip:AddLine("Duration: " .. EL:FormatDuration(tonumber(entry.duration) or 0), mr, mg, mb)
+            GameTooltip:AddLine("Item value: " .. EL:FormatMoneyText(tonumber(entry.itemValueSilver) or 0), vr, vg, vb)
+            GameTooltip:AddLine("Raw gold: " .. EL:FormatMoneyText(tonumber(entry.rawGoldGainedSilver) or 0), vr, vg, vb)
+            GameTooltip:AddLine("Spent: " .. EL:FormatMoneyText(-(tonumber(entry.goldSpentSilver) or 0)), 0.85, 0.45, 0.45)
             GameTooltip:Show()
         end)
         row:SetScript("OnLeave", function(self) if self.highlight then self.highlight:Hide() end GameTooltip:Hide() end)
@@ -2957,13 +3309,13 @@ function EL:CreateSessionHistoryWindow()
     frame.statsTitle = frame.statsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     frame.statsTitle:SetPoint("TOPLEFT", frame.statsPanel, "TOPLEFT", 16, -12)
     frame.statsTitle:SetText("Aggregated Session Stats")
-    frame.statsTitle:SetTextColor(1.00, 0.82, 0.24)
+    frame.statsTitle:SetTextColor(ThemeTextRGB())
 
     frame.statsNote = frame.statsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     frame.statsNote:SetPoint("TOPLEFT", frame.statsTitle, "BOTTOMLEFT", 0, -4)
     frame.statsNote:SetPoint("TOPRIGHT", frame.statsPanel, "TOPRIGHT", -16, -34)
     frame.statsNote:SetJustifyH("LEFT")
-    frame.statsNote:SetTextColor(0.74, 0.74, 0.70)
+    frame.statsNote:SetTextColor(ThemeMutedTextRGB())
 
     -- Session history layout constants. These preserve the existing visual layout
     -- while making the remaining UI-owned frame creation easier to adjust later.
@@ -2997,13 +3349,13 @@ function EL:CreateSessionHistoryWindow()
         labelText:SetPoint("TOPRIGHT", card, "TOPRIGHT", -10, -7)
         labelText:SetJustifyH("LEFT")
         labelText:SetText(label)
-        labelText:SetTextColor(0.86, 0.84, 0.78)
+        labelText:SetTextColor(ThemeTextRGB())
 
         local valueText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         valueText:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 34, 10)
         valueText:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -12, 10)
         valueText:SetJustifyH("RIGHT")
-        valueText:SetTextColor(0.92, 0.93, 0.94)
+        valueText:SetTextColor(ThemeValueTextRGB())
         return valueText, card
     end
 
@@ -3018,7 +3370,7 @@ function EL:CreateSessionHistoryWindow()
     frame.statsFootnote:SetPoint("BOTTOMLEFT", frame.statsPanel, "BOTTOMLEFT", 16, 14)
     frame.statsFootnote:SetPoint("BOTTOMRIGHT", frame.statsPanel, "BOTTOMRIGHT", -16, 14)
     frame.statsFootnote:SetJustifyH("LEFT")
-    frame.statsFootnote:SetTextColor(0.68, 0.68, 0.64)
+    frame.statsFootnote:SetTextColor(ThemeMutedTextRGB())
 
     frame.bagPanel = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     frame.bagPanel:SetPoint("TOPLEFT", frame.rangeBox, "BOTTOMLEFT", 0, -8)
@@ -3030,13 +3382,13 @@ function EL:CreateSessionHistoryWindow()
     frame.bagTitle = frame.bagPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     frame.bagTitle:SetPoint("TOPLEFT", frame.bagPanel, "TOPLEFT", 16, -12)
     frame.bagTitle:SetText("Current Bag Summary")
-    frame.bagTitle:SetTextColor(1.00, 0.82, 0.24)
+    frame.bagTitle:SetTextColor(ThemeTextRGB())
 
     frame.bagNote = frame.bagPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     frame.bagNote:SetPoint("TOPLEFT", frame.bagTitle, "BOTTOMLEFT", 0, -4)
     frame.bagNote:SetPoint("TOPRIGHT", frame.bagPanel, "TOPRIGHT", -16, -34)
     frame.bagNote:SetJustifyH("LEFT")
-    frame.bagNote:SetTextColor(0.74, 0.74, 0.70)
+    frame.bagNote:SetTextColor(ThemeMutedTextRGB())
     frame.bagNote:SetText("Read-only estimate of currently held tracked materials. This does not change session history or lifetime stats.")
 
     local function MakeBagCard(icon, label, col)
@@ -3058,13 +3410,13 @@ function EL:CreateSessionHistoryWindow()
         labelText:SetPoint("TOPRIGHT", card, "TOPRIGHT", -10, -6)
         labelText:SetJustifyH("LEFT")
         labelText:SetText(label)
-        labelText:SetTextColor(0.86, 0.84, 0.78)
+        labelText:SetTextColor(ThemeTextRGB())
 
         local valueText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         valueText:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 34, 7)
         valueText:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -12, 7)
         valueText:SetJustifyH("RIGHT")
-        valueText:SetTextColor(0.92, 0.93, 0.94)
+        valueText:SetTextColor(ThemeValueTextRGB())
         return valueText, card
     end
 
@@ -3109,7 +3461,7 @@ function EL:CreateSessionHistoryWindow()
         fs:SetWidth(col.width)
         fs:SetJustifyH(col.justify)
         fs:SetText(col.label)
-        fs:SetTextColor(1.00, 0.82, 0.24)
+        fs:SetTextColor(ThemeTextRGB())
         table.insert(frame.bagHeaders, fs)
     end
 
@@ -3126,7 +3478,7 @@ function EL:CreateSessionHistoryWindow()
         for _, col in ipairs(bagColumns) do
             local fs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
             AnchorBagCell(fs, row, col, 0)
-            fs:SetTextColor(0.90, 0.91, 0.92)
+            fs:SetTextColor(ThemeTextRGB())
             table.insert(row.texts, fs)
         end
         frame.bagRows[i] = row
@@ -3136,7 +3488,7 @@ function EL:CreateSessionHistoryWindow()
     frame.bagFootnote:SetPoint("BOTTOMLEFT", frame.bagPanel, "BOTTOMLEFT", 16, 14)
     frame.bagFootnote:SetPoint("BOTTOMRIGHT", frame.bagPanel, "BOTTOMRIGHT", -16, 14)
     frame.bagFootnote:SetJustifyH("LEFT")
-    frame.bagFootnote:SetTextColor(0.68, 0.68, 0.64)
+    frame.bagFootnote:SetTextColor(ThemeMutedTextRGB())
 
     frame.totals = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     frame.totals:SetPoint("TOPLEFT", frame.table, "BOTTOMLEFT", 0, -10)
@@ -3148,7 +3500,7 @@ function EL:CreateSessionHistoryWindow()
     frame.totalsTitle = frame.totals:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     frame.totalsTitle:SetPoint("TOPLEFT", frame.totals, "TOPLEFT", 14, -10)
     frame.totalsTitle:SetText("Sessions Total")
-    frame.totalsTitle:SetTextColor(1.00, 0.82, 0.24)
+    frame.totalsTitle:SetTextColor(ThemeTextRGB())
 
     local function MakeTotalCard(icon, label, col, row)
         local cardW, cardH = TOTAL_CARD_W, TOTAL_CARD_H
@@ -3170,13 +3522,13 @@ function EL:CreateSessionHistoryWindow()
         labelText:SetPoint("TOPRIGHT", card, "TOPRIGHT", -10, -6)
         labelText:SetJustifyH("LEFT")
         labelText:SetText(label)
-        labelText:SetTextColor(0.86, 0.84, 0.78)
+        labelText:SetTextColor(ThemeTextRGB())
 
         local valueText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         valueText:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 34, 7)
         valueText:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -12, 7)
         valueText:SetJustifyH("RIGHT")
-        valueText:SetTextColor(0.92, 0.93, 0.94)
+        valueText:SetTextColor(ThemeValueTextRGB())
         return valueText, card
     end
     frame.totalSessions = MakeTotalCard("Interface\\Icons\\INV_Misc_Note_01", "Sessions", 1, 1)
@@ -3283,12 +3635,12 @@ function EL:RefreshSessionHistoryWindow()
             else
                 row.texts[4]:SetTextColor(0.55, 1.00, 0.36)
             end
-            row.texts[1]:SetTextColor(0.90, 0.91, 0.92)
-            row.texts[3]:SetTextColor(0.90, 0.91, 0.92)
-            row.texts[5]:SetTextColor(0.90, 0.91, 0.92)
+            row.texts[1]:SetTextColor(ThemeTextRGB())
+            row.texts[3]:SetTextColor(ThemeTextRGB())
+            row.texts[5]:SetTextColor(ThemeTextRGB())
         else
             row:Show()
-            for _, fs in ipairs(row.texts or {}) do fs:SetText(""); fs:SetTextColor(0.88, 0.90, 0.92) end
+            for _, fs in ipairs(row.texts or {}) do fs:SetText(""); fs:SetTextColor(ThemeTextRGB()) end
         end
     end
     if frame.info then
@@ -3354,7 +3706,7 @@ function EL:CreateOnboardingPanel()
     f.title:SetPoint("TOPRIGHT", -18, -18)
     f.title:SetJustifyH("LEFT")
     f.title:SetText(T("Welcome to EmberLedger"))
-    f.title:SetTextColor(1.00, 0.82, 0.24)
+    f.title:SetTextColor(ThemeAccentRGB())
 
     f.body = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.body:SetPoint("TOPLEFT", 18, -52)
@@ -3362,7 +3714,7 @@ function EL:CreateOnboardingPanel()
     f.body:SetJustifyH("LEFT")
     f.body:SetJustifyV("TOP")
     if f.body.SetWordWrap then f.body:SetWordWrap(true) end
-    f.body:SetTextColor(0.90, 0.87, 0.78)
+    f.body:SetTextColor(ThemeTextRGB())
     f.body:SetText(T("EmberLedger learns your profession characters as you visit them.\n\nGetting Started:\n1. Log into each profession character you want to track.\n2. Open the Trade Skill window (press K, then choose a profession) once.\n3. Repeat this for each profession alt.\n\nConcentration, Artisan Moxie, and profession cooldowns are only available after opening the profession window. Your dashboard updates automatically as more characters are scanned.\n\nTip: /el help lists all commands and row interactions."))
 
     f.optionsButton = MakeSettingsButton(f, T("Open Options"), 120, function()
@@ -3460,7 +3812,7 @@ function EL:CreateMainButton()
     button.title:SetJustifyH("CENTER")
     button.title:SetText(T("EmberLedger"))
     if button.title.SetFontObject then button.title:SetFontObject(GameFontNormalLarge) end
-    button.title:SetTextColor(1.00, 0.82, 0.24)
+    button.title:SetTextColor(ThemeAccentRGB())
     button.title:SetShadowColor(0.00, 0.00, 0.00, 1.00)
     button.title:SetShadowOffset(1, -1)
     if button.title.SetWordWrap then button.title:SetWordWrap(false) end
@@ -3475,7 +3827,7 @@ function EL:CreateMainButton()
     button.titleRule:SetPoint("TOPLEFT", button.title, "BOTTOMLEFT", 10, -3)
     button.titleRule:SetPoint("TOPRIGHT", button.title, "BOTTOMRIGHT", -10, -3)
     button.titleRule:SetHeight(1)
-    button.titleRule:SetColorTexture(1.00, 0.82, 0.32, 0.38)
+    local r, g, b = ThemeAccentRGB(); button.titleRule:SetColorTexture(r, g, b, 0.32)
 
     button.line1 = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     button.line1:SetPoint("TOPLEFT", button.title, "BOTTOMLEFT", 0, -7)
@@ -3488,32 +3840,32 @@ function EL:CreateMainButton()
     button.line2:SetPoint("TOPRIGHT", button.line1, "BOTTOMRIGHT", 0, -3)
     button.line2:SetJustifyH("CENTER")
     if button.line2.SetWordWrap then button.line2:SetWordWrap(false) end
-    button.line2:SetTextColor(0.90, 0.88, 0.78)
+    button.line2:SetTextColor(ThemeTextRGB())
 
     button.line3 = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     button.line3:SetPoint("TOPLEFT", button.line2, "BOTTOMLEFT", 0, -3)
     button.line3:SetPoint("TOPRIGHT", button.line2, "BOTTOMRIGHT", 0, -3)
     button.line3:SetJustifyH("CENTER")
     if button.line3.SetWordWrap then button.line3:SetWordWrap(false) end
-    button.line3:SetTextColor(0.82, 0.82, 0.76)
+    button.line3:SetTextColor(ThemeMutedTextRGB())
 
     button.line4 = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     button.line4:SetPoint("TOPLEFT", button.line3, "BOTTOMLEFT", 0, -3)
     button.line4:SetPoint("TOPRIGHT", button.line3, "BOTTOMRIGHT", 0, -3)
     button.line4:SetJustifyH("CENTER")
     if button.line4.SetWordWrap then button.line4:SetWordWrap(false) end
-    button.line4:SetTextColor(0.74, 0.76, 0.72)
+    button.line4:SetTextColor(ThemeMutedTextRGB())
 
     button.line5 = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     button.line5:SetPoint("TOPLEFT", button.line4, "BOTTOMLEFT", 0, -3)
     button.line5:SetPoint("TOPRIGHT", button.line4, "BOTTOMRIGHT", 0, -3)
     button.line5:SetJustifyH("CENTER")
     if button.line5.SetWordWrap then button.line5:SetWordWrap(false) end
-    button.line5:SetTextColor(0.78, 0.78, 0.72)
+    button.line5:SetTextColor(ThemeMutedTextRGB())
 
     button.hover = button:CreateTexture(nil, "HIGHLIGHT")
     button.hover:SetAllPoints()
-    button.hover:SetColorTexture(1.00, 0.82, 0.32, 0.10)
+    local r, g, b = ThemeAccentRGB(); button.hover:SetColorTexture(r, g, b, 0.08)
 
     button:SetScript("OnDragStart", function(self)
         local settings = EL.db.settings.button
@@ -3562,7 +3914,7 @@ function EL:CreateSessionPanel(parent)
     session.title:SetPoint("RIGHT", session.header, "RIGHT", -32, 0)
     session.title:SetJustifyH("LEFT")
     session.title:SetText(T("EmberLedger") .. " " .. T("Session"))
-    session.title:SetTextColor(1.00, 0.82, 0.24)
+    session.title:SetTextColor(ThemeAccentRGB())
 
     session.buttonBar = CreateFrame("Frame", nil, session)
     session.buttonBar:SetPoint("BOTTOMLEFT", session, "BOTTOMLEFT", 6, 6)
@@ -3662,7 +4014,7 @@ function EL:RefreshSessionPanel()
     if self.IsSessionTrackingEnabled and not self:IsSessionTrackingEnabled() then
         if sp.summary then
             sp.summary:SetText("Session tracking is disabled.\nEnable it under Modules to track time, gathered items, and value.")
-            sp.summary:SetTextColor(0.82, 0.78, 0.68)
+            sp.summary:SetTextColor(ThemeMutedTextRGB())
             sp.summary:Show()
         end
         if sp.metrics then sp.metrics:SetShown(false) end
@@ -3699,7 +4051,7 @@ function EL:RefreshSessionPanel()
     end
     if sp.metricRate and sp.metricRate.value then
         sp.metricRate.value:SetText(gph)
-        sp.metricRate.value:SetTextColor(0.82, 0.78, 0.68)
+        sp.metricRate.value:SetTextColor(ThemeMutedTextRGB())
     end
     if sp.itemClip then sp.itemClip:SetShown(true) end
     sp.toggle:SetText(s.isPaused and "Start" or "Pause")
@@ -3796,10 +4148,11 @@ function EL:CreatePanel()
     panel:EnableMouse(true)
     panel:RegisterForDrag("LeftButton")
     panel:SetClampedToScreen(true)
-    AddBackdrop(panel, 0.64, 0.62)
-    if panel.SetBackdropColor then panel:SetBackdropColor(EL_BG_R, EL_BG_G, EL_BG_B, GetPanelOpacity()) end
-    if panel.SetBackdropBorderColor then panel:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, BORDER_ALPHA_STRONG) end
+    AddBackdrop(panel, 0.74, 0.74)
+    if panel.SetBackdropColor then panel:SetBackdropColor(0.012, 0.010, 0.026, GetPanelOpacity()) end
+    if panel.SetBackdropBorderColor then panel:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, 0.88) end
     AddInnerBorder(panel)
+    AddEmberCornerAccents(panel)
     panel:Hide()
     panel:SetScript("OnShow", function(self)
         BringEmberWindowToFront(self)
@@ -3840,18 +4193,25 @@ function EL:CreatePanel()
     end)
 
     panel.topBar = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-    panel.topBar:SetHeight(30)
+    panel.topBar:SetHeight(34)
     panel.topBar:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -8)
     panel.topBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -8)
-    AddBackdrop(panel.topBar, 0.30, 0.26)
-    if panel.topBar.SetBackdropColor then panel.topBar:SetBackdropColor(EL_HEADER_R, EL_HEADER_G, EL_HEADER_B, 0.78) end
-    if panel.topBar.SetBackdropBorderColor then panel.topBar:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, 0.38) end
+    AddBackdrop(panel.topBar, 0.48, 0.48)
+    if panel.topBar.SetBackdropColor then panel.topBar:SetBackdropColor(0.020, 0.012, 0.030, 0.90) end
+    if panel.topBar.SetBackdropBorderColor then panel.topBar:SetBackdropBorderColor(BORDER_R, BORDER_G, BORDER_B, 0.58) end
     AddHeaderAccent(panel.topBar)
+    panel.topBarGlow = panel.topBar:CreateTexture(nil, "BACKGROUND")
+    panel.topBarGlow:SetPoint("TOPLEFT", panel.topBar, "TOPLEFT", 6, -4)
+    panel.topBarGlow:SetPoint("BOTTOMRIGHT", panel.topBar, "BOTTOMRIGHT", -6, 4)
+    local r, g, b = ThemeAccentRGB(); panel.topBarGlow:SetColorTexture(r, g, b, 0.045)
+
+    panel.logo = AddEmberLogoBadge(panel.topBar, 30, "ARTWORK")
+    if panel.logo then panel.logo:SetPoint("LEFT", panel.topBar, "LEFT", 7, 0) end
 
     panel.title = panel.topBar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    panel.title:SetPoint("LEFT", panel.topBar, "LEFT", 10, 0)
+    panel.title:SetPoint("LEFT", panel.topBar, "LEFT", 46, 0)
     panel.title:SetText(T("EmberLedger"))
-    panel.title:SetTextColor(1.00, 0.82, 0.24)
+    panel.title:SetTextColor(ThemeAccentRGB())
 
     panel.subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     panel.subtitle:SetPoint("TOPLEFT", panel.topBar, "BOTTOMLEFT", 2, -4)
@@ -3861,7 +4221,7 @@ function EL:CreatePanel()
     panel.summary = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     panel.summary:SetPoint("TOPLEFT", panel.subtitle, "BOTTOMLEFT", 0, -2)
     panel.summary:SetJustifyH("LEFT")
-    panel.summary:SetTextColor(0.88, 0.86, 0.78)
+    panel.summary:SetTextColor(ThemeMutedTextRGB())
     panel.summary:SetText("")
     panel.summary:Hide()
 
@@ -3934,6 +4294,10 @@ function EL:CreatePanel()
     panel.header.bottomLine:SetPoint("BOTTOMLEFT", 2, 1)
     panel.header.bottomLine:SetPoint("BOTTOMRIGHT", -2, 1)
     panel.header.bottomLine:SetColorTexture(0.82, 0.74, 0.58, HEADER_LINE_ALPHA_BOTTOM)
+    panel.header.warmth = panel.header:CreateTexture(nil, "BACKGROUND")
+    panel.header.warmth:SetPoint("TOPLEFT", panel.header, "TOPLEFT", 5, -5)
+    panel.header.warmth:SetPoint("BOTTOMRIGHT", panel.header, "BOTTOMRIGHT", -5, 5)
+    local r, g, b = ThemeAccentRGB(); panel.header.warmth:SetColorTexture(r, g, b, 0.035)
     panel.header.separators = {}
     panel.header.name = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     panel.header.prof1 = panel.header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -3954,7 +4318,7 @@ function EL:CreatePanel()
     panel.header.cooldown:SetText(T("CD"))
     panel.header.mulch:SetText(T("Mulch"))
     for _, fs in pairs({panel.header.name, panel.header.prof1, panel.header.conc1, panel.header.prof2, panel.header.conc2, panel.header.moxie, panel.header.forecast, panel.header.cooldown, panel.header.mulch}) do
-        fs:SetTextColor(0.88, 0.84, 0.74)
+        fs:SetTextColor(ThemeMutedTextRGB())
         fs:SetJustifyH(fs == panel.header.name and "LEFT" or "CENTER")
         if fs.SetShadowColor then fs:SetShadowColor(0, 0, 0, 0.80) end
         if fs.SetShadowOffset then fs:SetShadowOffset(1, -1) end
@@ -3984,6 +4348,12 @@ function EL:CreatePanel()
     if panel.empty.SetSpacing then panel.empty:SetSpacing(4) end
     panel.empty:Hide()
 
+    panel.footerShade = panel:CreateTexture(nil, "BACKGROUND")
+    panel.footerShade:SetColorTexture(0.030, 0.032, 0.036, 0.34)
+    panel.footerTopLine = panel:CreateTexture(nil, "BORDER")
+    panel.footerTopLine:SetHeight(1)
+    panel.footerTopLine:SetColorTexture(0.68, 0.68, 0.70, 0.18)
+
     self:CreateActionBar(panel)
 
     panel.version = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -4004,7 +4374,7 @@ function EL:CreatePanel()
         line:SetHeight(2)
         line:SetWidth(7 + ((4 - i) * 4))
         line:SetPoint("BOTTOMRIGHT", panel.resize, "BOTTOMRIGHT", -2, 2 + ((i - 1) * 5))
-        line:SetColorTexture(1.00, 0.78, 0.24, 0.58)
+        line:SetColorTexture(0.76, 0.82, 0.92, 0.58)
         panel.resize.lines[i] = line
     end
     panel.resize.corner = panel.resize:CreateTexture(nil, "BACKGROUND")
@@ -4090,8 +4460,8 @@ function EL:UpdateSortHeaders()
             fs:SetTextColor(0.92, 0.78, 0.50)
             if btn and btn.bg then btn.bg:SetColorTexture(0.78, 0.66, 0.46, 0.10) end
         else
-            fs:SetTextColor(0.88, 0.84, 0.74)
-            if btn and btn.bg then btn.bg:SetColorTexture(1, 0.72, 0.22, 0) end
+            fs:SetTextColor(ThemeMutedTextRGB())
+            if btn and btn.bg then btn.bg:SetColorTexture(0.70, 0.78, 0.88, 0) end
         end
     end
 end
@@ -4170,13 +4540,10 @@ function EL:LayoutPanel()
     -- Action bar anchoring/floating layout is owned by Modules/ActionBar.lua.
     if p.resize then
         p.resize:ClearAllPoints()
-        if actionBarShown and p.actionBar then
-            p.resize:SetPoint("RIGHT", p.actionBar, "RIGHT", -8, 0)
-        else
-            -- With the action bar hidden, keep the resize grip inside the
-            -- lower-right frame border instead of letting it sit on the edge.
-            p.resize:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -14, 10)
-        end
+        -- Keep the resize grip visually centered with the footer controls.
+        -- When the anchored action bar is visible, center the 18px grip with
+        -- the 36px footer button row; otherwise keep it low and compact.
+        p.resize:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -10, actionBarShown and 19 or 10)
         p.resize:Show()
     end
 
@@ -4192,11 +4559,35 @@ function EL:LayoutPanel()
     end
 
     p.header:ClearAllPoints()
-    p.header:SetPoint("TOPLEFT", p, "TOPLEFT", 14, GetTrackingHeaderYOffset())
-    p.header:SetPoint("TOPRIGHT", p, "TOPRIGHT", -14, GetTrackingHeaderYOffset())
+    p.header:SetPoint("TOPLEFT", p, "TOPLEFT", 8, GetTrackingHeaderYOffset())
+    p.header:SetPoint("TOPRIGHT", p, "TOPRIGHT", -8, GetTrackingHeaderYOffset())
     p.header:SetHeight(compactMode and 28 or 32)
 
     if p.characterToggle then p.characterToggle:Hide() end
+
+    if p.footerShade then
+        p.footerShade:ClearAllPoints()
+        p.footerShade:SetPoint("BOTTOMLEFT", p, "BOTTOMLEFT", 8, 8)
+        p.footerShade:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -8, 8)
+        p.footerShade:SetHeight(actionBarShown and 36 or 28)
+        -- Match the footer tray to the character row shade so the lower area
+        -- feels like part of the table instead of a heavy black block.
+        local fr = math.min(1, ThemeColor("BG_R", 0.020) + 0.018)
+        local fg = math.min(1, ThemeColor("BG_G", 0.018) + 0.018)
+        local fb = math.min(1, ThemeColor("BG_B", 0.026) + 0.018)
+        p.footerShade:SetColorTexture(fr, fg, fb, 0.34)
+        p.footerShade:Show()
+    end
+    if p.footerTopLine then
+        p.footerTopLine:ClearAllPoints()
+        if p.footerShade then
+            p.footerTopLine:SetPoint("TOPLEFT", p.footerShade, "TOPLEFT", 2, 0)
+            p.footerTopLine:SetPoint("TOPRIGHT", p.footerShade, "TOPRIGHT", -2, 0)
+            p.footerTopLine:Show()
+        else
+            p.footerTopLine:Hide()
+        end
+    end
 
     if not charShown then
         p.header:Hide()
@@ -4205,9 +4596,10 @@ function EL:LayoutPanel()
     else
         p.header:Show()
         p.scroll:Show()
+        ApplyTrackingHeaderTextStyle(p.header)
         if p.header.nameButton then p.header.nameButton:Show() end
 
-        local headerW = math.max(1, w - 36)
+        local headerW = math.max(1, w - 16)
         local targetW = self:GetTrackingPanelMaxWidth()
         if p.SetResizeBounds then p:SetResizeBounds(targetW, GetCurrentPanelMinHeight(p), targetW, GetTrackingPanelMaxHeight(p)) end
         local cols = GetColumnLayout(headerW)
@@ -4223,7 +4615,7 @@ function EL:LayoutPanel()
                 fs:SetShown(visible[def.key] and true or false)
                 if visible[def.key] then
                     if def.key == "character" then
-                        AnchorColumnText(fs, p.header, (cols[def.key .. "X"] or 0) + 8, math.max(1, (cols[def.key .. "W"] or 1) - 8), "LEFT")
+                        AnchorColumnText(fs, p.header, cols[def.key .. "X"] or 0, math.max(1, cols[def.key .. "W"] or 1), "LEFT")
                     else
                         AnchorColumnText(fs, p.header, cols[def.key .. "X"], cols[def.key .. "W"], "CENTER")
                     end
@@ -4254,7 +4646,7 @@ function EL:LayoutPanel()
             sep:SetWidth(1)
             sep:SetPoint("TOPLEFT", p.header, "TOPLEFT", x, -4)
             sep:SetPoint("BOTTOMLEFT", p.header, "BOTTOMLEFT", x, 4)
-            sep:SetColorTexture(0.82, 0.74, 0.58, 0.08)
+            local sr, sg, sb = ThemeBorderRGB(); sep:SetColorTexture(sr, sg, sb, 0.10)
             sep:Show()
         end
         for i = #sepPositions + 1, #(p.header.separators or {}) do
@@ -4263,10 +4655,10 @@ function EL:LayoutPanel()
 
         p.scroll:ClearAllPoints()
         p.scroll:SetPoint("TOPLEFT", p.header, "BOTTOMLEFT", 0, -4)
-        if p.actionBar and actionBarShown then
-            p.scroll:SetPoint("BOTTOMRIGHT", p.actionBar, "TOPRIGHT", -2, 4)
+        if actionBarShown then
+            p.scroll:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -8, GetTrackingActionBarBottomOffset() + ACTION_BAR_H + 5)
         else
-            p.scroll:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -14, 24)
+            p.scroll:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -8, 41)
         end
         p.content:SetWidth(math.max(1, p.scroll:GetWidth()))
         self:UpdateSortHeaders()
@@ -4282,34 +4674,40 @@ function EL:GetRow(i)
         row:SetHeight(GetTrackingRowHeight())
         row.bg = row:CreateTexture(nil, "BACKGROUND")
         row.bg:SetAllPoints()
+        row.edge = row:CreateTexture(nil, "BORDER")
+        row.edge:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
+        row.edge:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 1)
+        row.edge:SetWidth(3)
+        row.edge:SetColorTexture(0.70, 0.78, 0.88, 0.00)
+        row.edge:Hide()
         row.currentHighlight = row:CreateTexture(nil, "BORDER")
         row.currentHighlight:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
         row.currentHighlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
-        row.currentHighlight:SetColorTexture(1.00, 0.78, 0.24, 0.00)
+        row.currentHighlight:SetColorTexture(CURRENT_ROW_R, CURRENT_ROW_G, CURRENT_ROW_B, 0.00)
         row.currentHighlight:Hide()
         row.currentHighlightTop = row:CreateTexture(nil, "ARTWORK")
         row.currentHighlightTop:SetHeight(1)
         row.currentHighlightTop:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
         row.currentHighlightTop:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
-        row.currentHighlightTop:SetColorTexture(1.00, 0.84, 0.32, 0.00)
+        row.currentHighlightTop:SetColorTexture(CURRENT_ROW_R, CURRENT_ROW_G, CURRENT_ROW_B, 0.00)
         row.currentHighlightTop:Hide()
         row.currentHighlightBottom = row:CreateTexture(nil, "ARTWORK")
         row.currentHighlightBottom:SetHeight(1)
         row.currentHighlightBottom:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
         row.currentHighlightBottom:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
-        row.currentHighlightBottom:SetColorTexture(1.00, 0.84, 0.32, 0.00)
+        row.currentHighlightBottom:SetColorTexture(CURRENT_ROW_R, CURRENT_ROW_G, CURRENT_ROW_B, 0.00)
         row.currentHighlightBottom:Hide()
         row.currentHighlightLeft = row:CreateTexture(nil, "ARTWORK")
-        row.currentHighlightLeft:SetWidth(2)
+        row.currentHighlightLeft:SetWidth(3)
         row.currentHighlightLeft:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
         row.currentHighlightLeft:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
-        row.currentHighlightLeft:SetColorTexture(1.00, 0.84, 0.32, 0.00)
+        row.currentHighlightLeft:SetColorTexture(CURRENT_ROW_R, CURRENT_ROW_G, CURRENT_ROW_B, 0.00)
         row.currentHighlightLeft:Hide()
         row.currentHighlightRight = row:CreateTexture(nil, "ARTWORK")
         row.currentHighlightRight:SetWidth(2)
         row.currentHighlightRight:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
         row.currentHighlightRight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
-        row.currentHighlightRight:SetColorTexture(1.00, 0.84, 0.32, 0.00)
+        row.currentHighlightRight:SetColorTexture(CURRENT_ROW_R, CURRENT_ROW_G, CURRENT_ROW_B, 0.00)
         row.currentHighlightRight:Hide()
         row._highlightLines = { row.currentHighlightTop, row.currentHighlightBottom, row.currentHighlightLeft, row.currentHighlightRight }
         row.pinGlow = row:CreateTexture(nil, "BORDER")
@@ -4327,7 +4725,7 @@ function EL:GetRow(i)
         row.sep:SetHeight(1)
         row.sep:SetPoint("BOTTOMLEFT", 0, 0)
         row.sep:SetPoint("BOTTOMRIGHT", 0, 0)
-        row.sep:SetColorTexture(0.95, 0.82, 0.42, ROW_SEPARATOR_ALPHA)
+        local sr, sg, sb = ThemeBorderRGB(); row.sep:SetColorTexture(sr, sg, sb, ROW_SEPARATOR_ALPHA)
         row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         row.name:SetJustifyH("LEFT")
         row.prof1Icon = row:CreateTexture(nil, "OVERLAY")
@@ -4355,6 +4753,10 @@ function EL:GetRow(i)
         row.forecast:SetJustifyH("CENTER")
         row.cooldown = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         row.cooldown:SetJustifyH("CENTER")
+        row.cooldownReadyIcon = row:CreateTexture(nil, "OVERLAY")
+        row.cooldownReadyIcon:SetTexture(CD_READY_ICON_TEXTURE)
+        row.cooldownReadyIcon:SetVertexColor(CD_READY_ICON_R, CD_READY_ICON_G, CD_READY_ICON_B, 1)
+        row.cooldownReadyIcon:Hide()
         row.mulch = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         row.mulch:SetJustifyH("CENTER")
         row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -4386,17 +4788,17 @@ function EL:GetRow(i)
             end
         end)
         row:SetScript("OnEnter", function(self)
-            if self.hover then self.hover:Show() end
+            ApplyTrackingRowHoverState(self, true)
             if EL.ShowRowTooltip then EL:ShowRowTooltip(self) end
         end)
         row:SetScript("OnLeave", function(self)
-            if self.hover then self.hover:Hide() end
+            ApplyTrackingRowHoverState(self, false)
             GameTooltip:Hide()
         end)
         row.hover = row:CreateTexture(nil, "HIGHLIGHT")
         row.hover:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
         row.hover:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
-        row.hover:SetColorTexture(1.00, 0.82, 0.24, PIN_HOVER_ALPHA)
+        row.hover:SetColorTexture(TRACKING_ROW_HOVER_R, TRACKING_ROW_HOVER_G, TRACKING_ROW_HOVER_B, TRACKING_ROW_HOVER_ALPHA)
         row.hover:Hide()
         p.rows[i] = row
     end
@@ -4437,7 +4839,7 @@ local function UpdateTrackingHeader(owner, panel, concReady, concSoon, mulchRead
             panel.summary:Hide()
         else
             SetFontStringTextIfChanged(panel.summary, T("Ready: %d | Soon: %d | Mulch: %d", concReady, concSoon, mulchReady))
-            panel.summary:SetTextColor(0.82, 0.80, 0.72)
+            panel.summary:SetTextColor(ThemeMutedTextRGB())
             panel.summary:Show()
         end
     end
@@ -4658,6 +5060,7 @@ function EL:RefreshPanel()
             AnchorMoxieCell(row, row, cols.moxieX, math.max(1, cols.moxieW))
             AnchorColumnText(row.forecast, row, cols.forecastX, math.max(1, cols.forecastW), "CENTER")
             AnchorColumnText(row.cooldown, row, cols.cooldownX, math.max(1, cols.cooldownW), "CENTER")
+            AnchorColumnTexture(row.cooldownReadyIcon, row, cols.cooldownX, math.max(1, cols.cooldownW))
             AnchorColumnText(row.mulch, row, cols.mulchX, math.max(1, cols.mulchW), "CENTER")
             AnchorProfessionCell(row, row.prof1, row.prof1Icon, cols.prof1X, cols.prof1W, visible.prof1, profIcon1)
             AnchorProfessionCell(row, row.prof2, row.prof2Icon, cols.prof2X, cols.prof2W, visible.prof2, profIcon2)
@@ -4673,6 +5076,7 @@ function EL:RefreshPanel()
         SetMoxieCellShown(row, visible.moxie and true or false, row._emberMoxieSplit)
         row.forecast:SetShown(visible.forecast and true or false)
         row.cooldown:SetShown(visible.cooldown and true or false)
+        if row.cooldownReadyIcon then row.cooldownReadyIcon:SetShown(false) end
         row.mulch:SetShown(visible.mulch and true or false)
 
         row.charKey = charKey
@@ -4692,15 +5096,20 @@ function EL:RefreshPanel()
         if row.currentHighlight then
             row.currentHighlight:SetShown(isCurrentCharacter and true or false)
             if isCurrentCharacter then
-                row.currentHighlight:SetColorTexture(1.00, 0.78, 0.24, IsCompactModeEnabled() and 0.13 or 0.16)
+                row.currentHighlight:SetColorTexture(CURRENT_ROW_R, CURRENT_ROW_G, CURRENT_ROW_B, IsCompactModeEnabled() and CURRENT_ROW_BG_ALPHA_COMPACT or CURRENT_ROW_BG_ALPHA)
             end
+        end
+        if row.edge then
+            row.edge:SetShown(isCurrentCharacter and true or false)
+            if isCurrentCharacter then row.edge:SetColorTexture(CURRENT_ROW_R, CURRENT_ROW_G, CURRENT_ROW_B, CURRENT_ROW_EDGE_ALPHA) end
         end
         for _, line in ipairs(row._highlightLines or {}) do
             if line then
                 line:SetShown(isCurrentCharacter and true or false)
-                if isCurrentCharacter then line:SetColorTexture(1.00, 0.84, 0.32, 0.42) end
+                if isCurrentCharacter then line:SetColorTexture(CURRENT_ROW_R, CURRENT_ROW_G, CURRENT_ROW_B, CURRENT_ROW_LINE_ALPHA) end
             end
         end
+        ApplyTrackingRowHoverState(row, false)
         row.name:SetShadowColor(0.00, 0.00, 0.00, 0.85)
         row.name:SetShadowOffset(1, -1)
         if row.pinGlow then
@@ -4712,9 +5121,9 @@ function EL:RefreshPanel()
             if isPinned then row.pinAccent:SetColorTexture(PIN_GLOW_R, PIN_GLOW_G, PIN_GLOW_B, PIN_ACCENT_ALPHA) end
         end
         SetFontStringTextIfChanged(row.prof1, profValue1)
-        row.prof1:SetTextColor(0.88, 0.86, 0.76)
+        row.prof1:SetTextColor(ThemeTextRGB())
         SetFontStringTextIfChanged(row.prof2, profValue2)
-        row.prof2:SetTextColor(0.88, 0.86, 0.76)
+        row.prof2:SetTextColor(ThemeTextRGB())
         SetFontStringTextIfChanged(row.conc1, concValue1)
         if concData1 then
             local cr, cg, cb = self:GetConcentrationColor(concQ1 or 0, concData1.maxQuantity or self.CONCENTRATION_MAX_DEFAULT, self:GetProfessionConcentrationThreshold(concData1))
@@ -4743,24 +5152,32 @@ function EL:RefreshPanel()
             if self.HasMoxieAtThreshold and self:HasMoxieAtThreshold(charKey, moxieEntries) then
                 SetMoxieCellColor(row, 0.35, 1.00, 0.45)
             else
-                SetMoxieCellColor(row, 0.88, 0.84, 0.74)
+                SetMoxieCellColor(row, ThemeValueTextRGB())
             end
         else
-            SetMoxieCellColor(row, 0.70, 0.70, 0.70)
+            SetMoxieCellColor(row, ThemeMutedTextRGB())
         end
         SetFontStringTextIfChanged(row.forecast, forecastValue)
         if forecastValue == "Ready" or forecastValue:match("^%d+x Ready$") then
             row.forecast:SetTextColor(0.35, 1.00, 0.45)
         else
-            row.forecast:SetTextColor(0.70, 0.70, 0.70)
+            row.forecast:SetTextColor(ThemeMutedTextRGB())
         end
-        SetFontStringTextIfChanged(row.cooldown, cooldownValue or "-")
-        if cooldownSummary and cooldownSummary.ready and cooldownSummary.ready > 0 then
-            row.cooldown:SetTextColor(0.35, 1.00, 0.45)
+        local cooldownReady = cooldownSummary and cooldownSummary.ready and cooldownSummary.ready > 0
+        SetFontStringTextIfChanged(row.cooldown, cooldownReady and "" or (cooldownValue or "-"))
+        if row.cooldownReadyIcon then
+            local iconSize = IsCompactModeEnabled() and 16 or 18
+            row.cooldownReadyIcon:SetSize(iconSize, iconSize)
+            row.cooldownReadyIcon:SetVertexColor(CD_READY_ICON_R, CD_READY_ICON_G, CD_READY_ICON_B, 1)
+            row.cooldownReadyIcon:SetShown(visible.cooldown and cooldownReady and true or false)
+        end
+        if cooldownReady then
+            -- Gold readiness marker keeps the CD column visually distinct from the green Imbued Mulch ready state beside it.
+            row.cooldown:SetTextColor(CD_READY_ICON_R, CD_READY_ICON_G, CD_READY_ICON_B)
         elseif cooldownSummary and cooldownSummary.tracked and cooldownSummary.tracked > 0 then
-            row.cooldown:SetTextColor(1.00, 0.82, 0.32)
+            local ar, ag, ab = ThemeAccentRGB(); row.cooldown:SetTextColor(ar, ag, ab)
         else
-            row.cooldown:SetTextColor(0.70, 0.70, 0.70)
+            row.cooldown:SetTextColor(ThemeMutedTextRGB())
         end
         SetFontStringTextIfChanged(row.mulch, mulchValue)
         if self:HasImbuedMulchAccess(mulchData) then
@@ -4770,8 +5187,11 @@ function EL:RefreshPanel()
         else
             row.mulch:SetTextColor(0.7, 0.7, 0.7)
         end
-        local stripe = (i % 2 == 0) and 0.030 or 0
-        row.bg:SetColorTexture(0.10 + stripe, 0.10 + stripe, 0.115 + stripe, IsCompactModeEnabled() and ROW_STRIPE_ALPHA_COMPACT or ROW_STRIPE_ALPHA)
+        local stripe = (i % 2 == 0) and 0.026 or 0.010
+        local bgR = ThemeColor("BG_R", 0.020)
+        local bgG = ThemeColor("BG_G", 0.018)
+        local bgB = ThemeColor("BG_B", 0.026)
+        row.bg:SetColorTexture(math.min(1, bgR + stripe), math.min(1, bgG + stripe), math.min(1, bgB + stripe), IsCompactModeEnabled() and ROW_STRIPE_ALPHA_COMPACT or ROW_STRIPE_ALPHA)
         row:Show()
     end
     for i = #rows + 1, #p.rows do
@@ -4800,7 +5220,7 @@ function EL:UpdateButton()
 
     if b.title then
         SetFontStringTextIfChanged(b.title, T("EmberLedger"))
-        b.title:SetTextColor(1.00, 0.82, 0.24)
+        b.title:SetTextColor(ThemeAccentRGB())
         b.title:SetJustifyH("CENTER")
         b.title:SetShadowColor(0.00, 0.00, 0.00, 0.95)
         b.title:SetShadowOffset(1, -1)
@@ -4828,7 +5248,7 @@ function EL:UpdateButton()
             if (concReady and concReady > 0) or (mulchReady and mulchReady > 0) then
                 b.line1:SetTextColor(0.35, 1.00, 0.35)
             else
-                b.line1:SetTextColor(0.86, 0.84, 0.76)
+                b.line1:SetTextColor(ThemeTextRGB())
             end
             b.line1:Show()
         else
@@ -4866,7 +5286,7 @@ function EL:UpdateButton()
     if b.line2 then
         if #line2Text > 0 then
             SetFontStringTextIfChanged(b.line2, line2Text)
-            b.line2:SetTextColor(0.78, 0.78, 0.72)
+            b.line2:SetTextColor(ThemeMutedTextRGB())
             b.line2:Show()
         else
             SetFontStringTextIfChanged(b.line2, "")
@@ -5033,9 +5453,57 @@ function EL:ResetWindowPositions()
     self:Print("Window positions reset.")
 end
 
+function EL:ResetUISettingsToDefaults()
+    local settings = self.db and self.db.settings
+    if not settings then return end
+    local defaults = self.GetDefaultSettingsSnapshot and self:GetDefaultSettingsSnapshot() or nil
+    if type(defaults) ~= "table" then return end
+
+    local keepHidden = settings.hiddenCharacters
+    local keepPinned = settings.favoriteCharacters
+    local keepSessionHistory = settings.sessionHistory
+
+    settings.sort = defaults.sort
+    settings.button = defaults.button
+    settings.panel = defaults.panel
+    settings.session = defaults.session
+    settings.alerts = defaults.alerts
+    settings.display = defaults.display
+    settings.performance = defaults.performance
+    settings.minimap = defaults.minimap
+    settings.options = defaults.options
+    settings.lockWindows = defaults.lockWindows
+    settings.debug = defaults.debug
+    settings.onboardingSeen = defaults.onboardingSeen
+
+    settings.hiddenCharacters = keepHidden or {}
+    settings.favoriteCharacters = keepPinned or {}
+    settings.sessionHistory = keepSessionHistory or {}
+
+    if self.button then SetFramePointFromDB(self.button, settings.button) end
+    if self.panel then
+        self.panel:SetScale(tonumber(settings.panel.scale) or 1)
+        SetFramePointFromDB(self.panel, settings.panel)
+    end
+    if self.sessionWindow then
+        self.sessionWindow:SetScale(tonumber(settings.session.scale) or 1)
+        SetFramePointFromDB(self.sessionWindow, settings.session)
+    end
+    if self.settingsPanel then
+        SetFramePointFromDB(self.settingsPanel, settings.options)
+    end
+
+    if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+    if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
+    if self.ForEachModule then self:ForEachModule("Refresh") end
+    if self.RefreshLayout then self:RefreshLayout("resetUISettings") end
+    if self.RequestUpdate then self:RequestUpdate() end
+    self:Print("UI settings reset to defaults. Tracked character and session data was kept.")
+end
+
 function EL:ShowButtonTooltip(owner)
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-    GameTooltip:SetText(T("EmberLedger"), 1, 0.82, 0.24)
+    GameTooltip:SetText(T("EmberLedger"), 0.82, 0.88, 0.96)
     GameTooltip:AddLine(T("Quick launcher and window toggle."), 0.86, 0.86, 0.78, true)
     if self.GetNextProfessionCooldownSummary then
         local nextCooldown = self:GetNextProfessionCooldownSummary(time())
