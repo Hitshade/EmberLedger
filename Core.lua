@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.1.3"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.1.7"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -1470,6 +1470,8 @@ EL.REQUIRED_MODULES = {
             "RefreshBagSummaryView",
             "CreateSessionWindow",
             "LayoutSessionWindow",
+            "ShowSessionWindow",
+            "HideSessionWindow",
             "ShowSessionWindowFromSavedState",
             "ToggleSessionWindow",
         },

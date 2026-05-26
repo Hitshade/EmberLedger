@@ -39,7 +39,7 @@ local function ThemeValue(key, fallback)
 end
 
 local function ThemeBorderRGB()
-    return ThemeValue("BORDER_R", 0.82), ThemeValue("BORDER_G", 0.66), ThemeValue("BORDER_B", 0.34)
+    return ThemeValue("BORDER_R", 0.42), ThemeValue("BORDER_G", 0.42), ThemeValue("BORDER_B", 0.44)
 end
 
 local function ThemeTextRGB()
@@ -335,10 +335,10 @@ function EL:CreateSessionWindow()
     end)
     frame:SetScript("OnHide", function()
         if EL.db and EL.db.settings and EL.db.settings.session then
+            -- Hiding/closing the Session window should only close the current window instance.
+            -- It should not disable the user's Session window preference, otherwise launcher
+            -- and minimap toggles will refuse to restore the window until /el session forces it.
             EL.db.settings.session.windowOpen = false
-            if not EL._suppressSessionWindowHideSetting then
-                EL.db.settings.session.shown = false
-            end
         end
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
         if EL.RefreshUpdateTicker then EL:RefreshUpdateTicker() end
@@ -357,7 +357,7 @@ function EL:CreateSessionWindow()
     frame.close:SetSize(SESSION_CLOSE_SIZE, SESSION_CLOSE_SIZE)
     frame.close:SetPoint("RIGHT", frame.sessionPanel.header, "RIGHT", SESSION_CLOSE_RIGHT_PAD, 0)
     frame.close:SetFrameLevel((frame.sessionPanel.header:GetFrameLevel() or 1) + 10)
-    frame.close:SetScript("OnClick", function() frame:Hide() end)
+    frame.close:SetScript("OnClick", function() EL:HideSessionWindow(true) end)
 
     if frame.sessionPanel and frame.sessionPanel.title then
         frame.sessionPanel.title:ClearAllPoints()
@@ -370,23 +370,61 @@ function EL:CreateSessionWindow()
     self:LayoutSessionWindow()
 end
 
-function EL:ShowSessionWindowFromSavedState()
-    if not self.sessionWindow then return end
-    if self.db and self.db.settings and self.db.settings.session and self.db.settings.session.shown == false then return end
-    SetFramePointFromDB(self.sessionWindow, self.db.settings.session)
+function EL:ShowSessionWindow(forcePreference)
+    if not self.sessionWindow and self.CreateSessionWindow then
+        self:CreateSessionWindow()
+    end
+    if not self.sessionWindow then
+        if self.Print then self:Print("Session window could not be created.") end
+        return false
+    end
+
+    local settings = self.db and self.db.settings and self.db.settings.session
+    if settings then
+        if forcePreference then
+            settings.shown = true
+            settings.windowOpen = true
+        elseif settings.shown == false then
+            return false
+        end
+    end
+
+    SetFramePointFromDB(self.sessionWindow, settings or {})
     self:LayoutSessionWindow()
     if self.RefreshSessionPanel then self:RefreshSessionPanel() end
     self.sessionWindow:Show()
     BringEmberWindowToFront(self.sessionWindow)
     if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
+    return true
+end
+
+function EL:HideSessionWindow(preservePreference)
+    local settings = self.db and self.db.settings and self.db.settings.session
+    if settings then
+        settings.windowOpen = false
+        if preservePreference == true then
+            settings.shown = true
+        elseif preservePreference == false then
+            settings.shown = false
+        end
+    end
+    if self.sessionWindow and self.sessionWindow:IsShown() then
+        self.sessionWindow:Hide()
+    else
+        if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+        if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
+    end
+end
+
+function EL:ShowSessionWindowFromSavedState(forceShow)
+    return self:ShowSessionWindow(forceShow == true)
 end
 
 function EL:ToggleSessionWindow()
-    if not self.sessionWindow then return end
-    if self.sessionWindow:IsShown() then
-        self.sessionWindow:Hide()
-        if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
+    if self.sessionWindow and self.sessionWindow:IsShown() then
+        self:HideSessionWindow(true)
     else
-        self:ShowSessionWindowFromSavedState()
+        local shown = self:ShowSessionWindow(true)
+        if not shown and self.Print then self:Print("Session window could not be shown.") end
     end
 end

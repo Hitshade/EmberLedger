@@ -1275,14 +1275,7 @@ function EL:CreateSessionHistoryWindow()
     frame.close:SetSize(24, 24)
     frame.close:SetPoint("RIGHT", frame.header, "RIGHT", -6, 0)
     frame.close:SetScript("OnClick", function()
-        EL._suppressSessionWindowHideSetting = true
         frame:Hide()
-        EL._suppressSessionWindowHideSetting = false
-        if EL.db and EL.db.settings and EL.db.settings.session then
-            -- shown is preserved by the suppress flag above; this write is defensive.
-            EL.db.settings.session.shown = true
-            EL.db.settings.session.windowOpen = false
-        end
         if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
         if EL.LayoutActionBar then EL:LayoutActionBar() end
         if EL.RequestActionBarRefresh then EL:RequestActionBarRefresh(true) end
@@ -3184,38 +3177,53 @@ function EL:TogglePanel()
 end
 
 function EL:ToggleAllWindows()
+    local settings = self.db and self.db.settings
+    if not settings then return end
+
+    local panelSettings = settings.panel or {}
+    local sessionSettings = settings.session or {}
+    local wantMain = panelSettings.charactersShown ~= false
+    local wantSession = sessionSettings.shown ~= false and (not self.IsSessionTrackingEnabled or self:IsSessionTrackingEnabled())
+
     local mainShown = self.panel and self.panel:IsShown()
     local sessionShown = self.sessionWindow and self.sessionWindow:IsShown()
-    if mainShown or sessionShown then
-        if mainShown and self.panel then
-            self._suppressPanelWindowHideSetting = true
-            self.panel:Hide()
-            self._suppressPanelWindowHideSetting = false
-            if self.db and self.db.settings and self.db.settings.panel then
-                self.db.settings.panel.charactersShown = true
-                self.db.settings.panel.windowOpen = true
-            end
+    local desiredWindowHidden = (wantMain and not mainShown) or (wantSession and not sessionShown)
+
+    -- Launcher/minimap clicks should restore any enabled/preferred window that is missing.
+    -- This keeps a closed Session window recoverable even while the main tracker is still open.
+    if desiredWindowHidden then
+        if wantMain and self.ShowPanelFromSavedState then
+            self:ShowPanelFromSavedState()
         end
-        if sessionShown and self.sessionWindow then
-            self._suppressSessionWindowHideSetting = true
-            self.sessionWindow:Hide()
-            self._suppressSessionWindowHideSetting = false
-            if self.db and self.db.settings and self.db.settings.session then
-                self.db.settings.session.shown = true
-                self.db.settings.session.windowOpen = true
-            end
+        if wantSession and self.ShowSessionWindow then
+            self:ShowSessionWindow(true)
+        elseif wantSession and self.ShowSessionWindowFromSavedState then
+            self:ShowSessionWindowFromSavedState(true)
         end
         if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
         return
     end
-    if self.db and self.db.settings then
-        if self.db.settings.panel and self.db.settings.panel.charactersShown ~= false and self.ShowPanelFromSavedState then
-            self:ShowPanelFromSavedState()
-        end
-        if self.db.settings.session and self.db.settings.session.shown ~= false and self.ShowSessionWindowFromSavedState then
-            self:ShowSessionWindowFromSavedState()
+
+    if mainShown and self.panel then
+        self._suppressPanelWindowHideSetting = true
+        self.panel:Hide()
+        self._suppressPanelWindowHideSetting = false
+        if settings.panel then
+            settings.panel.charactersShown = true
+            settings.panel.windowOpen = false
         end
     end
+    if sessionShown and self.HideSessionWindow then
+        self:HideSessionWindow(true)
+    elseif sessionShown and self.sessionWindow then
+        self.sessionWindow:Hide()
+        if settings.session then
+            settings.session.shown = true
+            settings.session.windowOpen = false
+        end
+    end
+    if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+    if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
 end
 
 function EL:ToggleLauncherLock()

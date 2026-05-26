@@ -1,3 +1,34 @@
+## v2.1.7
+
+### Fixed
+- Prevented cancelled, expired, or returned auction mail attachments from being counted as trusted session material gains.
+- Added auction invoice detection to trusted mail reward filtering so returned auction items do not inflate session value.
+
+## v2.1.6
+
+### Fixed
+- Reworked launcher/minimap window toggling so enabled windows are restored when one preferred window is hidden.
+- Fixed the Session window remaining hidden after closing it while the main tracker was still visible.
+- Preserved Session Tracking as an enabled module state while allowing the Session window to be closed and restored normally.
+
+### Cleanup
+- Centralized Session window show/hide/toggle handling through shared helpers.
+- Removed obsolete Session window suppress-flag cleanup code from the session history window close path.
+- Added Session window show/hide helpers to module verification.
+
+## v2.1.5
+
+### Fixed
+- Fixed the Session window close button marking the window preference as hidden.
+- Restored launcher and minimap toggle recovery for the Session window after it has been closed.
+- Kept Session Tracking enabled while allowing the Session window to be closed and reopened normally.
+
+## v2.1.4
+
+### Fixed
+- Fixed `/el session` failing to restore the Session window after it had been closed.
+- Added defensive Session window creation/show handling so the command no longer fails silently if the frame is missing.
+
 ## v2.1.3
 
 ### Upgrade Migration and Audit Cleanup

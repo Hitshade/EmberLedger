@@ -20,9 +20,13 @@ local TRUSTED_MAIL_KEYWORDS = {
 
 local BLOCKED_MAIL_KEYWORDS = {
     "auction",
+    "auction house",
     "outbid",
     "sale pending",
     "expired",
+    "cancelled",
+    "canceled",
+    "returned",
 }
 
 local BAG_DIFF_DEBOUNCE_SECONDS = 0.75
@@ -38,6 +42,16 @@ end
 
 local function N(value, fallback, context)
     return EL:SafeNumber(value, fallback, context)
+end
+
+
+local function HasAuctionInvoice(mailIndex)
+    -- Auction-house return mail can look like a normal item attachment during
+    -- bag-diff processing. If Blizzard exposes invoice data for the inbox row,
+    -- treat it as auction mail and never allow it through trusted reward mail.
+    if type(GetInboxInvoiceInfo) ~= "function" then return false end
+    local ok, invoiceType = pcall(GetInboxInvoiceInfo, mailIndex)
+    return ok and invoiceType ~= nil
 end
 
 local function GetInboxAttachmentQuantity(mailIndex, attachmentIndex)
@@ -346,10 +360,11 @@ function EL:ConsumePendingSessionCraftedItem(itemID, quantity)
     return consumed
 end
 
-function EL:IsTrustedSessionRewardMail(sender, subject, codAmount, itemCount, isGM)
+function EL:IsTrustedSessionRewardMail(sender, subject, codAmount, itemCount, isGM, mailIndex)
     if not self:IsTrustedMailRewardTrackingEnabled() then return false end
     if (tonumber(codAmount) or 0) > 0 then return false end
     if (tonumber(itemCount) or 0) <= 0 then return false end
+    if mailIndex and HasAuctionInvoice(mailIndex) then return false end
 
     -- Avoid obvious auction/transaction mail. These can contain valuable items,
     -- but counting them would turn session tracking into mailbox accounting.
@@ -381,7 +396,7 @@ function EL:RefreshTrustedSessionMailCache()
     numItems = okCount and (tonumber(numItems) or 0) or 0
     for mailIndex = 1, numItems do
         local okHeader, _, _, sender, subject, _, codAmount, _, itemCount, _, _, _, _, isGM = pcall(GetInboxHeaderInfo, mailIndex)
-        if okHeader and self:IsTrustedSessionRewardMail(sender, subject, codAmount, itemCount, isGM) then
+        if okHeader and self:IsTrustedSessionRewardMail(sender, subject, codAmount, itemCount, isGM, mailIndex) then
             for attachmentIndex = 1, tonumber(itemCount) or 0 do
                 local itemLink = GetInboxItemLink(mailIndex, attachmentIndex)
                 local itemID = itemLink and GetItemInfoInstantSafe(itemLink)

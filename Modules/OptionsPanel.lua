@@ -1755,16 +1755,16 @@ function EL:TogglePerformanceSetting(key)
             if shouldReopen then
                 sessionSettings.shown = true
                 sessionSettings.windowOpen = true
-                if self.ShowSessionWindowFromSavedState then self:ShowSessionWindowFromSavedState() end
+                if self.ShowSessionWindow then self:ShowSessionWindow() elseif self.ShowSessionWindowFromSavedState then self:ShowSessionWindowFromSavedState() end
             elseif self.RefreshSessionPanel then
                 self:RefreshSessionPanel()
             end
         else
             sessionSettings.reopenAfterPerformanceEnable = (self.sessionWindow and self.sessionWindow:IsShown()) or sessionSettings.windowOpen == true
-            if self.sessionWindow then
-                self._suppressSessionWindowHideSetting = true
+            if self.HideSessionWindow then
+                self:HideSessionWindow(true)
+            elseif self.sessionWindow then
                 self.sessionWindow:Hide()
-                self._suppressSessionWindowHideSetting = false
             end
             sessionSettings.windowOpen = false
         end
@@ -1874,9 +1874,13 @@ function EL:ToggleSectionSetting(section)
         self.db.settings.session.shown = not (self.db.settings.session.shown ~= false)
         self:NotifyToggle(SECTION_TOGGLE_LABELS.session, self.db.settings.session.shown ~= false)
         if self.db.settings.session.shown then
-            if self.ShowSessionWindowFromSavedState then self:ShowSessionWindowFromSavedState() end
+            if self.ShowSessionWindow then self:ShowSessionWindow() elseif self.ShowSessionWindowFromSavedState then self:ShowSessionWindowFromSavedState() end
         else
-            if self.sessionWindow then self.sessionWindow:Hide() end
+            if self.HideSessionWindow then
+                self:HideSessionWindow(false)
+            elseif self.sessionWindow then
+                self.sessionWindow:Hide()
+            end
         end
     end
 
