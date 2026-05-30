@@ -930,7 +930,7 @@ function EL:CreateSettingsPanel(parent)
     f.toggleTime:SetPoint("TOPLEFT", 294, -56)
     SetSettingsTooltip(f.toggleTime, "Launcher session time", {"Controls the session timer line on the launcher only.", "This does not show or hide the standalone Session window."})
 
-    f.sessionOptions = MakeSettingsSection(f, "Session Tracking", contentX, -724, contentW, 190)
+    f.sessionOptions = MakeSettingsSection(f, "Session Tracking", contentX, -724, contentW, 232)
     f.filterHerbs = MakeSettingsCheck(f.sessionOptions, "Herbs", function() EL:ToggleSessionFilterSetting("trackHerbs") end)
     f.filterHerbs:SetPoint("TOPLEFT", 12, -34)
     f.filterOre = MakeSettingsCheck(f.sessionOptions, "Ore", function() EL:ToggleSessionFilterSetting("trackOre") end)
@@ -951,33 +951,51 @@ function EL:CreateSettingsPanel(parent)
     f.trackGoldSpent = MakeSettingsCheck(f.sessionOptions, "Gold spent", function() EL:ToggleSessionMoneySetting("trackGoldSpent", false, "Gold spent") end)
     f.trackGoldSpent:SetPoint("TOPLEFT", 238, -86)
     SetSettingsTooltip(f.trackGoldSpent, "Gold spent", {"Subtracts direct wallet losses from the session total.", "Off by default so repairs and purchases do not surprise users."})
-    f.countTrustedMailRewards = MakeSettingsCheck(f.sessionOptions, "Trusted mail rewards", function() EL:ToggleSessionMoneySetting("countTrustedMailRewards", true, "Trusted mail rewards") end)
-    f.countTrustedMailRewards:SetPoint("TOPLEFT", 128, -112)
-    SetSettingsTooltip(f.countTrustedMailRewards, "Trusted mail rewards", {"Counts profession material attachments from trusted patron or crafting-order reward mail.", "Player mail, auction mail, and normal transfers remain ignored."})
-    f.pricingSourceLabel = f.sessionOptions:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    f.pricingSourceLabel:SetPoint("TOPLEFT", 12, -134)
-    f.pricingSourceLabel:SetText("Pricing:")
-    f.pricingSourceLabel:SetTextColor(ThemeMutedTextRGB())
-    RegisterThemeText(f.pricingSourceLabel, "themeMutedTextWidgets")
-    f.pricingSourceValue = f.sessionOptions:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    f.pricingSourceValue:SetPoint("LEFT", f.pricingSourceLabel, "RIGHT", 5, 0)
-    f.pricingSourceValue:SetTextColor(1.00, 0.92, 0.56)
-    RegisterThemeText(f.pricingSourceValue, "themeValueTextWidgets")
     f.toggleSessionHistory = MakeSettingsCheck(f.sessionOptions, "Session history", function() if EL.ToggleSessionHistoryEnabled then EL:ToggleSessionHistoryEnabled() end end)
     f.toggleSessionHistory:SetPoint("TOPLEFT", 12, -112)
     SetSettingsTooltip(f.toggleSessionHistory, "Session History", {"Saves account-wide summary records on reset and logout/reload."})
+    f.countTrustedMailRewards = MakeSettingsCheck(f.sessionOptions, "Trusted mail rewards", function() EL:ToggleSessionMoneySetting("countTrustedMailRewards", true, "Trusted mail rewards") end)
+    f.countTrustedMailRewards:SetPoint("TOPLEFT", 128, -112)
+    SetSettingsTooltip(f.countTrustedMailRewards, "Trusted mail rewards", {"Counts profession material attachments from trusted patron or crafting-order reward mail.", "Player mail, auction mail, and normal transfers remain ignored."})
+
+    f.pricingSourceLabel = f.sessionOptions:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.pricingSourceLabel:SetPoint("TOPLEFT", 12, -148)
+    f.pricingSourceLabel:SetText("Item value source")
+    f.pricingSourceLabel:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.pricingSourceLabel, "themeMutedTextWidgets")
+    f.pricingSourceDropdown = MakeSettingsDropdown(f.sessionOptions, 158, {
+        { label = "Auto", value = "auto" },
+        { label = "TSM", value = "tsm" },
+        { label = "Auctionator", value = "auctionator" },
+        { label = "Fallback only", value = "fallback" },
+    }, function()
+        return (EL.GetSessionPricingSource and EL:GetSessionPricingSource()) or "auto"
+    end, function(value)
+        if EL.SetSessionPricingSource then EL:SetSessionPricingSource(value) end
+    end)
+    f.pricingSourceDropdown:SetPoint("TOPLEFT", f.sessionOptions, "TOPLEFT", 130, -140)
+    SetSettingsTooltip(f.pricingSourceDropdown, "Item value source", {"Auto uses TSM when available, then Auctionator as fallback.", "Choose TSM or Auctionator to force one data source when both addons are installed.", "Fallback only disables addon market pricing and uses zero value for unpriced items."})
+    f.pricingSourceValueLabel = f.sessionOptions:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.pricingSourceValueLabel:SetPoint("TOPLEFT", 12, -178)
+    f.pricingSourceValueLabel:SetText("Active source")
+    f.pricingSourceValueLabel:SetTextColor(ThemeMutedTextRGB())
+    RegisterThemeText(f.pricingSourceValueLabel, "themeMutedTextWidgets")
+    f.pricingSourceValue = f.sessionOptions:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.pricingSourceValue:SetPoint("LEFT", f.pricingSourceValueLabel, "RIGHT", 8, 0)
+    f.pricingSourceValue:SetTextColor(1.00, 0.92, 0.56)
+    RegisterThemeText(f.pricingSourceValue, "themeValueTextWidgets")
     f.copySummary = MakeSettingsButton(f.sessionOptions, "Copy Summary", 112, function() EL:ShowCopySessionSummaryDialog() end)
-    f.copySummary:SetPoint("TOPRIGHT", -12, -132)
+    f.copySummary:SetPoint("TOPRIGHT", -12, -176)
     SetSettingsTooltip(f.copySummary, "Copy Summary", {"Copies a quick summary of the current session totals."})
     f.sessionDisabledTip = f.sessionOptions:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    f.sessionDisabledTip:SetPoint("TOPLEFT", 12, -162)
+    f.sessionDisabledTip:SetPoint("TOPLEFT", 12, -204)
     f.sessionDisabledTip:SetWidth(contentW - 24)
     f.sessionDisabledTip:SetJustifyH("LEFT")
     f.sessionDisabledTip:SetTextColor(1.00, 0.74, 0.36)
     f.sessionDisabledTip:SetText("Session Tracking is disabled on the Modules page.")
     f.sessionDisabledTip:Hide()
 
-    f.craftedItemsSection = MakeSettingsSection(f, "Crafted Item Tracking", contentX, -898, contentW, 146)
+    f.craftedItemsSection = MakeSettingsSection(f, "Crafted Item Tracking", contentX, -940, contentW, 146)
     f.countCraftedItems = MakeSettingsCheck(f.craftedItemsSection, "Count crafted items", function() EL:ToggleSessionMoneySetting("countCraftedItems", false, "Crafted items") end)
     f.countCraftedItems:SetPoint("TOPLEFT", 12, -36)
     SetSettingsTooltip(f.countCraftedItems, "Crafted items", {"Counts crafted outputs added to your bags during tradeskill crafting.", "Off by default. May double-count value if the crafted item is later sold and AH/mail gold is also tracked.", "Reagent costs are not deducted from crafted item value."})
@@ -1399,7 +1417,7 @@ function EL:RefreshSettingsPanel()
     end
     if f.actionBarDisabledTip then f.actionBarDisabledTip:SetShown(performanceSettings.actionBar == false) end
     local sessionControlsAlpha = (performanceSettings.sessionTracking ~= false) and 1.0 or 0.45
-    for _, btn in ipairs({ f.toggleSessionSection, f.filterHerbs, f.filterOre, f.filterCloth, f.filterLeather, f.filterEnchanting, f.filterFish, f.filterOther, f.trackRawGoldGains, f.trackGoldSpent, f.countTrustedMailRewards, f.countCraftedItems, f.toggleSessionHistory, f.resetSession, f.historyMaxEntriesSlider }) do
+    for _, btn in ipairs({ f.toggleSessionSection, f.filterHerbs, f.filterOre, f.filterCloth, f.filterLeather, f.filterEnchanting, f.filterFish, f.filterOther, f.trackRawGoldGains, f.trackGoldSpent, f.countTrustedMailRewards, f.countCraftedItems, f.toggleSessionHistory, f.pricingSourceDropdown, f.resetSession, f.historyMaxEntriesSlider }) do
         if btn and btn.SetAlpha then btn:SetAlpha(sessionControlsAlpha) end
     end
     if f.sessionDisabledTip then f.sessionDisabledTip:SetShown(performanceSettings.sessionTracking == false) end
@@ -1416,6 +1434,9 @@ function EL:RefreshSettingsPanel()
     setToggle(f.countCraftedItems, sessionSettings.countCraftedItems == true)
     if f.toggleSessionHistory and f.toggleSessionHistory.SetChecked then
         f.toggleSessionHistory:SetChecked((self.IsSessionHistoryEnabled and self:IsSessionHistoryEnabled()) or false)
+    end
+    if f.pricingSourceDropdown and f.pricingSourceDropdown.RefreshSelection then
+        f.pricingSourceDropdown:RefreshSelection()
     end
     if f.pricingSourceValue then
         f.pricingSourceValue:SetText((self.GetActivePricingSourceLabel and self:GetActivePricingSourceLabel()) or "Unknown")

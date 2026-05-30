@@ -1,3 +1,14 @@
+## v2.2.1
+### Session Tracking
+- Changed Auto item value source priority to prefer TSM first, then Auctionator, then fallback.
+- Updated the Item Value Source tooltip to match the new Auto priority.
+
+## v2.2.0
+### Session Tracking
+- Added an Item Value Source option for Session Tracking.
+- Users can now choose Auto, TSM, Auctionator, or Fallback only for session item value pricing.
+- Auto preserves the existing behavior by using Auctionator when available and falling back to TSM when needed.
+
 ## v2.1.10
 
 ### Bug Fixes

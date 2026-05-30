@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.1.10"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.2.1"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -321,7 +321,7 @@ local defaults = {
             width = 352,
             height = 180,
             scale = 1,
-            pricingSource = "Auctionator",
+            pricingSource = "auto",
             topItems = 50,
             trackHerbs = true,
             trackOre = true,
@@ -2917,37 +2917,101 @@ function EL:GetTSMUnitPriceSilver(itemID)
     return 0
 end
 
+local VALID_PRICING_SOURCES = {
+    auto = true,
+    tsm = true,
+    auctionator = true,
+    fallback = true,
+    -- Legacy saved values from earlier EmberLedger builds.
+    TSM = "tsm",
+    Auctionator = "auctionator",
+}
+
+function EL:GetSessionPricingSource()
+    local settings = self.db and self.db.settings and self.db.settings.session
+    local source = settings and settings.pricingSource or "auto"
+    local mapped = VALID_PRICING_SOURCES[source]
+    if mapped == true then return source end
+    if type(mapped) == "string" then
+        if settings then settings.pricingSource = mapped end
+        return mapped
+    end
+    if settings then settings.pricingSource = "auto" end
+    return "auto"
+end
+
+function EL:SetSessionPricingSource(source)
+    if not VALID_PRICING_SOURCES[source] or VALID_PRICING_SOURCES[source] ~= true then
+        source = "auto"
+    end
+    self.db.settings.session = self.db.settings.session or {}
+    self.db.settings.session.pricingSource = source
+    if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+    if self.RefreshSessionWindow then self:RefreshSessionWindow() end
+    if self.RequestUpdate then self:RequestUpdate() end
+    if self.Print then
+        self:Print("Item value source set to " .. (self:GetSessionPricingSourceLabel(source) or "Auto"))
+    end
+end
+
+function EL:GetSessionPricingSourceLabel(source)
+    source = source or (self.GetSessionPricingSource and self:GetSessionPricingSource()) or "auto"
+    if source == "auto" then return "Auto" end
+    if source == "tsm" then return "TSM" end
+    if source == "auctionator" then return "Auctionator" end
+    if source == "fallback" then return "Fallback only" end
+    return "Auto"
+end
+
 function EL:GetUnitPriceSilver(itemID)
-    local source = self.db and self.db.settings and self.db.settings.session and self.db.settings.session.pricingSource or "Auctionator"
-    if source == "TSM" then
+    local source = self:GetSessionPricingSource()
+    if source == "fallback" then return 0 end
+    if source == "tsm" then
         return self:GetTSMUnitPriceSilver(itemID)
     end
-    local auctionator = self:GetAuctionatorUnitPriceSilver(itemID)
-    if auctionator and auctionator > 0 then return auctionator end
-    return self:GetTSMUnitPriceSilver(itemID)
+    if source == "auctionator" then
+        return self:GetAuctionatorUnitPriceSilver(itemID)
+    end
+
+    -- Auto prefers TSM when available because profession-focused users often
+    -- treat TSM as their authoritative market source, then falls back to Auctionator.
+    local tsm = self:GetTSMUnitPriceSilver(itemID)
+    if tsm and tsm > 0 then return tsm end
+    return self:GetAuctionatorUnitPriceSilver(itemID)
 end
 
 function EL:GetActivePricingSourceLabel()
-    local source = self.db and self.db.settings and self.db.settings.session and self.db.settings.session.pricingSource or "Auctionator"
-    if source == "TSM" then
+    local source = self:GetSessionPricingSource()
+    if source == "fallback" then return "Fallback only" end
+    if source == "tsm" then
         if self:IsAddOnLoaded("TradeSkillMaster") and TSM_API then return "TSM" end
-        return "None detected"
+        return "TSM selected, not ready"
     end
-    if self:IsAddOnLoaded("Auctionator") and Auctionator and Auctionator.API and Auctionator.API.v1 then return "Auctionator" end
-    if self:IsAddOnLoaded("TradeSkillMaster") and TSM_API then return "TSM fallback" end
-    return "None detected"
+    if source == "auctionator" then
+        if self:IsAddOnLoaded("Auctionator") and Auctionator and ((Auctionator.API and Auctionator.API.v1) or Auctionator.Database) then return "Auctionator" end
+        return "Auctionator selected, not ready"
+    end
+    if self:IsAddOnLoaded("TradeSkillMaster") and TSM_API then return "Auto: TSM" end
+    if self:IsAddOnLoaded("Auctionator") and Auctionator and ((Auctionator.API and Auctionator.API.v1) or Auctionator.Database) then return "Auto: Auctionator" end
+    return "Auto: fallback"
 end
 
 function EL:GetPricingWarning()
-    local source = self.db and self.db.settings and self.db.settings.session and self.db.settings.session.pricingSource or "Auctionator"
-    if source == "TSM" then
+    local source = self:GetSessionPricingSource()
+    if source == "fallback" then return nil end
+    if source == "tsm" then
         if not self:IsAddOnLoaded("TradeSkillMaster") then return "TSM missing" end
         if not TSM_API then return "TSM not ready" end
         return nil
     end
-    if not self:IsAddOnLoaded("Auctionator") then return "Auctionator missing" end
-    if not Auctionator or not Auctionator.API or not Auctionator.API.v1 then return "Auctionator not ready" end
-    return nil
+    if source == "auctionator" then
+        if not self:IsAddOnLoaded("Auctionator") then return "Auctionator missing" end
+        if not Auctionator or not ((Auctionator.API and Auctionator.API.v1) or Auctionator.Database) then return "Auctionator not ready" end
+        return nil
+    end
+    if self:IsAddOnLoaded("TradeSkillMaster") and TSM_API then return nil end
+    if self:IsAddOnLoaded("Auctionator") and Auctionator and ((Auctionator.API and Auctionator.API.v1) or Auctionator.Database) then return nil end
+    return "No pricing addon detected"
 end
 
 function EL:GetSessionDB()
