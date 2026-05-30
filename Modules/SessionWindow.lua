@@ -74,10 +74,23 @@ local function GetSessionOpacity()
     return math.max(0.20, math.min(1.00, tonumber(value) or 0.55))
 end
 
+local function IsCombatLocked()
+    if EL and EL.IsCombatLocked then return EL:IsCombatLocked() end
+    return InCombatLockdown and InCombatLockdown()
+end
+
 local function SetFramePointFromDB(frame, pos)
-    if not frame or not pos then return end
-    frame:ClearAllPoints()
-    frame:SetPoint(pos.point or "CENTER", UIParent, pos.relativePoint or "CENTER", pos.x or 0, pos.y or 0)
+    if not frame or not pos then return false end
+    if IsCombatLocked() then
+        if EL then
+            EL.pendingWindowPositionRestore = true
+            if EL.QueueCombatDeferredWork then EL:QueueCombatDeferredWork("layout") end
+        end
+        return false
+    end
+    local cleared = pcall(frame.ClearAllPoints, frame)
+    if not cleared then return false end
+    return pcall(frame.SetPoint, frame, pos.point or "CENTER", UIParent, pos.relativePoint or "CENTER", pos.x or 0, pos.y or 0)
 end
 
 local function SaveFramePoint(frame, pos)
@@ -87,6 +100,13 @@ local function SaveFramePoint(frame, pos)
     pos.relativePoint = relativePoint or "CENTER"
     pos.x = x or 0
     pos.y = y or 0
+end
+
+local function QueueDeferredWindowVisibility()
+    if EL then
+        EL.pendingWindowVisibility = true
+        if EL.QueueCombatDeferredWork then EL:QueueCombatDeferredWork("visibility") end
+    end
 end
 
 local function BringEmberWindowToFront(frame)
@@ -346,9 +366,13 @@ function EL:CreateSessionWindow()
     frame:SetScript("OnMouseDown", function(self)
         BringEmberWindowToFront(self)
     end)
-    frame:SetScript("OnDragStart", function(self) if not (EL.db.settings.lockWindows == true) or IsShiftKeyDown() then BringEmberWindowToFront(self); self:StartMoving() end end)
+    frame:SetScript("OnDragStart", function(self)
+        if EL.IsCombatLocked and EL:IsCombatLocked() then return end
+        if not (EL.db.settings.lockWindows == true) or IsShiftKeyDown() then BringEmberWindowToFront(self); self:StartMoving() end
+    end)
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
+        if EL.IsCombatLocked and EL:IsCombatLocked() then return end
         SaveFramePoint(self, EL.db.settings.session)
     end)
 
@@ -368,6 +392,12 @@ function EL:CreateSessionWindow()
     SetFramePointFromDB(frame, s)
     frame:SetScale(math.max(PANEL_MIN_SCALE, math.min(PANEL_MAX_SCALE, tonumber(s.scale) or 1)))
     self:LayoutSessionWindow()
+end
+
+function EL:SetSessionWindowPointFromDB()
+    if not self.sessionWindow then return false end
+    local settings = self.db and self.db.settings and self.db.settings.session
+    return SetFramePointFromDB(self.sessionWindow, settings or {})
 end
 
 function EL:ShowSessionWindow(forcePreference)
@@ -409,11 +439,19 @@ function EL:HideSessionWindow(preservePreference)
         end
     end
     if self.sessionWindow and self.sessionWindow:IsShown() then
+        if self.IsCombatLocked and self:IsCombatLocked() then
+            self.pendingSessionWindowHide = true
+            QueueDeferredWindowVisibility()
+            if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+            if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
+            return false
+        end
         self.sessionWindow:Hide()
     else
         if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
         if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
     end
+    return true
 end
 
 function EL:ShowSessionWindowFromSavedState(forceShow)

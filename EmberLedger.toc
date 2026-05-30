@@ -2,7 +2,7 @@
 ## Title: EmberLedger
 ## Notes: Modular profession alt dashboard for concentration, Artisan Moxie, Imbued Mulch, profession cooldown readiness, session tracking, utility actions, and roster management.
 ## Author: Hitshade
-## Version: 2.1.7
+## Version: 2.1.10
 ## Category: Professions
 ## SavedVariables: EmberLedgerDB
 ## OptionalDeps: LibStub, LibDataBroker-1.1, LibDBIcon-1.0

@@ -194,6 +194,25 @@ local function SanitizeFramePoint(point, fallback)
     return VALID_FRAME_POINTS[point] and point or fallback or "CENTER"
 end
 
+local function IsCombatLocked()
+    if EL and EL.IsCombatLocked then return EL:IsCombatLocked() end
+    return InCombatLockdown and InCombatLockdown()
+end
+
+local function QueueDeferredPositionRestore()
+    if EL then
+        EL.pendingWindowPositionRestore = true
+        if EL.QueueCombatDeferredWork then EL:QueueCombatDeferredWork("layout") end
+    end
+end
+
+local function QueueDeferredWindowVisibility()
+    if EL then
+        EL.pendingWindowVisibility = true
+        if EL.QueueCombatDeferredWork then EL:QueueCombatDeferredWork("visibility") end
+    end
+end
+
 local function SafeSetFramePoint(frame, point, relativeTo, relativePoint, x, y)
     if not frame then return false end
     point = SanitizeFramePoint(point, "CENTER")
@@ -202,15 +221,32 @@ local function SafeSetFramePoint(frame, point, relativeTo, relativePoint, x, y)
     y = tonumber(y) or 0
     relativeTo = relativeTo or UIParent
 
-    frame:ClearAllPoints()
+    -- Re-anchoring a protected frame during combat can trigger
+    -- ADDON_ACTION_BLOCKED. Show/hide may still be allowed, but movement must
+    -- wait until PLAYER_REGEN_ENABLED.
+    if IsCombatLocked() then
+        QueueDeferredPositionRestore()
+        return false
+    end
+
+    local cleared = pcall(frame.ClearAllPoints, frame)
+    if not cleared then
+        QueueDeferredPositionRestore()
+        return false
+    end
+
     local ok = pcall(frame.SetPoint, frame, point, relativeTo, relativePoint, x, y)
     if ok then return true end
 
     -- Anchor-family conflicts can happen if another frame was reparented or a
     -- stale restore target creates a circular relationship. Fall back to
     -- UIParent so the window remains usable instead of throwing a Lua error.
-    frame:ClearAllPoints()
-    pcall(frame.SetPoint, frame, "CENTER", UIParent, "CENTER", 0, 0)
+    if not IsCombatLocked() then
+        pcall(frame.ClearAllPoints, frame)
+        pcall(frame.SetPoint, frame, "CENTER", UIParent, "CENTER", 0, 0)
+    else
+        QueueDeferredPositionRestore()
+    end
     return false
 end
 
@@ -2363,15 +2399,9 @@ function EL:CreatePanel()
     panel.close:SetSize(18, 18)
     panel.close:SetPoint("RIGHT", panel.topBar, "RIGHT", -5, 0)
     panel.close:SetScript("OnClick", function()
-        EL._suppressPanelWindowHideSetting = true
-        panel:Hide()
-        EL._suppressPanelWindowHideSetting = false
-        if EL.db and EL.db.settings and EL.db.settings.panel then
-            EL.db.settings.panel.charactersShown = true
-            EL.db.settings.panel.windowOpen = false
+        if EL.HideMainPanel then
+            EL:HideMainPanel(true)
         end
-        if EL.RefreshSettingsPanel then EL:RefreshSettingsPanel() end
-        if EL.RefreshUpdateTicker then EL:RefreshUpdateTicker() end
     end)
 
     panel.settings = CreateFrame("Button", nil, panel.topBar, "UIPanelButtonTemplate")
@@ -3139,6 +3169,24 @@ function EL:AdjustPanelScale(delta)
     self:Print(T("Window scale: %s", string.format("%.2f", self.db.settings.panel.scale)))
 end
 
+function EL:RestoreDeferredWindowPositions()
+    if self:IsCombatLocked() then
+        self.pendingWindowPositionRestore = true
+        return
+    end
+    if self.panel and self.panel:IsShown() and self.db and self.db.settings and self.db.settings.panel then
+        SetFramePointFromDB(self.panel, self.db.settings.panel)
+        EnsureFrameOnScreen(self.panel, self.db.settings.panel)
+    end
+    if self.sessionWindow and self.sessionWindow:IsShown() and self.db and self.db.settings and self.db.settings.session then
+        if self.SetSessionWindowPointFromDB then
+            self:SetSessionWindowPointFromDB()
+        elseif self.ShowSessionWindowFromSavedState then
+            self:ShowSessionWindowFromSavedState(true)
+        end
+    end
+end
+
 function EL:ShowPanelFromSavedState()
     if not self.panel then return end
     self.db.settings.panel = self.db.settings.panel or {}
@@ -3162,11 +3210,69 @@ function EL:ShowPanelFromSavedState()
     if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
 end
 
+function EL:HideMainPanel(preservePreference)
+    local settings = self.db and self.db.settings and self.db.settings.panel
+    if settings then
+        settings.windowOpen = false
+        if preservePreference == true then
+            settings.charactersShown = true
+        elseif preservePreference == false then
+            settings.charactersShown = false
+        end
+    end
+    if self.panel and self.panel:IsShown() then
+        if IsCombatLocked() then
+            self.pendingMainPanelHide = true
+            QueueDeferredWindowVisibility()
+            if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+            if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
+            return false
+        end
+        self._suppressPanelWindowHideSetting = true
+        self.panel:Hide()
+        self._suppressPanelWindowHideSetting = false
+    else
+        if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+        if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
+    end
+    return true
+end
+
+function EL:ApplyDeferredWindowVisibility()
+    if self:IsCombatLocked() then
+        self.pendingWindowVisibility = true
+        if self.QueueCombatDeferredWork then self:QueueCombatDeferredWork("visibility") end
+        return
+    end
+
+    local hiddenAny = false
+    if self.pendingMainPanelHide then
+        self.pendingMainPanelHide = nil
+        if self.panel and self.panel:IsShown() then
+            self._suppressPanelWindowHideSetting = true
+            self.panel:Hide()
+            self._suppressPanelWindowHideSetting = false
+            hiddenAny = true
+        end
+    end
+    if self.pendingSessionWindowHide then
+        self.pendingSessionWindowHide = nil
+        if self.sessionWindow and self.sessionWindow:IsShown() then
+            self.sessionWindow:Hide()
+            hiddenAny = true
+        end
+    end
+
+    if hiddenAny then
+        if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
+        if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
+    end
+end
+
 function EL:ToggleMainPanel()
     if not self.panel then return end
     if self.panel:IsShown() then
-        self.panel:Hide()
-        if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end
+        self:HideMainPanel(false)
         return
     end
     self:ShowPanelFromSavedState()
@@ -3204,23 +3310,11 @@ function EL:ToggleAllWindows()
         return
     end
 
-    if mainShown and self.panel then
-        self._suppressPanelWindowHideSetting = true
-        self.panel:Hide()
-        self._suppressPanelWindowHideSetting = false
-        if settings.panel then
-            settings.panel.charactersShown = true
-            settings.panel.windowOpen = false
-        end
+    if mainShown and self.HideMainPanel then
+        self:HideMainPanel(true)
     end
     if sessionShown and self.HideSessionWindow then
         self:HideSessionWindow(true)
-    elseif sessionShown and self.sessionWindow then
-        self.sessionWindow:Hide()
-        if settings.session then
-            settings.session.shown = true
-            settings.session.windowOpen = false
-        end
     end
     if self.RefreshSettingsPanel then self:RefreshSettingsPanel() end
     if self.RefreshUpdateTicker then self:RefreshUpdateTicker() end

@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.1.7"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.1.10"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -1100,6 +1100,9 @@ function EL:QueueCombatDeferredWork(kind)
     elseif kind == "layout" then
         self.pendingSecureLayout = true
         self.pendingUIRefresh = true
+    elseif kind == "visibility" then
+        self.pendingWindowVisibility = true
+        self.pendingUIRefresh = true
     else
         self.pendingUIRefresh = true
     end
@@ -1143,11 +1146,21 @@ function EL:FlushCombatDeferredWork()
     local needsActionBar = self.pendingActionBarRefresh
     local needsLayout = self.pendingSecureLayout
     local needsRefresh = self.pendingUIRefresh
+    local needsPositionRestore = self.pendingWindowPositionRestore
+    local needsVisibility = self.pendingWindowVisibility
 
     self.pendingActionBarRefresh = nil
     self.pendingSecureLayout = nil
     self.pendingUIRefresh = nil
+    self.pendingWindowPositionRestore = nil
+    self.pendingWindowVisibility = nil
 
+    if needsPositionRestore and self.RestoreDeferredWindowPositions then
+        self:RestoreDeferredWindowPositions()
+    end
+    if needsVisibility and self.ApplyDeferredWindowVisibility then
+        self:ApplyDeferredWindowVisibility()
+    end
     if needsLayout then
         if self.LayoutPanel then self:LayoutPanel() end
         if self.AutoSizePanelHeight then self:AutoSizePanelHeight("combatDeferred") end

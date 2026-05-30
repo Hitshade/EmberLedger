@@ -1,3 +1,25 @@
+## v2.1.10
+
+### Bug Fixes
+- Added combat-safe deferred hiding for the main tracker and Session window to prevent `ADDON_ACTION_BLOCKED` errors from protected `Hide()` calls during combat.
+- Routed launcher, minimap, and close-button hide paths through shared safe window helpers.
+- Preserved Session window and main tracker preferences while deferring the actual hide until combat ends.
+- Ensured the Session window always stops dragging before combat-save guards run.
+
+## v2.1.9
+### Localization
+- Added community localization updates.
+- Special thanks to ZamestoTV for the localization contribution.
+- Replaced the localization table with the community-contributed localization update.
+- Added Russian localization coverage while preserving English fallback strings for untranslated locales.
+
+## v2.1.8
+
+### Bug Fixes
+- Added combat-safe window positioning guards for the main tracker, Options panel, and Session window.
+- Deferred protected window re-anchoring until combat ends to prevent `ADDON_ACTION_BLOCKED` errors from `ClearAllPoints()`.
+- Preserved launcher/minimap window restoration behavior while avoiding protected frame movement during combat.
+
 ## v2.1.7
 
 ### Fixed

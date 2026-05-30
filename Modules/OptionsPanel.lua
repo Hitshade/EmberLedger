@@ -26,15 +26,27 @@ local function SanitizeFramePoint(point, fallback)
     return VALID_FRAME_POINTS[point] and point or fallback or "CENTER"
 end
 
+local function IsCombatLocked()
+    if EL and EL.IsCombatLocked then return EL:IsCombatLocked() end
+    return InCombatLockdown and InCombatLockdown()
+end
+
 local function SafeSetFramePoint(frame, point, relativeTo, relativePoint, x, y)
     if not frame then return false end
     point = SanitizeFramePoint(point, "CENTER")
     relativePoint = SanitizeFramePoint(relativePoint, point)
     x = tonumber(x) or 0
     y = tonumber(y) or 0
-    frame:ClearAllPoints()
-    frame:SetPoint(point, relativeTo or UIParent, relativePoint, x, y)
-    return true
+    if IsCombatLocked() then
+        if EL then
+            EL.pendingWindowPositionRestore = true
+            if EL.QueueCombatDeferredWork then EL:QueueCombatDeferredWork("layout") end
+        end
+        return false
+    end
+    local cleared = pcall(frame.ClearAllPoints, frame)
+    if not cleared then return false end
+    return pcall(frame.SetPoint, frame, point, relativeTo or UIParent, relativePoint, x, y)
 end
 
 local function SetFramePointFromDB(frame, pos)
@@ -1431,12 +1443,11 @@ function EL:ShowSettingsPanel()
     if not self.settingsPanel then self:CreateSettingsPanel(UIParent) end
     self.settingsPanel:SetParent(UIParent)
     self.settingsPanel:SetScale(1)
-    self.settingsPanel:ClearAllPoints()
     self.db.settings.options = self.db.settings.options or {}
     if self.db.settings.options.point then
         SetFramePointFromDB(self.settingsPanel, self.db.settings.options)
     else
-        self.settingsPanel:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+        SafeSetFramePoint(self.settingsPanel, "CENTER", UIParent, "CENTER", 0, 0)
     end
     self.settingsPanel:Show()
     BringEmberWindowToFront(self.settingsPanel)
