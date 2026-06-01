@@ -686,10 +686,15 @@ local function BuildCooldownRecord(def)
         readyTime = recipeReadyTime
         if maxCharges <= 0 then maxCharges = SafeNumber(def.defaultMaxCharges, 0) or 0 end
         if maxCharges <= 0 then maxCharges = 1 end
-        -- A positive recipe cooldown from the open profession window means this recipe
-        -- is not currently usable. Do not trust stale spell-charge APIs that may still
-        -- report 2/2 charges for shared charged profession cooldowns.
-        currentCharges = 0
+        -- A positive recipe cooldown means this recipe is temporarily locked, but
+        -- for shared charged cooldown pools it must not erase the shared bucket count.
+        -- The CD column should reflect available shared charges; recipe locks remain
+        -- tooltip/detail data and only block when the bucket has no usable charges.
+        if def.sharedCooldownKey and maxCharges > 0 then
+            currentCharges = math.max(0, math.min(maxCharges, currentCharges))
+        else
+            currentCharges = 0
+        end
     elseif maxCharges > 0 then
         currentCharges = math.max(0, math.min(maxCharges, currentCharges))
         if currentCharges > 0 then ready = true end
@@ -946,8 +951,6 @@ function SharedCooldownBucket.GetRecoveringChargeCount(recordOrTiming, now, maxC
     local count = CountDistinctFutureTimes({
         recordOrTiming.nextChargeReadyTime,
         recordOrTiming.fullRechargeReadyTime,
-        recordOrTiming.recipeReadyTime,
-        recordOrTiming.sharedRecipeReadyTime,
     }, now)
     return math.max(0, math.min(maxCharges, count))
 end
@@ -995,7 +998,10 @@ function SharedCooldownBucket.AccumulateFutureState(state, timing, now)
         chargeDuration = timing.chargeDuration or 0,
     }
     if (timing.maxCharges or 0) > (state.maxCharges or 0) then state.maxCharges = timing.maxCharges end
-    state.currentCharges = math.min(state.currentCharges or timing.currentCharges or 0, timing.currentCharges or 0)
+    -- Shared charged cooldown records describe the same bucket. Use the highest
+    -- reported bucket charge count and let real charge recovery timers clamp it down.
+    -- A single recipe-specific lock must not force the whole pool to 0/max.
+    state.currentCharges = math.max(state.currentCharges or 0, timing.currentCharges or 0)
     if (timing.chargeDuration or 0) > (state.chargeDuration or 0) then state.chargeDuration = timing.chargeDuration end
     if timing.nextChargeReadyTime and timing.nextChargeReadyTime > now then
         state.nextChargeReadyTime = state.nextChargeReadyTime and math.min(state.nextChargeReadyTime, timing.nextChargeReadyTime) or timing.nextChargeReadyTime
@@ -1053,11 +1059,11 @@ local function NormalizeCooldownRecordTiming(record)
             sharedRecipeReadyTime = nil
         end
 
-        -- Recipe cooldown data is the most reliable signal while the profession UI is
-        -- open. If it reports a future lock, trust it over spell-charge APIs that can
-        -- briefly report full/ready for shared charged cooldown buckets after login or craft events.
+        -- Recipe cooldown data can mean one recipe in a shared pool is locked.
+        -- It should not erase the shared charge bucket. Only non-shared cooldowns
+        -- treat a recipe lock as fully unavailable.
         local recipeLockTime = SharedCooldownBucket.GetRecipeLockTime(record, now)
-        if recipeLockTime and recipeLockTime > now then
+        if recipeLockTime and recipeLockTime > now and not record.sharedCooldownKey then
             currentCharges = 0
         end
 
@@ -1371,7 +1377,11 @@ function ApplySharedCooldownGroups(records)
 
                 if maxCharges > groupMaxCharges then groupMaxCharges = maxCharges end
                 if maxCharges > 0 then
-                    if not groupCurrentCharges or currentCharges < groupCurrentCharges then
+                    -- All entries in a shared group consume the same charge bucket.
+                    -- Prefer the highest reported bucket count, then clamp with real
+                    -- recharge timers below. This avoids one recipe-specific lock
+                    -- making the entire group appear as 0/max.
+                    if not groupCurrentCharges or currentCharges > groupCurrentCharges then
                         groupCurrentCharges = currentCharges
                     end
                 end
@@ -2018,7 +2028,7 @@ ComputeCanonicalCooldownState = function(entry)
 
     if state.maxCharges > 0 then
         local recipeReadyTime = SafeNumber(entry.recipeReadyTime)
-        if recipeReadyTime and recipeReadyTime > now then
+        if recipeReadyTime and recipeReadyTime > now and not entry.sharedCooldownKey then
             state.currentCharges = 0
         end
         state.currentCharges = SharedCooldownBucket.ClampChargesByRecoveringTimers(state.currentCharges, state.maxCharges, entry, now)

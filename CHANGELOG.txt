@@ -1,3 +1,8 @@
+## v2.2.2
+### Profession Cooldowns
+- Fixed shared charged cooldowns so recipe-specific locks no longer force the entire shared pool to display as 0/max charges.
+- Improved shared charge normalization so the CD column reflects available shared charges while tooltip timing details still preserve recipe lock information.
+
 ## v2.2.1
 ### Session Tracking
 - Changed Auto item value source priority to prefer TSM first, then Auctionator, then fallback.
