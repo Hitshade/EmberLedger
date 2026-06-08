@@ -1,8 +1,8 @@
 local addonName, EL = ...
 if not EL then return end
 
--- SessionWindow owns the standalone Session window and the extracted refresh
--- helpers for the Stats, Sessions, and Bag Summary views. Main tracker UI and
+-- SessionWindow owns the standalone Session window and refresh helpers
+-- for the Stats, Sessions, and Bag Summary views. Main tracker UI and
 -- options wiring remain in UI.lua so this module stays focused and low-risk.
 
 local M = {}
@@ -248,7 +248,7 @@ end
 
 
 -- Dispatcher for the Session History window tabs. Frame creation remains in UI.lua,
--- while each extracted view owns its own refresh logic here. Keeping the routing
+-- while each view owns its own refresh logic here. Keeping the routing
 -- in one place makes future Stats / Sessions / Bag Summary changes easier to trace.
 function EL:RefreshSessionView(frame, viewMode)
     if not frame then return false end

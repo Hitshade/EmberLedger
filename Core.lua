@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.2.2"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.3.1"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -3970,11 +3970,13 @@ function EL:PerformUpdate()
         self:ProfileStop("RefreshSessionPanel", profile)
     end
 
+    if self.RefreshSessionDataBroker then self:RefreshSessionDataBroker() end
     if self:ShouldRefreshActionBar() and self.RequestActionBarRefresh then self:RequestActionBarRefresh() end
     self:ProfileStop("PerformUpdate", profileAll)
 end
 
 function EL:RequestUpdate(immediate)
+    if self.RefreshSessionDataBroker then self:RefreshSessionDataBroker() end
     if self.HasVisibleUpdateConsumers and not self:HasVisibleUpdateConsumers() then
         self.updateRefreshQueued = nil
         self.updateRefreshPending = nil

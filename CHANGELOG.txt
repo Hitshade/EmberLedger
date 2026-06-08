@@ -1,3 +1,17 @@
+## v2.3.1
+### Maintenance
+- Improved Session LDB tooltip handling for disabled Session Tracking and empty sessions.
+- Routed Session LDB tooltip labels through the localization helper where practical.
+- Cleaned up minor stale refactor comments.
+- Replaced remaining legacy debug helper references with the current debug helper.
+
+## v2.3.0
+### Session Tracking
+- Added an optional LibDataBroker session data feed named EmberLedger Session for ElvUI, Titan Panel, Bazooka, ChocolateBar, and similar LDB displays.
+- Session LDB text shows current gold/hour and session total.
+- Session LDB tooltip shows session time, total, rate, raw gold, gold spent, pricing source, and top session items.
+- Left-clicking the Session LDB feed opens the Session window; right-clicking opens Options.
+
 ## v2.2.2
 ### Profession Cooldowns
 - Fixed shared charged cooldowns so recipe-specific locks no longer force the entire shared pool to display as 0/max charges.

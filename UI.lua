@@ -1842,7 +1842,7 @@ function EL:RefreshSessionHistoryWindow()
     end
 
     -- Non-history tabs are delegated to SessionWindow.lua so the tab routing
-    -- stays small and all extracted refresh paths are easy to verify.
+    -- stays small and each refresh path remains easy to verify.
     if bagMode or statsMode then
         if self.RefreshSessionView then
             self:RefreshSessionView(frame, viewMode)

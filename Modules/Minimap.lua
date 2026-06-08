@@ -6,6 +6,12 @@ EL:RegisterModule("Minimap", M)
 local MINIMAP_BUTTON_NAME = "EmberLedgerMinimapButton"
 local DEFAULT_ICON = (EL and EL.LOGO_TEXTURE) or "Interface\\Icons\\INV_Misc_Coin_01"
 
+local function T(key, ...)
+    if EL and EL.T then return EL:T(key, ...) end
+    if select("#", ...) > 0 then return string.format(tostring(key), ...) end
+    return tostring(key)
+end
+
 local function ThemeRGB(kind, fallbackR, fallbackG, fallbackB)
     local colors = EL and EL.THEME_COLORS or {}
     local prefix = {
@@ -61,6 +67,87 @@ local function PopulateTooltipLines(tooltip)
     tooltip:AddLine("Left-click: Toggle tracker", mr, mg, mb)
     tooltip:AddLine("Right-click: Options", mr, mg, mb)
 end
+
+
+local function GetSessionLDBText()
+    if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then
+        return T("Session disabled")
+    end
+    local session = (EL.GetSessionDB and EL:GetSessionDB()) or {}
+    local total = (EL.FormatMoneyText and EL:FormatMoneyText(session.totalSilver or 0)) or tostring(session.totalSilver or 0)
+    local rate = (EL.GetSessionGoldPerHour and EL.FormatMoneyRateText and EL:FormatMoneyRateText(EL:GetSessionGoldPerHour())) or "0g"
+    return tostring(rate) .. "/hr | " .. tostring(total)
+end
+
+local function PopulateSessionLDBTooltip(tooltip)
+    if not tooltip then return end
+
+    local session = (EL.GetSessionDB and EL:GetSessionDB()) or {}
+    local tr, tg, tb = ThemeRGB("text", 0.90, 0.91, 0.93)
+    local mr, mg, mb = ThemeRGB("muted", 0.80, 0.82, 0.85)
+    local vr, vg, vb = ThemeRGB("value", 0.93, 0.94, 0.96)
+
+    local total = (EL.FormatMoneyText and EL:FormatMoneyText(session.totalSilver or 0)) or tostring(session.totalSilver or 0)
+    local rate = (EL.GetSessionGoldPerHour and EL.FormatMoneyRateText and EL:FormatMoneyRateText(EL:GetSessionGoldPerHour())) or "0g"
+    local elapsed = (EL.GetSessionElapsedSeconds and EL.FormatDuration and EL:FormatDuration(EL:GetSessionElapsedSeconds())) or "0s"
+    local raw = (EL.FormatMoneyText and EL:FormatMoneyText(session.rawGoldGainedSilver or 0)) or tostring(session.rawGoldGainedSilver or 0)
+    local spent = (EL.FormatMoneyText and EL:FormatMoneyText(session.goldSpentSilver or 0)) or tostring(session.goldSpentSilver or 0)
+    local pricing = (EL.GetActivePricingSourceLabel and EL:GetActivePricingSourceLabel()) or "Unknown"
+
+    tooltip:SetText(T("EmberLedger Session"), tr, tg, tb)
+    tooltip:AddLine(" ")
+    if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then
+        tooltip:AddLine(T("Session Tracking is disabled."), 1.00, 0.74, 0.36)
+    else
+        tooltip:AddDoubleLine(T("Session total"), total, mr, mg, mb, vr, vg, vb)
+        tooltip:AddDoubleLine(T("Gold/hour"), tostring(rate) .. "/hr", mr, mg, mb, vr, vg, vb)
+        tooltip:AddDoubleLine(T("Session time"), elapsed, mr, mg, mb, vr, vg, vb)
+        tooltip:AddDoubleLine(T("Raw gold"), raw, mr, mg, mb, vr, vg, vb)
+        tooltip:AddDoubleLine(T("Gold spent"), spent, mr, mg, mb, vr, vg, vb)
+        tooltip:AddDoubleLine(T("Pricing"), pricing, mr, mg, mb, vr, vg, vb)
+
+        local items = (EL.GetTopSessionItems and EL:GetTopSessionItems(3)) or {}
+        if #items > 0 then
+            tooltip:AddLine(" ")
+            tooltip:AddLine(T("Top items"), tr, tg, tb)
+            for _, item in ipairs(items) do
+                local count = tonumber(item.count) or 0
+                local name = tostring(item.name or ("item:" .. tostring(item.itemID or "?")))
+                local value = (EL.FormatMoneyText and EL:FormatMoneyText(item.totalSilver or 0)) or tostring(item.totalSilver or 0)
+                tooltip:AddDoubleLine(name .. " x" .. tostring(count), value, mr, mg, mb, vr, vg, vb)
+            end
+        end
+    end
+
+    tooltip:AddLine(" ")
+    tooltip:AddLine(T("Left-click: Toggle Session window"), mr, mg, mb)
+    tooltip:AddLine(T("Right-click: Options"), mr, mg, mb)
+end
+
+local function HandleSessionLDBClick(button)
+    if button == "RightButton" then
+        if EL.ShowSettingsPanel then EL:ShowSettingsPanel() end
+    else
+        if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then
+            if EL.ShowSettingsPanel then EL:ShowSettingsPanel() end
+            return
+        end
+        if EL.ShowSessionWindow then
+            EL:ShowSessionWindow()
+        elseif EL.ToggleSessionWindow then
+            EL:ToggleSessionWindow()
+        elseif EL.ToggleSectionSetting then
+            EL:ToggleSectionSetting("session")
+        end
+    end
+end
+
+function EL:RefreshSessionDataBroker()
+    if self.sessionDataObject then
+        self.sessionDataObject.text = GetSessionLDBText()
+    end
+end
+
 
 function EL:ShowMinimapTooltip(owner)
     if not GameTooltip then return end
@@ -204,6 +291,7 @@ function EL:RefreshMinimapButton()
     if self.minimapDataObject then
         self.minimapDataObject.text = "EmberLedger"
     end
+    if self.RefreshSessionDataBroker then self:RefreshSessionDataBroker() end
     if self.minimapButton then
         PositionFallbackButton(self.minimapButton)
         if self.minimapRegisteredWithDBIcon then
@@ -233,6 +321,17 @@ local function TryRegisterLibDataBroker()
             PopulateTooltipLines(tooltip)
         end,
     })
+
+    EL.sessionDataObject = EL.sessionDataObject or ldb:NewDataObject("EmberLedger Session", {
+        type = "data source",
+        text = GetSessionLDBText(),
+        icon = DEFAULT_ICON,
+        OnClick = function(_, button) HandleSessionLDBClick(button) end,
+        OnTooltipShow = function(tooltip)
+            PopulateSessionLDBTooltip(tooltip)
+        end,
+    })
+    if EL.RefreshSessionDataBroker then EL:RefreshSessionDataBroker() end
 
     local dbIcon = LibStub("LibDBIcon-1.0", true)
     if dbIcon and EL.minimapDataObject then
