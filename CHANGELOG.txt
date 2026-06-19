@@ -1,3 +1,8 @@
+## v2.3.2
+### Session Tracking
+- Fixed false material gains after zone/area transitions such as leaving Arcantina.
+- Session tracking now re-primes the bag baseline during world and zone transitions so existing inventory is not counted as newly gained session loot.
+
 ## v2.3.1
 ### Maintenance
 - Improved Session LDB tooltip handling for disabled Session Tracking and empty sessions.

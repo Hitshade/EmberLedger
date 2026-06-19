@@ -607,6 +607,30 @@ function M:PrimeBagBaseline(forceReady)
     end
 end
 
+function M:ReprimeBagBaseline(reason, seconds)
+    if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then return end
+    local s = EL:GetSessionDB()
+    if s.isPaused then return end
+    local now = GetTime and GetTime() or 0
+    local window = tonumber(seconds) or 3
+    s.lastBagCounts = EL:CountSessionItemsInBags()
+    s.bagBaselineReady = false
+    s.baselinePrimingUntil = now + window
+    if EL.DebugThrottled then
+        EL:DebugThrottled("session.baseline.reprime." .. tostring(reason or "unknown"), 2, "Session bag baseline re-primed after " .. tostring(reason or "transition") .. ".")
+    elseif EL.Debug then
+        EL:Debug("Session bag baseline re-primed after " .. tostring(reason or "transition") .. ".")
+    end
+    if C_Timer and C_Timer.After then
+        C_Timer.After(window + 0.35, function()
+            if not EL or not EL.db then return end
+            if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then return end
+            self:PrimeBagBaseline(true)
+            if EL.RequestUpdate then EL:RequestUpdate() end
+        end)
+    end
+end
+
 function M:ProcessBagDiff()
     local profile = EL.ProfileStart and EL:ProfileStart("ProcessBagDiff") or nil
     if EL.IsSessionTrackingEnabled and not EL:IsSessionTrackingEnabled() then if EL.ProfileStop then EL:ProfileStop("ProcessBagDiff", profile) end return end
@@ -787,6 +811,7 @@ function M:OnEvent(event, ...)
     elseif event == "PLAYER_ENTERING_WORLD" then
         -- Core also calls module:Refresh() after login; this branch only handles
         -- session-specific money sync and the delayed bag baseline priming window.
+        if self.ReprimeBagBaseline then self:ReprimeBagBaseline("world transition", 6) end
         C_Timer.After(1, function()
             if not EL or not EL.db then return end
             if EL.SyncSessionMoneyBaseline then EL:SyncSessionMoneyBaseline() end
@@ -797,5 +822,10 @@ function M:OnEvent(event, ...)
             self:PrimeBagBaseline(true)
             EL:RequestUpdate()
         end)
+    elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
+        -- Some special areas, including Arcantina exits, can trigger bag updates
+        -- while the client restores existing inventory state. Re-prime the bag
+        -- baseline so current inventory is not counted as fresh session gains.
+        if self.ReprimeBagBaseline then self:ReprimeBagBaseline(event, 3) end
     end
 end
