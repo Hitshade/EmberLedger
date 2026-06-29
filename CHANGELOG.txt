@@ -1,3 +1,9 @@
+## v2.3.3
+### Session Tracking
+- Fixed cancelled/expired auction return mail being counted as session material gains when Trusted Mail rewards were disabled.
+- Added an ignored mail attachment cache for auction/blocked mail so returned items are consumed from bag-diff tracking instead of being treated as new loot.
+- Trusted Mail rewards remain optional and continue to apply only to narrow profession reward mail.
+
 ## v2.3.2
 ### Session Tracking
 - Fixed false material gains after zone/area transitions such as leaving Arcantina.

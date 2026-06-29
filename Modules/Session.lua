@@ -385,9 +385,58 @@ function EL:ClearTrustedSessionMailCache()
     s.trustedMailItems = {}
 end
 
+function EL:ClearIgnoredSessionMailCache()
+    local s = self:GetSessionDB()
+    s.ignoredMailItems = {}
+end
+
+function EL:IsIgnoredSessionMail(sender, subject, codAmount, itemCount, isGM, mailIndex)
+    if (tonumber(itemCount) or 0) <= 0 then return false end
+    if mailIndex and HasAuctionInvoice(mailIndex) then return true end
+    return TextContainsAny(sender, BLOCKED_MAIL_KEYWORDS) or TextContainsAny(subject, BLOCKED_MAIL_KEYWORDS)
+end
+
+function EL:RefreshIgnoredSessionMailCache()
+    local s = self:GetSessionDB()
+    s.ignoredMailItems = {}
+    if not IsShownFrame(_G.MailFrame) then return end
+    if not GetInboxNumItems or not GetInboxHeaderInfo or not GetInboxItemLink then return end
+
+    local okCount, numItems = pcall(GetInboxNumItems)
+    numItems = okCount and (tonumber(numItems) or 0) or 0
+    for mailIndex = 1, numItems do
+        local okHeader, _, _, sender, subject, _, codAmount, _, itemCount, _, _, _, _, isGM = pcall(GetInboxHeaderInfo, mailIndex)
+        if okHeader and self:IsIgnoredSessionMail(sender, subject, codAmount, itemCount, isGM, mailIndex) then
+            for attachmentIndex = 1, tonumber(itemCount) or 0 do
+                local itemLink = GetInboxItemLink(mailIndex, attachmentIndex)
+                local itemID = itemLink and GetItemInfoInstantSafe(itemLink)
+                if itemID and self:IsSessionTrackedItem(itemID) then
+                    local qty = GetInboxAttachmentQuantity(mailIndex, attachmentIndex)
+                    if qty > 0 then
+                        s.ignoredMailItems[itemID] = (tonumber(s.ignoredMailItems[itemID]) or 0) + qty
+                    end
+                end
+            end
+        end
+    end
+end
+
+function EL:ConsumeIgnoredSessionMailItem(itemID, quantity)
+    if not itemID or not quantity or quantity <= 0 then return 0 end
+    local s = self:GetSessionDB()
+    if type(s.ignoredMailItems) ~= "table" then return 0 end
+    local blocked = tonumber(s.ignoredMailItems[itemID]) or 0
+    if blocked <= 0 then return 0 end
+    local consumed = math.min(quantity, blocked)
+    s.ignoredMailItems[itemID] = blocked - consumed
+    if s.ignoredMailItems[itemID] <= 0 then s.ignoredMailItems[itemID] = nil end
+    return consumed
+end
+
 function EL:RefreshTrustedSessionMailCache()
     local s = self:GetSessionDB()
     s.trustedMailItems = {}
+    if self.RefreshIgnoredSessionMailCache then self:RefreshIgnoredSessionMailCache() end
     if not self:IsTrustedMailRewardTrackingEnabled() then return end
     if not IsShownFrame(_G.MailFrame) then return end
     if not GetInboxNumItems or not GetInboxHeaderInfo or not GetInboxItemLink then return end
@@ -643,17 +692,23 @@ function M:ProcessBagDiff()
     -- are open so closing them does not create delayed false gains.
     if EL.IsSessionInventoryTransferOpen and EL:IsSessionInventoryTransferOpen() then
         if EL.DebugThrottled then EL:DebugThrottled("session.transfer.baseline", 2, "Session bag baseline refreshed during inventory transfer UI.") elseif EL.Debug then EL:Debug("Session bag baseline refreshed during inventory transfer UI.") end
-        if IsShownFrame(_G.MailFrame) and EL.IsTrustedMailRewardTrackingEnabled and EL:IsTrustedMailRewardTrackingEnabled() then
-            if EL.RefreshTrustedSessionMailCache and (not s.trustedMailItems or next(s.trustedMailItems) == nil) then
+        if IsShownFrame(_G.MailFrame) then
+            if EL.RefreshTrustedSessionMailCache and ((not s.trustedMailItems or next(s.trustedMailItems) == nil) and (not s.ignoredMailItems or next(s.ignoredMailItems) == nil)) then
                 EL:RefreshTrustedSessionMailCache()
+            elseif EL.RefreshIgnoredSessionMailCache and (not s.ignoredMailItems or next(s.ignoredMailItems) == nil) then
+                EL:RefreshIgnoredSessionMailCache()
             end
             for itemID, count in pairs(current) do
                 local prev = tonumber(s.lastBagCounts[itemID]) or 0
                 local diff = count - prev
-                if diff > 0 and EL.ConsumeTrustedSessionMailItem then
-                    local trusted = EL:ConsumeTrustedSessionMailItem(itemID, diff)
-                    if trusted > 0 then
-                        EL:AddSessionLootValue(itemID, trusted)
+                if diff > 0 then
+                    local ignored = (EL.ConsumeIgnoredSessionMailItem and EL:ConsumeIgnoredSessionMailItem(itemID, diff)) or 0
+                    local remaining = diff - ignored
+                    if remaining > 0 and EL.ConsumeTrustedSessionMailItem then
+                        local trusted = EL:ConsumeTrustedSessionMailItem(itemID, remaining)
+                        if trusted > 0 then
+                            EL:AddSessionLootValue(itemID, trusted)
+                        end
                     end
                 end
             end
@@ -689,11 +744,16 @@ function M:ProcessBagDiff()
         local diff = count - prev
         if diff > 0 then
             if EL.DebugThrottled then EL:DebugThrottled("session.bagdiff." .. tostring(itemID), 1, "Session bag diff detected: item " .. tostring(itemID) .. " +" .. tostring(diff) .. ".") elseif EL.Debug then EL:Debug("Session bag diff detected: item " .. tostring(itemID) .. " +" .. tostring(diff) .. ".") end
-            local crafted = (EL.ConsumePendingSessionCraftedItem and EL:ConsumePendingSessionCraftedItem(itemID, diff)) or 0
+            local ignored = (EL.ConsumeIgnoredSessionMailItem and EL:ConsumeIgnoredSessionMailItem(itemID, diff)) or 0
+            local afterIgnored = diff - ignored
+            if ignored > 0 then
+                if EL.DebugThrottled then EL:DebugThrottled("session.mail.ignore." .. tostring(itemID), 1, "Ignored auction/blocked mail return: item " .. tostring(itemID) .. " x" .. tostring(ignored) .. ".") elseif EL.Debug then EL:Debug("Ignored auction/blocked mail return: item " .. tostring(itemID) .. " x" .. tostring(ignored) .. ".") end
+            end
+            local crafted = (afterIgnored > 0 and EL.ConsumePendingSessionCraftedItem and EL:ConsumePendingSessionCraftedItem(itemID, afterIgnored)) or 0
             if crafted > 0 then
                 EL:AddSessionLootValue(itemID, crafted, true)
             end
-            local remaining = diff - crafted
+            local remaining = afterIgnored - crafted
             if remaining > 0 then
                 remaining = EL:ConsumePendingSessionChatLoot(itemID, remaining)
                 if remaining > 0 then
@@ -805,9 +865,20 @@ function M:OnEvent(event, ...)
             else
                 EL:RefreshTrustedSessionMailCache()
             end
+        elseif EL.RefreshIgnoredSessionMailCache then
+            EL:RefreshIgnoredSessionMailCache()
         end
     elseif event == "MAIL_CLOSED" then
-        if EL.ClearTrustedSessionMailCache then EL:ClearTrustedSessionMailCache() end
+        if C_Timer and C_Timer.After then
+            C_Timer.After(4, function()
+                if not EL or not EL.db then return end
+                if EL.ClearTrustedSessionMailCache then EL:ClearTrustedSessionMailCache() end
+                if EL.ClearIgnoredSessionMailCache then EL:ClearIgnoredSessionMailCache() end
+            end)
+        else
+            if EL.ClearTrustedSessionMailCache then EL:ClearTrustedSessionMailCache() end
+            if EL.ClearIgnoredSessionMailCache then EL:ClearIgnoredSessionMailCache() end
+        end
     elseif event == "PLAYER_ENTERING_WORLD" then
         -- Core also calls module:Refresh() after login; this branch only handles
         -- session-specific money sync and the delayed bag baseline priming window.

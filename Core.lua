@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.3.2"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.3.3"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -3025,6 +3025,7 @@ function EL:GetSessionDB()
     s.recent = type(s.recent) == "table" and s.recent or {}
     s.pendingChatLoot = type(s.pendingChatLoot) == "table" and s.pendingChatLoot or {}
     s.trustedMailItems = type(s.trustedMailItems) == "table" and s.trustedMailItems or {}
+    s.ignoredMailItems = type(s.ignoredMailItems) == "table" and s.ignoredMailItems or {}
     s.pendingCraftedItems = type(s.pendingCraftedItems) == "table" and s.pendingCraftedItems or {}
     s.lastBagCounts = type(s.lastBagCounts) == "table" and s.lastBagCounts or {}
     s.categoryTotals = type(s.categoryTotals) == "table" and s.categoryTotals or {}
@@ -3050,6 +3051,7 @@ function EL:StartFreshSessionOnLogin()
         recent = {},
         pendingChatLoot = {},
         trustedMailItems = {},
+        ignoredMailItems = {},
         pendingCraftedItems = {},
         lastBagCounts = {},
         categoryTotals = {},
@@ -3166,6 +3168,7 @@ function EL:ResetSession()
         recent = {},
         pendingChatLoot = {},
         trustedMailItems = {},
+        ignoredMailItems = {},
         pendingCraftedItems = {},
         lastBagCounts = {},
         categoryTotals = {},
