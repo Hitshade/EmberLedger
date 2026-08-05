@@ -1,3 +1,9 @@
+## v2.3.4
+### Compatibility
+- Added Retail Patch 12.1.0 interface support (`120100`).
+- Retained the supported 12.0 interface entries for compatibility during the patch transition.
+- Reviewed the published 12.1 API changes; no EmberLedger code changes were required for profession tracking, session tracking, mail filtering, LibDataBroker integration, or window handling.
+
 ## v2.3.3
 ### Session Tracking
 - Fixed cancelled/expired auction return mail being counted as session material gains when Trusted Mail rewards were disabled.
