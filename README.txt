@@ -1,4 +1,4 @@
-# 🔥 EmberLedger v2.3.4
+# 🔥 EmberLedger v2.3.5
 
 **EmberLedger** is a lightweight Retail World of Warcraft profession dashboard for players managing profession alts across multiple characters.
 
@@ -62,6 +62,8 @@ The main tracker shows your profession alts in a compact dashboard with optional
 * Profession cooldown readiness (`CD`)
 
 EmberLedger supports multiple concentration-based professions per character. If a character only has one concentration-tracked profession, it is placed cleanly in the first profession slot instead of leaving awkward gaps.
+
+If a profession has concentration recorded for more than one expansion (for example after viewing an older expansion tab in the profession window), the dashboard always shows the current expansion's concentration. Older-expansion data is kept but not displayed or counted toward alerts.
 
 Helpful tracker options include Compact Mode, Attention Only mode, pinned characters, hidden characters, current-character-first sorting, current-character highlighting, and optional columns for a cleaner layout.
 

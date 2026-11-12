@@ -1,4 +1,4 @@
-local addonName, EL = ...
+local _, EL = ...
 if not EL then return end
 
 -- Dashboard row tooltip module.
@@ -74,7 +74,6 @@ function M:ShowRowTooltip(row)
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
     GameTooltip:SetText(displayName, r, g, b)
 
-    local textR, textG, textB = ThemeRGB("text", 0.88, 0.89, 0.91)
     local mutedR, mutedG, mutedB = ThemeRGB("muted", 0.76, 0.77, 0.80)
     local valueR, valueG, valueB = ThemeRGB("value", 0.90, 0.91, 0.93)
     local accentR, accentG, accentB = TOOLTIP_SECTION_R, TOOLTIP_SECTION_G, TOOLTIP_SECTION_B

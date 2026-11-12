@@ -1,3 +1,18 @@
+## v2.3.5
+### Concentration
+- Fixed concentration appearing to stop tracking after the profession window briefly showed the previous expansion. EmberLedger could record the previous expansion's concentration pool (for example Khaz Algar) and then display it instead of the current Midnight pool, which persisted across reloads and relogs.
+- When a profession has concentration recorded for more than one expansion, the dashboard, tooltips, launcher, and ready alerts now use the current expansion's pool. Older-expansion records are preserved in saved data but are no longer displayed or counted.
+- Fixed a stale full previous-expansion pool triggering false "concentration ready" alerts and adding extra profession slots.
+- Concentration capture now waits until the profession window has settled after opening or switching expansion tabs.
+- Fixed first-time onboarding not recognizing existing concentration-only data.
+
+### Options
+- Fixed a Lua error when changing the cooldown display scope or showing/hiding individual profession cooldowns. The setting now saves and refreshes correctly.
+- Fixed a Lua error when dragging the Main window or Session window scale sliders.
+
+### Maintenance
+- Removed unused functions, constants, and leftover values from earlier refactors. No behavior change.
+
 ## v2.3.4
 ### Compatibility
 - Added Retail Patch 12.1.0 interface support (`120100`).

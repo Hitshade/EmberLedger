@@ -1,4 +1,4 @@
-local addonName, EL = ...
+local _, EL = ...
 
 local CreateFrame = _G.CreateFrame
 local GetTime = _G.GetTime
@@ -160,7 +160,7 @@ end
 
 local function GetToyIconSafe(itemID, itemName, fallback)
     if itemID and C_ToyBox and C_ToyBox.GetToyInfo then
-        local ok, _, name, icon = pcall(C_ToyBox.GetToyInfo, itemID)
+        local ok, _, _, icon = pcall(C_ToyBox.GetToyInfo, itemID)
         if ok and icon then return icon end
     end
     return GetItemIconByIDOrName(itemID, itemName, fallback)

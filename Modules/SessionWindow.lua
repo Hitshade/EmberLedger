@@ -1,4 +1,4 @@
-local addonName, EL = ...
+local _, EL = ...
 if not EL then return end
 
 -- SessionWindow owns the standalone Session window and refresh helpers
@@ -48,10 +48,6 @@ end
 
 local function ThemeMutedTextRGB()
     return ThemeValue("MUTED_TEXT_R", 0.80), ThemeValue("MUTED_TEXT_G", 0.82), ThemeValue("MUTED_TEXT_B", 0.85)
-end
-
-local function ThemeValueTextRGB()
-    return ThemeValue("VALUE_TEXT_R", 0.93), ThemeValue("VALUE_TEXT_G", 0.94), ThemeValue("VALUE_TEXT_B", 0.96)
 end
 
 local BORDER_ALPHA_STRONG = 0.78

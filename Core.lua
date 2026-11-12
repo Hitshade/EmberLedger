@@ -5,7 +5,7 @@ local GetTime = _G.GetTime
 local time = _G.time
 
 EL.name = addonName or "EmberLedger"
-EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.3.4"
+EL.version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "2.3.5"
 EL.frame = CreateFrame("Frame")
 EL.L = EL.L or {}
 
@@ -1726,7 +1726,8 @@ function EL:GetConcentrationEntryForProfession(charKey, professionData, concentr
     local targetParentID = self.SafeNumber and self:SafeNumber(professionData.parentProfessionID, nil, "concentration.match.targetParentID") or nil
     local targetName = self:GetCleanProfessionName(professionData.professionName):lower()
     local fallback
-    local source = concentrationEntries or (self.db and self.db.resources and self.db.resources.concentration) or {}
+    -- Use the display index so superseded older-expansion records are never matched.
+    local source = concentrationEntries or self:GetConcentrationEntriesForCharacter(charKey) or {}
 
     for _, data in pairs(source) do
         if data and data.charKey == charKey then
@@ -2312,7 +2313,6 @@ function EL:GetDashboardSortValue(entry, key, now, cache)
     elseif key == "forecast" then
         local conc = cache and cache.bestConc or self:GetBestConcentrationForCharacter(charKey, now)
         if not conc then return nil end
-        local maxQ = tonumber(conc.maxQuantity) or self.CONCENTRATION_MAX_DEFAULT
         local q = self:GetEstimatedConcentration(conc, now) or 0
         local threshold = self:GetProfessionConcentrationThreshold(conc)
         if q >= threshold then return 0 end
@@ -2464,17 +2464,58 @@ function EL:InvalidateConcentrationIndex()
     self._concentrationByCharKey = nil
 end
 
+-- Concentration is stored per expansion child skill line (for example Khaz Algar
+-- Blacksmithing and Midnight Blacksmithing), but the dashboard tracks one
+-- concentration pool per base profession. Viewing an older expansion tab in the
+-- profession window (or Blizzard briefly opening the previously viewed tab)
+-- records that older pool too. Both records share the same parent profession,
+-- so the display index keeps only the newest expansion's record per parent.
+-- Blizzard child skill-line IDs increase with each expansion, so the highest
+-- child ID is the current expansion. Older records stay in SavedVariables
+-- untouched; they are simply not displayed or counted for alerts.
+local function IsPreferredConcentrationRecord(candidate, current)
+    if not current then return true end
+    local candidateID = tonumber(candidate.professionID or candidate.skillLineID or candidate.skillLine) or 0
+    local currentID = tonumber(current.professionID or current.skillLineID or current.skillLine) or 0
+    if candidateID ~= currentID then return candidateID > currentID end
+    return (tonumber(candidate.lastUpdate) or 0) > (tonumber(current.lastUpdate) or 0)
+end
+
 function EL:GetConcentrationIndex()
     if self._concentrationByCharKey then return self._concentrationByCharKey end
     local byChar = {}
+    local preferredByParent = {}
     for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
-        local charKey = data and data.charKey
+        local charKey = type(data) == "table" and data.charKey
         if charKey then
-            local list = byChar[charKey]
-            if not list then
-                list = {}
-                byChar[charKey] = list
+            local parentID = tonumber(data.parentProfessionID)
+            if parentID then
+                local groups = preferredByParent[charKey]
+                if not groups then
+                    groups = {}
+                    preferredByParent[charKey] = groups
+                end
+                if IsPreferredConcentrationRecord(data, groups[parentID]) then
+                    groups[parentID] = data
+                end
+            else
+                -- Legacy records without a parent profession cannot be grouped safely.
+                local list = byChar[charKey]
+                if not list then
+                    list = {}
+                    byChar[charKey] = list
+                end
+                list[#list + 1] = data
             end
+        end
+    end
+    for charKey, groups in pairs(preferredByParent) do
+        local list = byChar[charKey]
+        if not list then
+            list = {}
+            byChar[charKey] = list
+        end
+        for _, data in pairs(groups) do
             list[#list + 1] = data
         end
     end
@@ -3702,7 +3743,6 @@ function EL:GetSessionAggregateStats(range)
         local key = self:GetSessionAggregateWeekKey(now)
         AddAggregateBucketToTotal(total, stats.weekly and stats.weekly[key])
     else
-        range = "30"
         local cutoffKey = self:GetSessionAggregateDateKey(now - (30 * 86400))
         for key, bucket in pairs(stats.daily or {}) do
             if tostring(key) >= cutoffKey then
@@ -4053,8 +4093,9 @@ function EL:HasScannedProfessionData()
     end
     local concentration = resources.concentration
     if type(concentration) == "table" then
-        for _, list in pairs(concentration) do
-            if type(list) == "table" and #list > 0 then return true end
+        -- Concentration entries are individual records keyed by resource key, not arrays.
+        for _, data in pairs(concentration) do
+            if type(data) == "table" and data.charKey then return true end
         end
     end
     return false

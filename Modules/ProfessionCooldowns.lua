@@ -1,4 +1,4 @@
-local addonName, EL = ...
+local _, EL = ...
 if not EL then return end
 
 -- Curated profession cooldown readiness tracking.
@@ -127,12 +127,10 @@ EL.PROFESSION_COOLDOWN_DEFS = EL.PROFESSION_COOLDOWN_DEFS or {
 }
 
 local COOLDOWN_DEFS_BY_PROFESSION = {}
-local COOLDOWN_DEFS_BY_KEY = {}
 local COOLDOWN_DEFS_BY_ITEM = {}
 local VALID_COOLDOWN_DEF_KEYS = {}
 for _, def in ipairs(EL.PROFESSION_COOLDOWN_DEFS) do
     if def and def.key then
-        COOLDOWN_DEFS_BY_KEY[def.key] = def
         VALID_COOLDOWN_DEF_KEYS[def.key] = true
         if def.professionID then
             COOLDOWN_DEFS_BY_PROFESSION[def.professionID] = COOLDOWN_DEFS_BY_PROFESSION[def.professionID] or {}
@@ -278,6 +276,26 @@ local function ShouldDisplayCooldownDefinition(def)
     return IsCooldownDefinitionInDisplayScope(def) and IsCooldownDefinitionUserVisible(def)
 end
 
+local SPELL_NAME_CACHE = {}
+local RECIPE_MATCH_CACHE = { byKey = nil }
+
+-- Short-lived display caches reduce repeated cooldown entry/summary rebuilding during
+-- row sorting, row painting, launcher summaries, and tooltip prep. They are invalidated
+-- whenever cooldown data or visibility settings change, and also expire quickly so
+-- countdown text remains fresh.
+local COOLDOWN_DISPLAY_CACHE_TTL_SECONDS = 0.35
+local COOLDOWN_DISPLAY_CACHE_VERSION = 0
+local COOLDOWN_ENTRIES_CACHE = {}
+local COOLDOWN_SUMMARY_CACHE = {}
+
+-- Bumping the cache version invalidates all display cache entries.
+local function ClearCooldownDisplayCache()
+    COOLDOWN_DISPLAY_CACHE_VERSION = COOLDOWN_DISPLAY_CACHE_VERSION + 1
+    COOLDOWN_ENTRIES_CACHE = {}
+    COOLDOWN_SUMMARY_CACHE = {}
+    if EL then EL._hasCooldownColumnData = nil end
+end
+
 function EL:GetCooldownDisplayScope()
     return GetCooldownDisplayScope()
 end
@@ -324,27 +342,6 @@ function EL:GetProfessionCooldownVisibilityDefinitions()
     return defs
 end
 
-
-local SPELL_NAME_CACHE = {}
-local RECIPE_MATCH_CACHE = { byKey = nil }
-
--- Short-lived display caches reduce repeated cooldown entry/summary rebuilding during
--- row sorting, row painting, launcher summaries, and tooltip prep. They are invalidated
--- whenever cooldown data or visibility settings change, and also expire quickly so
--- countdown text remains fresh.
-local COOLDOWN_DISPLAY_CACHE_TTL_SECONDS = 0.35
-local COOLDOWN_DISPLAY_CACHE_VERSION = 0
-local COOLDOWN_ENTRIES_CACHE = {}
-local COOLDOWN_SUMMARY_CACHE = {}
-
--- Short-lived display caches avoid rebuilding the same cooldown lists repeatedly
--- during bursty UI refreshes. Bumping the cache version invalidates all entries.
-local function ClearCooldownDisplayCache()
-    COOLDOWN_DISPLAY_CACHE_VERSION = COOLDOWN_DISPLAY_CACHE_VERSION + 1
-    COOLDOWN_ENTRIES_CACHE = {}
-    COOLDOWN_SUMMARY_CACHE = {}
-    if EL then EL._hasCooldownColumnData = nil end
-end
 
 function EL:InvalidateProfessionCooldownDisplayCache()
     ClearCooldownDisplayCache()
@@ -552,7 +549,7 @@ local function GetSpellOrRecipeKnownState(spellID)
 end
 
 local function GetSpellCooldownData(spellID)
-    local startTime, duration, isEnabled, modRate = 0, 0, 1, 1
+    local startTime, duration, isEnabled, modRate
     if C_Spell and C_Spell.GetSpellCooldown then
         local info = SafeCall(C_Spell.GetSpellCooldown, spellID)
         if type(info) == "table" then
@@ -656,18 +653,16 @@ local function BuildCooldownRecord(def)
 
     local now = Now()
     local name = GetSpellName(def.spellID) or def.label or ("Spell " .. tostring(def.spellID))
-    local currentCharges, maxCharges, chargeStart, chargeDuration, chargeModRate = GetSpellChargeData(def.spellID)
-    local startTime, duration, isEnabled, modRate = GetSpellCooldownData(def.spellID)
+    local currentCharges, maxCharges, chargeStart, chargeDuration = GetSpellChargeData(def.spellID)
+    local startTime, duration, isEnabled = GetSpellCooldownData(def.spellID)
     local recipeRemaining = GetRecipeCooldownRemaining(def, knownRecipeInfo, knownRecipeID)
     currentCharges = SafeNumber(currentCharges, 0)
     maxCharges = SafeNumber(maxCharges, 0)
     chargeStart = SafeNumber(chargeStart, 0)
     chargeDuration = SafeNumber(chargeDuration, 0)
-    chargeModRate = SafeNumber(chargeModRate, 1)
     startTime = SafeNumber(startTime, 0)
     duration = SafeNumber(duration, 0)
     isEnabled = SafeNumber(isEnabled, 1)
-    modRate = SafeNumber(modRate, 1)
     -- Profession cooldown crafts currently report normal modRate values.
     -- Keep the raw API remaining time for display unless Blizzard adds profession-specific modifiers.
 
@@ -1051,12 +1046,10 @@ local function NormalizeCooldownRecordTiming(record)
         if recipeReadyTime and recipeReadyTime <= now then
             record.recipeReadyTime = nil
             record.recipeRemaining = nil
-            recipeReadyTime = nil
         end
         if sharedRecipeReadyTime and sharedRecipeReadyTime <= now then
             record.sharedRecipeReadyTime = nil
             record.sharedRecipeRemaining = nil
-            sharedRecipeReadyTime = nil
         end
 
         -- Recipe cooldown data can mean one recipe in a shared pool is locked.
@@ -1418,12 +1411,10 @@ function ApplySharedCooldownGroups(records)
                     if recipeReadyTime and recipeReadyTime <= now then
                         record.recipeReadyTime = nil
                         record.recipeRemaining = nil
-                        recipeReadyTime = nil
                     end
                     if sharedRecipeReadyTime and sharedRecipeReadyTime <= now then
                         record.sharedRecipeReadyTime = nil
                         record.sharedRecipeRemaining = nil
-                        sharedRecipeReadyTime = nil
                     end
                     if groupRecipeReadyTime and groupRecipeReadyTime <= now then
                         groupRecipeReadyTime = nil
@@ -2122,8 +2113,7 @@ function EL:GetProfessionCooldownSortValue(charKey, professions)
     return 999999999
 end
 
-function EL:GetNextProfessionCooldownSummary(now)
-    now = SafeNumber(now, Now()) or Now()
+function EL:GetNextProfessionCooldownSummary()
     local bestReady, bestRecovering
     local rows = self.GetCharacterRows and self:GetCharacterRows() or nil
     if type(rows) ~= "table" then

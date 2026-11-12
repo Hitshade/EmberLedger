@@ -1,8 +1,11 @@
-local addonName, EL = ...
+local _, EL = ...
 
 local CreateFrame = _G.CreateFrame
 local UIParent = _G.UIParent
 local THEME = EL.THEME_COLORS or {}
+local UIC = EL.UI_CONSTANTS or {}
+local PANEL_MIN_SCALE = UIC.PANEL_MIN_SCALE or 0.6
+local PANEL_MAX_SCALE = UIC.PANEL_MAX_SCALE or 1.4
 
 local function T(key, ...)
     if EL and EL.T then return EL:T(key, ...) end
@@ -97,12 +100,6 @@ local function GetPanelOpacity()
     local db = EL and EL.db
     local value = db and db.settings and db.settings.display and db.settings.display.panelOpacity
     return math.max(0.20, math.min(1.00, tonumber(value) or 0.55))
-end
-
-local function GetLauncherOpacity()
-    local db = EL and EL.db
-    local value = db and db.settings and db.settings.display and db.settings.display.launcherOpacity
-    return math.max(0.20, math.min(1.00, tonumber(value) or 0.50))
 end
 
 local function StyleBlizzardButton(button)
@@ -404,18 +401,6 @@ end
 local function BringEmberWindowToFront(frame)
     if EL and EL.Style and EL.Style.BringWindowToFront then
         return EL.Style:BringWindowToFront(frame)
-    end
-end
-
-local function HideSessionHistoryDisplayDropdown()
-    if EL and EL.Style and EL.Style.HideSessionHistoryDisplayDropdown then
-        return EL.Style:HideSessionHistoryDisplayDropdown()
-    end
-end
-
-local function ShowSessionHistoryDisplayDropdown(anchor)
-    if EL and EL.Style and EL.Style.ShowSessionHistoryDisplayDropdown then
-        return EL.Style:ShowSessionHistoryDisplayDropdown(anchor)
     end
 end
 

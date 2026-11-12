@@ -56,7 +56,7 @@ end
 
 local function GetInboxAttachmentQuantity(mailIndex, attachmentIndex)
     if type(GetInboxItem) ~= "function" then return 0 end
-    local ok, _name, itemID, _texture, count = pcall(GetInboxItem, mailIndex, attachmentIndex)
+    local ok, _, itemID, _, count = pcall(GetInboxItem, mailIndex, attachmentIndex)
     if not ok then return 0 end
     return itemID and (N(count, 0, "session.mailAttachmentCount") or 0) or 0
 end
@@ -120,7 +120,7 @@ local function GetItemIcon(itemID)
         if ok then return icon end
     end
     if type(GetItemInfoInstant) == "function" then
-        local ok, _itemID, _itemType, _itemSubType, _itemEquipLoc, icon = pcall(GetItemInfoInstant, itemID)
+        local ok, _, _, _, _, icon = pcall(GetItemInfoInstant, itemID)
         if ok then return icon end
     end
     return nil
@@ -147,12 +147,10 @@ local function GetTradeGoodsSubclassID(key, legacy)
     return legacy
 end
 
-local TRACKED_TRADEGOODS_SUBCLASSES = {}
 local TRADEGOODS_CATEGORY_BY_SUBCLASS = {}
 local function AddTrackedSubclass(key, legacy, category)
     local id = GetTradeGoodsSubclassID(key, legacy)
     if id ~= nil then
-        TRACKED_TRADEGOODS_SUBCLASSES[id] = true
         TRADEGOODS_CATEGORY_BY_SUBCLASS[id] = category or "other"
     end
 end

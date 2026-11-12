@@ -1,4 +1,4 @@
-local addonName, EL = ...
+local _, EL = ...
 
 local CreateFrame = _G.CreateFrame
 local IsShiftKeyDown = _G.IsShiftKeyDown
@@ -31,15 +31,6 @@ local ROW_SEPARATOR_ALPHA = 0.18
 
 local THEME = EL.THEME_COLORS or {}
 
-local function T(key, ...)
-    if EL and EL.T then return EL:T(key, ...) end
-    if select("#", ...) > 0 then
-        local ok, formatted = pcall(string.format, tostring(key), ...)
-        if ok then return formatted end
-    end
-    return tostring(key)
-end
-
 local function ThemeColor(key, fallback)
     local current = EL.THEME_COLORS or THEME or {}
     local value = current[key]
@@ -60,10 +51,6 @@ end
 
 local function ThemeMutedTextRGB()
     return ThemeColor("MUTED_TEXT_R", 0.80), ThemeColor("MUTED_TEXT_G", 0.82), ThemeColor("MUTED_TEXT_B", 0.85)
-end
-
-local function ThemeValueTextRGB()
-    return ThemeColor("VALUE_TEXT_R", 0.93), ThemeColor("VALUE_TEXT_G", 0.94), ThemeColor("VALUE_TEXT_B", 0.96)
 end
 
 local function ThemeMoxieTextRGB()

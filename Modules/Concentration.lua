@@ -111,11 +111,15 @@ end
 function M:OnEvent(event, ...)
     if event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_DATA_SOURCE_CHANGED" or event == "TRADE_SKILL_ITEM_CRAFTED_RESULT" then
         if C_Timer and C_Timer.After then
-            if EL._concentrationTradeSkillRefreshPending then return end
-            EL._concentrationTradeSkillRefreshPending = true
+            -- Trailing debounce: each trade-skill event restarts the wait so the
+            -- capture reads the profession window after it has settled. Blizzard can
+            -- briefly open the previously viewed expansion tab before switching to
+            -- the current one; reading on the first event could capture that tab.
+            local token = (EL._concentrationTradeSkillRefreshToken or 0) + 1
+            EL._concentrationTradeSkillRefreshToken = token
             C_Timer.After(0.2, function()
-                if EL then EL._concentrationTradeSkillRefreshPending = nil end
-                if not EL or not EL.db then return end
+                if not EL or EL._concentrationTradeSkillRefreshToken ~= token then return end
+                if not EL.db then return end
                 self:RecordFromTradeSkill()
                 self:RefreshMoxieCurrencies()
                 EL:RequestUpdate()

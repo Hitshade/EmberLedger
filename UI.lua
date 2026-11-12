@@ -1,4 +1,4 @@
-local addonName, EL = ...
+local _, EL = ...
 
 local CreateFrame = _G.CreateFrame
 local IsShiftKeyDown = _G.IsShiftKeyDown
@@ -10,36 +10,22 @@ local PANEL_MIN_W = UIC.PANEL_MIN_W or 352
 local TRACKING_DYNAMIC_MIN_W = UIC.TRACKING_DYNAMIC_MIN_W or 260
 local TRACKING_COMPACT_MIN_W = UIC.TRACKING_COMPACT_MIN_W or 236
 local PANEL_MIN_H = UIC.PANEL_MIN_H or 120
-local SESSION_MIN_W = UIC.SESSION_MIN_W or 320
 local SESSION_EXPANDED_H = UIC.SESSION_EXPANDED_H or 182
 local ACTION_BAR_H = UIC.ACTION_BAR_H or 36
 local SESSION_VISIBLE_ITEM_ROWS = UIC.SESSION_VISIBLE_ITEM_ROWS or 4
 local SESSION_HISTORY_ROWS = UIC.SESSION_HISTORY_ROWS or 8
 local SESSION_ITEM_ROW_H = UIC.SESSION_ITEM_ROW_H or 18
-local PANEL_DEFAULT_VISIBLE_ROWS = UIC.PANEL_DEFAULT_VISIBLE_ROWS or 12
 local TRACKING_ROW_H = UIC.TRACKING_ROW_H or 23
 local TRACKING_COMPACT_ROW_H = UIC.TRACKING_COMPACT_ROW_H or 18
 local TRACKING_EMPTY_BODY_H = 28
 local TRACKING_COMPACT_EMPTY_BODY_H = 24
-local PANEL_EXPANDED_MIN_H = UIC.PANEL_EXPANDED_MIN_H or 300
 local PANEL_MAX_W = UIC.PANEL_MAX_W or 900
 local PANEL_MAX_H = UIC.PANEL_MAX_H or 1600
 local PANEL_SCREEN_MARGIN = 18
 local PANEL_MIN_SCALE = UIC.PANEL_MIN_SCALE or 0.6
 local PANEL_MAX_SCALE = UIC.PANEL_MAX_SCALE or 1.4
-local READY_ICON = "|TInterface\\RaidFrame\\ReadyCheck-Ready:14|t"
-local CD_READY_ICON_TEXTURE = "Interface\\Buttons\\UI-CheckBox-Check"
-local CD_READY_ICON_R, CD_READY_ICON_G, CD_READY_ICON_B = 1.00, 0.82, 0.25
-local PIN_GLOW_R, PIN_GLOW_G, PIN_GLOW_B = 0.70, 0.78, 0.88
-local PIN_GLOW_ALPHA = 0.060
-local PIN_ACCENT_ALPHA = 0.20
-local PIN_HOVER_ALPHA = 0.070
 local TRACKING_ROW_PALETTE = EL.Style and EL.Style.GetTrackingRowPalette and EL.Style:GetTrackingRowPalette() or {}
 local CURRENT_ROW_R, CURRENT_ROW_G, CURRENT_ROW_B = TRACKING_ROW_PALETTE.currentR or 0.42, TRACKING_ROW_PALETTE.currentG or 0.68, TRACKING_ROW_PALETTE.currentB or 1.00
-local CURRENT_ROW_BG_ALPHA = TRACKING_ROW_PALETTE.currentBgAlpha or 0.145
-local CURRENT_ROW_BG_ALPHA_COMPACT = TRACKING_ROW_PALETTE.currentBgAlphaCompact or 0.125
-local CURRENT_ROW_LINE_ALPHA = TRACKING_ROW_PALETTE.currentLineAlpha or 0.44
-local CURRENT_ROW_EDGE_ALPHA = TRACKING_ROW_PALETTE.currentEdgeAlpha or 0.70
 local TRACKING_ROW_HOVER_R, TRACKING_ROW_HOVER_G, TRACKING_ROW_HOVER_B = TRACKING_ROW_PALETTE.hoverR or 0.50, TRACKING_ROW_PALETTE.hoverG or 0.66, TRACKING_ROW_PALETTE.hoverB or 0.88
 local TRACKING_ROW_HOVER_ALPHA = TRACKING_ROW_PALETTE.hoverAlpha or 0.075
 local TRACKING_CURRENT_ROW_HOVER_ALPHA = TRACKING_ROW_PALETTE.currentHoverAlpha or 0.115
@@ -51,11 +37,9 @@ local EL_BG_R, EL_BG_G, EL_BG_B = THEME.BG_R or 0.000, THEME.BG_G or 0.000, THEM
 local EL_HEADER_R, EL_HEADER_G, EL_HEADER_B = 0.030, 0.024, 0.070
 local HEADER_LINE_ALPHA_TOP = 0.16
 local HEADER_LINE_ALPHA_BOTTOM = 0.30
-local ROW_STRIPE_ALPHA = 0.32
-local ROW_STRIPE_ALPHA_COMPACT = 0.28
 local ROW_SEPARATOR_ALPHA = 0.18
 
-local ThemeColor, ThemeAccentRGB, ThemeBorderRGB, ThemeTextRGB, ThemeMutedTextRGB, ThemeValueTextRGB, RegisterThemeText, ApplyThemeTextCollections
+local ThemeColor, ThemeAccentRGB, ThemeBorderRGB, ThemeTextRGB, ThemeMutedTextRGB, ThemeValueTextRGB, ApplyThemeTextCollections
 
 local function T(key, ...)
     if EL and EL.T then return EL:T(key, ...) end
@@ -101,13 +85,6 @@ toggles, and shared visual helpers used by multiple modules.
 Keep row-specific changes inside Modules/TrackingRows.lua unless they affect
 main frame sizing or global layout orchestration.
 ]]
-
-local function SortDashboardProfessionEntries(a, b)
-    local as = tonumber(a.slot) or 99
-    local bs = tonumber(b.slot) or 99
-    if as ~= bs then return as < bs end
-    return (a.professionName or "") < (b.professionName or "")
-end
 
 
 local function IsCompactModeEnabled()
@@ -171,14 +148,6 @@ local function SetFontStringTextIfChanged(fs, text)
     if fs._emberLastText ~= text then
         fs._emberLastText = text
         fs:SetText(text)
-    end
-end
-
-local function ApplyTrackingTextStyle(row)
-    if not row then return end
-    local fontObject = IsCompactModeEnabled() and GameFontHighlightSmall or GameFontHighlight
-    for _, fs in ipairs({row.name, row.prof1, row.conc1, row.prof2, row.conc2, row.moxie, row.moxieLeft, row.moxieSep, row.moxieRight, row.forecast, row.cooldown, row.mulch}) do
-        if fs and fs.SetFontObject then fs:SetFontObject(fontObject) end
     end
 end
 
@@ -382,18 +351,6 @@ local function GetTrackingPanelMaxHeight(panel)
     end
 
     return math.max(minH, math.min(PANEL_MAX_H, screenMax))
-end
-
-local function ClampPanelSize(panel)
-    if not panel then return end
-    local minH = GetCurrentPanelMinHeight(panel)
-    local minW = (EL.GetTrackingPanelMinWidth and EL:GetTrackingPanelMinWidth()) or PANEL_MIN_W
-    local maxW = (EL.GetTrackingPanelMaxWidth and EL:GetTrackingPanelMaxWidth()) or PANEL_MAX_W
-    local w = math.max(minW, math.min(maxW, panel:GetWidth() or minW))
-    local h = math.max(minH, math.min(GetTrackingPanelMaxHeight(panel), panel:GetHeight() or minH))
-    if math.abs((panel:GetWidth() or 0) - w) > 1 or math.abs((panel:GetHeight() or 0) - h) > 1 then
-        panel:SetSize(w, h)
-    end
 end
 
 function EL:GetVisibleTrackingRowCount()
@@ -654,12 +611,11 @@ function EL:HasSecondaryConcentrationColumnData()
         end
     end
 
-    local chars = {}
-    for _, data in pairs(self.db and self.db.resources and self.db.resources.concentration or {}) do
-        local charKey = data and data.charKey
-        if charKey and not self:IsCharacterHidden(charKey) then
-            chars[charKey] = (chars[charKey] or 0) + 1
-            if chars[charKey] > 1 then return true end
+    -- Use the display index so superseded older-expansion concentration records
+    -- do not make a single-profession character look like it has two professions.
+    for charKey, entries in pairs(self:GetConcentrationIndex() or {}) do
+        if charKey and not self:IsCharacterHidden(charKey) and type(entries) == "table" and #entries > 1 then
+            return true
         end
     end
     return false
@@ -804,92 +760,6 @@ local function AnchorColumnText(fs, parent, x, width, justify)
     if fs.SetNonSpaceWrap then fs:SetNonSpaceWrap(false) end
 end
 
-local function AnchorColumnTexture(texture, parent, x, width)
-    if not texture or not parent then return end
-    texture:ClearAllPoints()
-    texture:SetPoint("CENTER", parent, "LEFT", x + (math.max(1, tonumber(width) or 1) / 2), 0)
-end
-
-local function AnchorMoxieCell(row, parent, x, width)
-    if not row or not parent then return end
-    width = math.max(1, tonumber(width) or 1)
-    local sepW = math.min(14, math.max(8, math.floor(width * 0.16 + 0.5)))
-    local sideW = math.max(1, math.floor((width - sepW) / 2))
-    local rightW = math.max(1, width - sepW - sideW)
-
-    AnchorColumnText(row.moxie, parent, x, width, "CENTER")
-
-    if row.moxieLeft then
-        AnchorColumnText(row.moxieLeft, parent, x, sideW, "RIGHT")
-    end
-    if row.moxieSep then
-        AnchorColumnText(row.moxieSep, parent, x + sideW, sepW, "CENTER")
-    end
-    if row.moxieRight then
-        AnchorColumnText(row.moxieRight, parent, x + sideW + sepW, rightW, "LEFT")
-    end
-end
-
-local function SetMoxieCellShown(row, visible, split)
-    if not row then return end
-    visible = visible and true or false
-    split = split and true or false
-    if row.moxie then row.moxie:SetShown(visible and not split) end
-    if row.moxieLeft then row.moxieLeft:SetShown(visible and split) end
-    if row.moxieSep then row.moxieSep:SetShown(visible and split) end
-    if row.moxieRight then row.moxieRight:SetShown(visible and split) end
-end
-
-local function SetMoxieCellColor(row, r, g, b)
-    if not row then return end
-    for _, fs in ipairs({row.moxie, row.moxieLeft, row.moxieSep, row.moxieRight}) do
-        if fs and fs.SetTextColor then fs:SetTextColor(r, g, b) end
-    end
-end
-
-local function GetMoxieDisplayValues(charKey, dashboardSlots)
-    local values = {}
-    if not charKey or type(dashboardSlots) ~= "table" then return values end
-    for _, slotData in ipairs(dashboardSlots) do
-        local prof = slotData and slotData.prof or slotData
-        if EL.GetMoxieCurrencyIDForProfession and EL:GetMoxieCurrencyIDForProfession(prof) then
-            local entry = EL.GetMoxieEntryForProfession and EL:GetMoxieEntryForProfession(charKey, prof)
-            if entry and type(entry.quantity) == "number" then
-                values[#values + 1] = tostring(entry.quantity)
-            end
-        end
-    end
-    return values
-end
-
-
-local function AnchorProfessionCell(row, fs, icon, x, width, visible, iconTexture)
-    if not row or not fs then return end
-    fs:ClearAllPoints()
-    fs:SetWidth(width)
-    fs:SetJustifyH("CENTER")
-    if fs.SetWordWrap then fs:SetWordWrap(false) end
-    if fs.SetNonSpaceWrap then fs:SetNonSpaceWrap(false) end
-
-    local showIcon = visible and icon and iconTexture and iconTexture ~= ""
-    fs._emberHasProfessionIcon = showIcon and true or false
-    if showIcon then
-        local iconSize = IsCompactModeEnabled() and 14 or 16
-        icon:ClearAllPoints()
-        icon:SetSize(iconSize, iconSize)
-        icon:SetPoint("CENTER", row, "LEFT", x + (width / 2), 0)
-        icon:SetTexture(iconTexture)
-        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        icon:Show()
-        fs:Hide()
-    else
-        if icon then icon:Hide() end
-        fs:SetPoint("LEFT", row, "LEFT", x, 0)
-        fs:SetPoint("RIGHT", row, "LEFT", x + width, 0)
-        fs:SetJustifyH("CENTER")
-        fs:SetShown(visible and true or false)
-    end
-end
 
 local function GetTextWidth(fs)
     if not fs then return 0 end
@@ -906,18 +776,6 @@ local function FormatSessionTime(seconds)
         return string.format("%dh %02dm", hours, mins)
     end
     return string.format("%dm %02ds", mins, secs)
-end
-
-local function FormatActionCooldownText(seconds)
-    seconds = math.max(0, math.ceil(tonumber(seconds) or 0))
-    if seconds <= 1 then return "" end
-    local days = math.floor(seconds / 86400)
-    local hours = math.floor((seconds % 86400) / 3600)
-    local mins = math.floor((seconds % 3600) / 60)
-    if days > 0 then return tostring(days) .. "d" end
-    if hours > 0 then return tostring(hours) .. "h" end
-    if mins > 0 then return tostring(mins) .. "m" end
-    return tostring(seconds)
 end
 
 
@@ -1025,20 +883,6 @@ end
 -- theme refresh logic remain in UI.lua.
 -- ============================================================================
 
-local function MakeSettingsButton(parent, text, width, onClick)
-    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    b:SetSize(width or 58, 22)
-    b:SetText(text)
-    b.text = b:GetFontString()
-    if b.text then
-        b.text:SetPoint("CENTER")
-        b.text:SetText(text)
-    end
-    StyleBlizzardButton(b)
-    b:SetScript("OnClick", onClick)
-    return b
-end
-
 
 local function BringEmberWindowToFront(frame)
     if EL and EL.Style and EL.Style.BringWindowToFront then
@@ -1089,10 +933,6 @@ ThemeValueTextRGB = function()
     return ThemeColor("VALUE_TEXT_R", 0.90), ThemeColor("VALUE_TEXT_G", 0.91), ThemeColor("VALUE_TEXT_B", 0.93)
 end
 
-RegisterThemeText = function(fontString, bucket)
-    if EL and EL.Style and EL.Style.RegisterThemeText then return EL.Style:RegisterThemeText(fontString, bucket) end
-end
-
 ApplyThemeTextCollections = function(frame)
     if EL and EL.Style and EL.Style.ApplyThemeTextCollections then return EL.Style:ApplyThemeTextCollections(frame) end
 end
@@ -1111,27 +951,6 @@ local function ApplySettingsSectionTheme(section)
     if section.title then section.title:SetTextColor(accentR, accentG, accentB) end
     if section.line then section.line:SetColorTexture(accentR, accentG, accentB, 0.18) end
     if section.accentTop then section.accentTop:SetColorTexture(accentR, accentG, accentB, 0.34) end
-end
-
-local function MakeSettingsSection(parent, title, x, y, w, h)
-    local section = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    section:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
-    section:SetSize(w, h)
-    AddBackdrop(section, math.max(0.24, GetPanelOpacity() - 0.08), 0.42)
-    AddHeaderAccent(section)
-    section.sideAccent = section:CreateTexture(nil, "ARTWORK")
-    section.sideAccent:SetWidth(2)
-    section.sideAccent:SetPoint("TOPLEFT", section, "TOPLEFT", 5, -8)
-    section.sideAccent:SetPoint("BOTTOMLEFT", section, "BOTTOMLEFT", 5, 8)
-    section.title = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    section.title:SetPoint("TOPLEFT", 14, -9)
-    section.title:SetText(title)
-    section.line = section:CreateTexture(nil, "BORDER")
-    section.line:SetHeight(1)
-    section.line:SetPoint("TOPLEFT", 14, -28)
-    section.line:SetPoint("TOPRIGHT", -14, -28)
-    ApplySettingsSectionTheme(section)
-    return section
 end
 
 
@@ -2652,27 +2471,6 @@ function EL:ShouldShowMulchColumn(rows)
 end
 
 
-local function SetPanelHeightKeepTopLeft(panel, height, settings)
-    if not panel then return end
-    local left = panel:GetLeft()
-    local top = panel:GetTop()
-
-    panel._autoSizingHeight = true
-    panel:SetHeight(height)
-
-    -- Resizing a centered/middle-anchored frame can make it appear to move.
-    -- Re-anchor by the current top-left corner so collapse/expand only changes
-    -- the bottom edge of the EmberLedger window.
-    if left and top then
-        SafeSetFramePoint(panel, "TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
-        if settings then
-            SaveFramePoint(panel, settings)
-        end
-    end
-
-    panel._autoSizingHeight = false
-end
-
 function EL:AutoSizePanelHeight(reason)
     if self.IsCombatLocked and self:IsCombatLocked() then
         if self.QueueCombatDeferredWork then self:QueueCombatDeferredWork("layout") end
@@ -2692,7 +2490,7 @@ function EL:LayoutPanel()
     if not p or not p.header or not p.scroll or not p.content then return end
     if self.AutoSizeTrackingPanel and not p._emberVerticalResizing then self:AutoSizeTrackingPanel("layout") end
 
-    local w, h = p:GetWidth(), p:GetHeight()
+    local w = p:GetWidth()
     local settings = self.db and self.db.settings and self.db.settings.panel or {}
     local charShown = settings.charactersShown ~= false
     local actionBarShown = IsAnchoredActionBarShown()
@@ -2897,7 +2695,7 @@ function EL:RefreshPanel()
     local p = self.panel
     if not p then return end
     local profileStage = self.ProfileStart and self.ProfileStop and self:IsProfilingEnabled()
-    local stageProfile = nil
+    local stageProfile
     local function StartStage(label)
         if not profileStage then return nil end
         return self:ProfileStart(label)
@@ -2999,9 +2797,8 @@ function EL:RefreshPanel()
     StopStage("RefreshPanel:LayoutPrep", stageProfile)
 
     stageProfile = StartStage("RefreshPanel:RowUpdate")
-    local renderedRowCount = #rows
     if self.RefreshTrackingRows then
-        local outCount, outRowH, outGap = self:RefreshTrackingRows({
+        local _, outRowH, outGap = self:RefreshTrackingRows({
             panel = p,
             rows = rows,
             width = width,
@@ -3017,7 +2814,6 @@ function EL:RefreshPanel()
             professionLookup = professionLookup,
             dashboardLookups = dashboardLookups,
         })
-        renderedRowCount = tonumber(outCount) or renderedRowCount
         rowH = tonumber(outRowH) or rowH
         gap = tonumber(outGap) or gap
     elseif not self._trackingRowsMissingWarned then
@@ -3084,7 +2880,7 @@ function EL:UpdateButton()
         end
     end
 
-    local nextCooldown = display.showLauncherCooldown == true and self.GetNextProfessionCooldownSummary and self:GetNextProfessionCooldownSummary(now) or nil
+    local nextCooldown = display.showLauncherCooldown == true and self.GetNextProfessionCooldownSummary and self:GetNextProfessionCooldownSummary() or nil
     local line2Text = ""
     if nextCooldown then
         if nextCooldown.ready then
@@ -3377,7 +3173,7 @@ function EL:ShowButtonTooltip(owner)
     GameTooltip:SetText(T("EmberLedger"), 0.82, 0.88, 0.96)
     GameTooltip:AddLine(T("Quick launcher and window toggle."), 0.86, 0.86, 0.78, true)
     if self.GetNextProfessionCooldownSummary then
-        local nextCooldown = self:GetNextProfessionCooldownSummary(time())
+        local nextCooldown = self:GetNextProfessionCooldownSummary()
         if nextCooldown then
             if nextCooldown.ready then
                 GameTooltip:AddLine(T("Next CD: Ready on %s", tostring(nextCooldown.characterName or "character")), 0.70, 0.90, 0.70, true)
