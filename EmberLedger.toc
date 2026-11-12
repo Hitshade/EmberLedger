@@ -1,4 +1,4 @@
-## Interface: 120100, 120007, 120005, 120000
+## Interface: 120105, 120100, 120007, 120005, 120000
 ## Title: EmberLedger
 ## Notes: Modular profession alt dashboard for concentration, Artisan Moxie, Imbued Mulch, profession cooldown readiness, session tracking, utility actions, and roster management.
 ## Author: Hitshade

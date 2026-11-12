@@ -1,4 +1,7 @@
 ## v2.3.5
+### Compatibility
+- Added Retail Patch 12.1.5 interface support (`120105`).
+
 ### Concentration
 - Fixed concentration appearing to stop tracking after the profession window briefly showed the previous expansion. EmberLedger could record the previous expansion's concentration pool (for example Khaz Algar) and then display it instead of the current Midnight pool, which persisted across reloads and relogs.
 - When a profession has concentration recorded for more than one expansion, the dashboard, tooltips, launcher, and ready alerts now use the current expansion's pool. Older-expansion records are preserved in saved data but are no longer displayed or counted.
